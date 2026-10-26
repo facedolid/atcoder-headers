@@ -4011,6 +4011,57 @@ ld atan2_deg(Y y, X x) {
     return to_deg(atan2l(static_cast<ld>(y), static_cast<ld>(x)));
 }
 
+
+namespace ac_detail::geometry {
+template <class T>
+constexpr i128 polar_coordinate(T value) {
+    static_assert(is_integral_v<T> && is_signed_v<T> && sizeof(T) <= 8,
+                  "polar ordering requires signed integers of at most 64 bits");
+    return static_cast<i128>(value);
+}
+}  // namespace ac_detail::geometry
+
+// @acf fn polar_less — (a,b) -> bool — 整数座標の偏角順を厳密に比較
+/// @acf-doc @brief 原点が先頭。その後は正のx軸から反時計回り、同方向は近い順。符号付き64bit以下の座標を受け取り、外積はi128、二乗距離はu128で比較
+/// @acf-doc [function] polar_less
+template <class A, class B>
+constexpr bool polar_less(const A& a, const B& b) {
+    using namespace ac_detail::geometry;
+    const i128 ax = polar_coordinate(x_val(a)), ay = polar_coordinate(y_val(a));
+    const i128 bx = polar_coordinate(x_val(b)), by = polar_coordinate(y_val(b));
+    const bool az = ax == 0 && ay == 0, bz = bx == 0 && by == 0;
+    if (az || bz) return az && !bz;
+    const bool ah = ay < 0 || (ay == 0 && ax < 0);
+    const bool bh = by < 0 || (by == 0 && bx < 0);
+    if (ah != bh) return ah < bh;
+    // Signed 64-bit coordinates have determinants strictly within signed i128.
+    const i128 cross = ax * by - ay * bx;
+    if (cross != 0) return cross > 0;
+    // (-2^63,-2^63) has squared length 2^127, so add as unsigned.
+    const u128 an = static_cast<u128>(ax * ax) + static_cast<u128>(ay * ay);
+    const u128 bn = static_cast<u128>(bx * bx) + static_cast<u128>(by * by);
+    return an < bn;
+}
+
+// @acf fn polar_sort — (vector<P>& points) -> void — 点列を整数の偏角順に並べ替える
+/// @acf-doc @brief polar_lessで入力vectorを書き換える。O(N log N)。同じ先頭2座標を持つ要素の順序は保証しない
+/// @acf-doc [function] polar_sort
+template <class P>
+void polar_sort(vector<P>& points) {
+    std::sort(points.begin(), points.end(), [](const P& a, const P& b) {
+        return polar_less(a, b);
+    });
+}
+
+// @acf fn polar_sorted — (vector<P> points) -> vector<P> — 整数の偏角順に並べたコピーを返す
+/// @acf-doc @brief polar_sortと同じ順序。lvalue入力は変更せず、空なら空を返す。O(N log N)、追加記憶O(N)
+/// @acf-doc [function] polar_sorted
+template <class P>
+vector<P> polar_sorted(vector<P> points) {
+    polar_sort(points);
+    return points;
+}
+
 // @acf fn argument — (p) / (x,y) -> ld — 偏角（ラジアン、atan2）
 /// @acf-doc @brief 点またはベクトルの偏角。`atan2(y,x)`、値域 `(-PI,PI]`
 /// @acf-doc [function] argument

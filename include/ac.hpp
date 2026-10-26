@@ -4267,6 +4267,17 @@ AC_RANGE_ALGORITHM_WRAPPER_(contains_subrange)
     __cpp_lib_ranges_starts_ends_with >= 202106L
 AC_RANGE_ALGORITHM_WRAPPER_(starts_with)
 AC_RANGE_ALGORITHM_WRAPPER_(ends_with)
+#else
+template <ranges::input_range R1, ranges::input_range R2,
+          class Pred = ranges::equal_to, class Proj1 = identity,
+          class Proj2 = identity>
+requires indirectly_comparable<ranges::iterator_t<R1>, ranges::iterator_t<R2>,
+                              Pred, Proj1, Proj2>
+constexpr bool starts_with(R1&& values, R2&& prefix, Pred pred = {},
+                           Proj1 proj1 = {}, Proj2 proj2 = {}) {
+    return ranges::mismatch(values, prefix, std::move(pred), std::move(proj1),
+                            std::move(proj2)).in2 == ranges::end(prefix);
+}
 #endif
 
 #if defined(__cpp_lib_ranges_find_last) && __cpp_lib_ranges_find_last >= 202207L

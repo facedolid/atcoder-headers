@@ -2346,7 +2346,7 @@ inline int edit_distance(string_view s, string_view t, DpOptions options = {}) {
 }
 
 // @acf fn Trie — () -> Trie — 文字列の挿入・完全一致・接頭辞個数を扱うTrie
-/// @acf-doc @brief ASCII文字列を扱い、重複挿入・削除・完全一致・接頭辞個数を O(|s|) で処理
+/// @acf-doc @brief charのバイト列を扱い、空文字・重複挿入・1個削除・完全一致・接頭辞検索に対応。各操作はO(|s| log Σ)、Σは最大256の文字種数
 /// @acf-doc [function] Trie
 class Trie {
     struct Node {
@@ -2427,7 +2427,13 @@ public:
         return v < 0 ? 0 : nodes_[v].pass;
     }
 
-    /// @brief 登録語の総数を返す。
+    /// @brief prefixで始まる登録語があるか判定する。空prefixは登録語があればtrue。
+    bool starts_with(string_view prefix) const { return prefix_count(prefix) > 0; }
+
+    /// @brief 登録語がないか判定する。
+    bool empty() const { return words_ == 0; }
+
+    /// @brief 重複と空文字を含む登録語の総数を返す。
     int size() const { return words_; }
 };
 
