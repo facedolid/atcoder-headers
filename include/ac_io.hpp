@@ -1,4 +1,5 @@
 #pragma once
+// Library: https://github.com/facedolid/atcoder-headers
 
 // 宣言しながら読む API と、既存変数・コンテナへ読む API の互換レイヤー。
 // ac_io.hpp を明示的にincludeする。公開短縮名は頻出のものだけに限定。

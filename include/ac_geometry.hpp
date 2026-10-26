@@ -1,4 +1,5 @@
 #pragma once
+// Library: https://github.com/facedolid/atcoder-headers
 
 // Geometry / trigonometry / affine transforms for ac.hpp.
 // This header may be included alone or in any order with the other local headers.

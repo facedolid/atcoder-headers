@@ -1,4 +1,5 @@
 #pragma once
+// Library: https://github.com/facedolid/atcoder-headers
 
 #include <array>
 #include <bitset>

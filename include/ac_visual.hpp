@@ -1,4 +1,5 @@
 #pragma once
+// Library: https://github.com/facedolid/atcoder-headers
 
 // LOCAL 専用のターミナル可視化。通常提出時は no-op になる。
 #define AC_VISUAL_HPP 1

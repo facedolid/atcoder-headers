@@ -1,4 +1,5 @@
 #pragma once
+// Library: https://github.com/facedolid/atcoder-headers
 
 // 基本型・軽量補助・共通入出力。専門アルゴリズムや入力糖衣は明示include。
 
