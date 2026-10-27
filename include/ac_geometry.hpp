@@ -5,7 +5,7 @@
 // This header may be included alone or in any order with the other local headers.
 #include "ac.hpp"
 
-// LOCAL の core-only 構成でも、visual を後から include した順序を許容する。
+// LOCALかつ可視化ヘッダーが未読込の場合は、ac_visual.hppを読み込む。
 #if defined(LOCAL) && !defined(AC_VISUAL_HPP)
 #include "ac_visual.hpp"
 #endif

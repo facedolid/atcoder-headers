@@ -4,7 +4,7 @@
 // 基本型・軽量補助・共通入出力。専門アルゴリズムや入力糖衣は明示include。
 
 // LOCAL 時は trace.hpp（-Iinclude）。IDE や古いローカル ac.hpp コピーで
-// 見つからない場合は no-op に落とす（clangd の偽エラー防止）。
+// 見つからない場合は何もしないマクロにする（clangdの偽エラーを防ぐ）。
 #if defined(LOCAL) && __has_include("trace.hpp")
 #include "trace.hpp"
 #elif defined(LOCAL) && __has_include(<trace.hpp>)
@@ -61,18 +61,18 @@
 #include <vector>
 
 // 解答側は vector / sort / views などを無修飾で使う。
-// 実装補助は ac_detail に閉じ、解答へ名前空間を意識させない。
+// 実装補助はac_detailにまとめ、解答側で名前空間を意識せずに使えるようにする。
 using namespace std;
 
 // AtCoder Library（デフォルトで有効）。切る: 先に #define AC_NO_ACL
-// AtCoder 提出: atc submit が __has_include を外して #include <atcoder/all> に畳む。
-// ITP* 等の AOJ: ローカルは -DAC_NO_ACL、submit は ACL ブロック除去（展開すると提出サイズ超過）。
+// AtCoder提出では、atc submit が __has_include を外し、#include <atcoder/all> にまとめる。
+// ITP* 等のAOJ: ローカルは -DAC_NO_ACL、submit はACLブロック除去（展開すると提出サイズ超過）。
 // @ac-acl-begin
 #ifndef AC_NO_ACL
 #if __has_include(<atcoder/all>)
 #include <atcoder/all>
-// ACL の公開 API だけを解答側へ公開する。using namespace atcoder は避け、
-// internal や将来追加される名前とテンプレート独自 API の衝突を防ぐ。
+// ACLの公開APIだけを解答側へ公開する。using namespace atcoder は避け、
+// internal や将来追加される名前とテンプレート独自APIの衝突を防ぐ。
 using atcoder::convolution;
 using atcoder::convolution_ll;
 using atcoder::crt;
@@ -261,7 +261,7 @@ using product_type_t = conditional_t<(is_integral_v<remove_cv_t<Ts>> && ...),
                                      common_type_t<Ts...>>;
 
 // @acf using product_result_t — 幾何などの積APIの戻り型（int→ll、llはそのまま）
-/// @acf-doc @brief 積APIの戻り型。整数は `int`→`ll`、`ll`/`i128` はそのまま。中間計算はより広い型で行い、最後にこれに落とす
+/// @acf-doc @brief 積APIの戻り型。整数は `int`→`ll`、`ll`/`i128` はそのまま。中間計算はより広い型で行い、最後に戻り型へ変換する
 /// @acf-doc [type] product_result_t
 template <class... Ts>
 using product_result_t =
@@ -452,7 +452,7 @@ template <class T>
 using minpq = priority_queue<T, vector<T>, greater<T>>;
 
 // set と同じ同値判定で重複をまとめる優先度付きキュー。
-// Compare は priority_queue と同じ向き。less<T> で最大、greater<T> で最小。
+// Compareはpriority_queueと同じ比較順。less<T>で最大、greater<T>で最小を先に取り出す。
 // push/emplace/contains/erase: O(log N)、top/size/empty: O(1)、pop: 償却 O(1)。
 template <class T, class Compare = less<T>>
 class setpq {
@@ -491,7 +491,7 @@ class setpq {
 };
 
 // @acf const INF — 距離 DP 用の十分大きい値
-/// @acf-doc @brief 距離 DP 用の十分大きい値
+/// @acf-doc @brief 距離DP用の十分大きい値
 /// @acf-doc [constant] INF
 constexpr ll INF = (1LL << 60) - 1;
 // @acf macro NPOS — string::npos
@@ -507,11 +507,11 @@ constexpr ld EPS = 1e-12L;
 /// @acf-doc [constant] PI
 constexpr ld PI = 3.141592653589793238462643383279502884L;
 // @acf const MOD1000000007 — mod 1,000,000,007（mint1000000007 と対応）
-/// @acf-doc @brief mod 1,000,000,007。ACL 型は `mint1000000007`
+/// @acf-doc @brief mod 1,000,000,007。ACL型は `mint1000000007`
 /// @acf-doc [constant] MOD1000000007
 constexpr int MOD1000000007 = 1'000'000'007;
 // @acf const MOD998244353 — mod 998,244,353（mint998244353 と対応）
-/// @acf-doc @brief mod 998,244,353。ACL 型は `mint998244353`
+/// @acf-doc @brief mod 998,244,353。ACL型は `mint998244353`
 /// @acf-doc [constant] MOD998244353
 constexpr int MOD998244353 = 998'244'353;
 // @acf const O — 「丸」を表す小文字の char
@@ -812,7 +812,7 @@ inline constexpr bool is_char_v =
 #endif
     ;
 
-// bool 代入で char に入った 0/1 をデバッグ出力では false/true と見せる。
+// bool値を代入してcharに入った0/1は、デバッグ出力でfalse/trueと表示する。
 template <class Os>
 void write_char_as_display(Os& os, char c) {
     if (c == 0) {
@@ -1032,7 +1032,7 @@ istream& extract(istream& is, T& x) {
 // ---------------------------------------------------------------------------
 // Input API layer 1/5 — generic functions (source of truth)
 // scan は「既存変数へ読む」「型を指定して返す」の共通入口。
-// in は scan と同じ 3 形態を持つ短い従来名。
+// inはscanと同じ3形式を提供する従来の短い名前。
 // rd / in_tuple は戻り値形式の用途別糖衣として残す。
 // ---------------------------------------------------------------------------
 
@@ -1313,7 +1313,7 @@ inline bool finish() {
 }  // namespace ac_detail::output
 
 // @acf fn print — (const T&... args) -> bool — 空白区切りで出力して改行（STL / bitset 対応）。常に true（`cond && print(x)` 用）
-/// @acf-doc @brief 空白区切りで出力して改行（vector/set/map など STL・bitset 対応。単一 range の自然区切りはスカラー空白・pair/tuple/bitset/ネストは改行）。通常はflushせず、`AC_INTERACTIVE`時だけ末尾でflush。戻り値は常に true（`cond && print(x)` のように && チェーン可）
+/// @acf-doc @brief 空白区切りで出力して改行（vector/set/map などSTL・bitset 対応。単一 range の自然区切りはスカラー空白・pair/tuple/bitset/ネストは改行）。通常はflushせず、`AC_INTERACTIVE`時だけ末尾でflush。戻り値は常に true（`cond && print(x)` のように && チェーン可）
 /// @acf-doc @code (const T&... args) -> bool
 /// @acf-doc [function] print
 template <class... T, enable_if_t<(sizeof...(T) <= 1), int> = 0>
@@ -1393,7 +1393,7 @@ bool print(const R& r, string_view sep, bool nl = true) {
 }
 
 // @acf fn println — (const T&... args) -> bool — すべて改行区切りで出力。空 range は無出力。常に true
-/// @acf-doc @brief 引数をすべて改行区切りで出力。単一 range は要素も改行（`print(r, '\\n')`）。空 range は何も出さない（末尾の空行も付けない。AOJ の PE 対策）。通常はflushせず、`AC_INTERACTIVE`時だけ末尾でflush。戻り値は常に true
+/// @acf-doc @brief 引数をすべて改行区切りで出力。単一 range は要素も改行（`print(r, '\\n')`）。空 range は何も出さない（末尾の空行も付けない。AOJの PE 対策）。通常はflushせず、`AC_INTERACTIVE`時だけ末尾でflush。戻り値は常に true
 /// @acf-doc @code (const T&... args) -> bool
 /// @acf-doc [function] println
 inline bool println() {
@@ -1404,7 +1404,7 @@ inline bool println() {
 template <class T>
 bool println(const T& x) {
     if constexpr (ac_detail::io::is_range_v<T>) {
-        // 1要素1行の意味なので、0要素なら 0 行（空行すら出さない）。AOJ の PE 対策。
+        // 1要素1行の意味なので、0要素なら 0 行（空行すら出さない）。AOJの PE 対策。
         if (std::empty(x)) return ac_detail::output::finish();
         return ::print(x, '\n');
     }
@@ -2445,7 +2445,7 @@ struct leaf_type<T, true> : leaf_type<element_t<T>> {};
 template <class T>
 using leaf_type_t = typename leaf_type<T>::type;
 
-// 軸を1つ潰した結果の「形」。出力は入力コンテナの種類によらず vector に統一する。
+// 1つの軸を集約した結果のコンテナ構造。出力は入力コンテナの種類によらず vector に統一する。
 template <class T, bool IsRange = ac_detail::io::is_range_v<bare_t<T>>>
 struct reduced_shape {
     using type = bare_t<T>;

@@ -124,7 +124,7 @@ inline constexpr uint8_t braille_or(uint8_t dots, int row, int col) {
     return static_cast<uint8_t>(dots | braille_bit(row, col));
 }
 // @acf fn braille_char — (dots) -> string — ドットマスクを Braille 1文字（UTF-8）にする
-/// @acf-doc @brief U+2800+dots を UTF-8 文字列で返す
+/// @acf-doc @brief U+2800+dots をUTF-8文字列で返す
 /// @acf-doc @code (uint8_t dots) -> string
 /// @acf-doc [function] braille_char
 inline string braille_char(uint8_t dots) { return braille_utf8(dots); }

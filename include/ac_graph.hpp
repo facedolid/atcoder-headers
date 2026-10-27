@@ -3,8 +3,8 @@
 
 #include "ac.hpp"
 
-// LOCAL の core-only 構成でも、visual を後から include した順序を許容する。
-// ac_visual.hpp は ac.hpp を再 include するが、pragma once で安全に戻る。
+// LOCALで可視化ヘッダーが未読込の場合、ここでac_visual.hppを読み込む。
+// ac_visual.hppはac.hppを再度includeするが、pragma onceにより重複読み込みを防ぐ。
 #if defined(LOCAL) && !defined(AC_VISUAL_HPP)
 #include "ac_visual.hpp"
 #endif
@@ -97,7 +97,7 @@ Cost add_clamped(Cost a, Cost b, Cost inf) {
 }  // namespace ac_graph_detail
 
 // 既存の vvi 隣接リストとの相互変換。
-// 無向 vvi は read_graph と同様、各辺が両端のリストに入っている形を受け取る。
+// 無向グラフのvviは、read_graphと同じく各辺が両端の隣接リストに入った形式を受け取る。
 // @acf fn to_graph — (vvi[, directed]) -> Graph — 旧 vvi 隣接リストから Graph を作る
 /// @acf-doc @brief 旧 vvi 隣接リストから Graph を作る
 /// @acf-doc @code (vvi[, directed]) -> Graph
@@ -207,7 +207,7 @@ bool is_tree(const Graph<Cost>& graph) {
     return visited == graph.n;
 }
 
-// a b を m 行読む。index_base=1 が AtCoder 標準、0 なら変換しない。
+// a b を m 行読む。index_base=1 がAtCoder標準、0 なら変換しない。
 // @acf fn read_unweighted_graph — (n,m[,directed,index_base]) -> Graph — a b を m 行読む
 /// @acf-doc @brief a b を m 行読む
 /// @acf-doc @code (n,m[,directed,index_base]) -> Graph
@@ -558,7 +558,7 @@ vs grid_from_graph(const Graph<Cost>& graph, int h, int w, const vb& passable,
 template <class Cost>
 vs grid_from_graph(const Graph<Cost>& graph, int h, int w, char floor = '.',
                    char wall = '#') {
-    // Graph だけの復元: 次数0の通行マスは壁になる（孤立マスは grid_passable を渡す）
+    // Graphだけから復元すると、次数0の通行マスは壁になる。孤立マスを含む場合はgrid_passableを渡す。
     return grid_from_graph(
         graph, h, w, [&](int id) { return !graph[id].empty(); }, floor, wall);
 }
@@ -625,8 +625,8 @@ struct DfsResult {
     vi parent;
     vi parent_edge;
     vi depth;
-    vi root;         // 各頂点が属する DFS 木の根
-    vi component;    // DFS 木の番号。未訪問は -1
+    vi root;         // 各頂点が属するDFS木の根
+    vi component;    // DFS木の番号。未訪問は -1
     vi entry_time;   // 入時刻
     vi exit_time;    // 出時刻
     vi roots;        // 実際に探索を開始した根
@@ -716,7 +716,7 @@ DfsResult dfs_impl(const Graph<Cost>& graph, const vi& initial_roots,
 
 // source から到達できる部分だけを深さ優先探索する。
 // @acf fn dfs — (Graph, s|sources) -> DfsResult — 到達部分の DFS（行きがけ／帰りがけ）
-/// @acf-doc @brief 到達部分の DFS（行きがけ／帰りがけ）
+/// @acf-doc @brief 到達部分のDFS（行きがけ／帰りがけ）
 /// @acf-doc @code (Graph, s|sources) -> DfsResult
 /// @acf-doc [function] dfs
 template <class Cost>
@@ -730,9 +730,9 @@ DfsResult dfs(const Graph<Cost>& graph, const vi& sources) {
     return ac_graph_detail::dfs_impl(graph, sources, false);
 }
 
-// 非連結部分も含め、全頂点の DFS 森を作る。
+// 非連結部分も含め、全頂点のDFS森を作る。
 // @acf fn dfs_forest — (Graph) -> DfsResult — 全頂点の DFS 森
-/// @acf-doc @brief 全頂点の DFS 森
+/// @acf-doc @brief 全頂点のDFS森
 /// @acf-doc @code (Graph) -> DfsResult
 /// @acf-doc [function] dfs_forest
 template <class Cost>
@@ -881,7 +881,7 @@ optional<vi> bipartite_coloring(const Graph<Cost>& graph) {
     return color;
 }
 
-// DAG なら順序、閉路があれば nullopt。有向グラフ向け。
+// DAGなら順序、閉路があれば nullopt。有向グラフ向け。
 template <class Cost>
 // @acf fn topological_sort — (Graph) -> optional<vi> — 有向のトポロジカル順。閉路なら nullopt
 /// @acf-doc @brief 有向のトポロジカル順。閉路なら nullopt
@@ -1181,7 +1181,7 @@ StronglyConnectedComponents strongly_connected_components(
 
 template <class Cost>
 // @acf fn condensation_graph — (Graph, scc) -> Graph — SCC を頂点にした DAG
-/// @acf-doc @brief SCC を頂点にした DAG
+/// @acf-doc @brief SCCを頂点にしたDAG
 /// @acf-doc @code (Graph, scc) -> Graph
 /// @acf-doc [function] condensation_graph
 Graph<> condensation_graph(

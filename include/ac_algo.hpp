@@ -2022,7 +2022,7 @@ ll inversion_count(const R& values) {
 }
 
 // @acf fn lis_length — (range[, strict]) -> int — 最長増加部分列の長さ
-/// @acf-doc @brief `strict=true` なら狭義、`false` なら広義の LIS 長を O(N log N) で求める
+/// @acf-doc @brief `strict=true` なら狭義、`false` なら広義のLIS長を O(N log N) で求める
 /// @acf-doc [function] lis_length
 template <class R>
 int lis_length(const R& values, bool strict = true) {

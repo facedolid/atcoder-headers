@@ -6,7 +6,7 @@
 // 数論・組合せ・行列。アルゴリズム本体はコアから移動し、仕様は維持する。
 
 // @acf fn arith_sum — (a, d, n) -> ll / modint — 等差数列和
-/// @acf-doc @brief 整数版は ll 超過を検出。第1引数が ACL modint なら巨大な項数も同じ法で返す
+/// @acf-doc @brief 整数版は ll 超過を検出。第1引数がACL modint なら巨大な項数も同じ法で返す
 /// @acf-doc @code (ll a, ll d, ll n) -> ll / (Mint a, d, ll n) -> Mint
 /// @acf-doc [function] arith_sum
 inline ll arith_sum(ll a, ll d, ll n) {
@@ -68,7 +68,7 @@ pair<Mint, Mint> geom_pow_sum(Mint r, ll n) {
 }  // namespace ac_detail
 
 // @acf fn geom_sum — (a, r, n) -> ll / modint — 等比数列和
-/// @acf-doc @brief 整数版は超過を検出。第1引数が ACL modint なら除算なしの二分法で巨大な項数も同じ法で返す
+/// @acf-doc @brief 整数版は超過を検出。第1引数がACL modint なら除算なしの二分法で巨大な項数も同じ法で返す
 /// @acf-doc @code (ll a, ll r, ll n) -> ll / (Mint a, r, ll n) -> Mint
 /// @acf-doc [function] geom_sum
 inline ll geom_sum(ll a, ll r, ll n) {
