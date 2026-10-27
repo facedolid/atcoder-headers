@@ -4566,6 +4566,28 @@ int find_last_if_not_idx(R&& values, Pred pred, Proj projection = {}) {
 
 #endif
 
+// @acf fn argsort — (const range, comp={}, projection={}) -> vector<int> — 値順に並べた元添字を返す
+/// @acf-doc @brief 入力を変更せず、compとprojectionで並べた0始まりの元添字を返す。同値は降順でも元添字順。constで読めるsized random-access rangeが対象。比較回数O(N log N)、追加メモリO(N)。要素数がintの最大値を超える場合はoverflow_error。
+/// @acf-doc @code (const R& values, Comp comp={}, Proj projection={}) -> vector<int>
+/// @acf-doc [function] argsort
+template <class R, class Comp = ranges::less, class Proj = identity>
+requires ranges::random_access_range<const R> && ranges::sized_range<const R> &&
+         indirect_strict_weak_order<Comp, projected<ranges::iterator_t<const R>, Proj>>
+vector<int> argsort(const R& values, Comp comp = {}, Proj projection = {}) {
+    const int n = ac_detail::checked_range_index(ranges::size(values));
+    vector<int> order(n);
+    std::iota(order.begin(), order.end(), 0);
+    const auto first = ranges::begin(values);
+    std::sort(order.begin(), order.end(), [&](int lhs, int rhs) {
+        if (std::invoke(comp, std::invoke(projection, first[lhs]),
+                             std::invoke(projection, first[rhs]))) return true;
+        if (std::invoke(comp, std::invoke(projection, first[rhs]),
+                             std::invoke(projection, first[lhs]))) return false;
+        return lhs < rhs;
+    });
+    return order;
+}
+
 // マクロは変数束縛とラムダ生成だけを行う。処理本体は上の関数と共通。
 #define AC_COLLECT_BIND_0(names, value) auto&& names = value;
 #define AC_COLLECT_BIND_1(names, value) auto&& [AC_COLLECT_UNPACK_ names] = value;
