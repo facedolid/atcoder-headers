@@ -1710,7 +1710,7 @@ LinearSystemResult<T> solve_linear_system(const Matrix<T>& coefficients,
 }
 
 // @acf fn linear_recurrence_nth — (initial,coefficients,index) -> T — 定数係数線形漸化式の第 index 項
-/// @acf-doc @brief `a_n=c[0]a_(n-1)+...+c[k-1]a_(n-k)` の0始まり第 `index` 項。Kitamasa法で O(k^2 log index)、整数・modint対応
+/// @acf-doc @brief `a_n=c[0]a_(n-1)+...+c[k-1]a_(n-k)` の0始まり第 `index` 項。Kitamasa法で O(k^2 log index)、整数・modint対応。整数型の中間積・和が型の範囲を超えると overflow_error。最終値が範囲内でも中間値は検査する
 /// @acf-doc @code (const vector<T>& initial, const vector<C>& coefficients, ull index) -> T
 /// @acf-doc [function] linear_recurrence_nth
 template <class T, class C>
@@ -1732,17 +1732,28 @@ T linear_recurrence_nth(const vector<T>& initial,
         recurrence_coefficients.emplace_back(coefficient);
     }
 
+    const auto accumulate_product = [](T& sum, const T& a, const T& b) {
+        if constexpr (is_integral_v<T> && !is_same_v<T, bool>) {
+            T product, total;
+            if (__builtin_mul_overflow(a, b, &product) ||
+                __builtin_add_overflow(sum, product, &total))
+                throw overflow_error("linear_recurrence_nth: intermediate overflow");
+            sum = total;
+        } else {
+            sum += a * b;
+        }
+    };
     const auto combine = [&](const vector<T>& lhs, const vector<T>& rhs) {
         vector<T> product(order * 2 - 1, T{});
         for (size_t i = 0; i < order; ++i) {
             for (size_t j = 0; j < order; ++j) {
-                product[i + j] += lhs[i] * rhs[j];
+                accumulate_product(product[i + j], lhs[i], rhs[j]);
             }
         }
         for (size_t degree = product.size(); degree-- > order;) {
             for (size_t lag = 0; lag < order; ++lag) {
-                product[degree - 1 - lag] +=
-                    product[degree] * recurrence_coefficients[lag];
+                accumulate_product(product[degree - 1 - lag],
+                                   product[degree], recurrence_coefficients[lag]);
             }
         }
         product.resize(order);
@@ -1762,7 +1773,8 @@ T linear_recurrence_nth(const vector<T>& initial,
     }
 
     T result{};
-    for (size_t i = 0; i < order; ++i) result += weights[i] * initial[i];
+    for (size_t i = 0; i < order; ++i)
+        accumulate_product(result, weights[i], initial[i]);
     return result;
 }
 

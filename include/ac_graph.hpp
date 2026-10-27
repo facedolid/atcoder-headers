@@ -37,6 +37,11 @@ struct Graph {
     bool directed = false;
     vector<vector<edge_type>> adj;
     vector<edge_type> edges;  // 無向辺も入力1本につき1要素
+private:
+    unordered_set<int> used_edge_ids;
+    long long next_auto_edge_id = 0;
+
+public:
 
     /// @brief 頂点数0の空グラフを構築する。
     Graph() = default;
@@ -59,10 +64,20 @@ struct Graph {
     /// @brief 頂点 `v` から出る隣接辺の一覧を返す。
     vector<edge_type>& operator[](int v) { return adj[v]; }
 
-    /// @brief 辺を追加し、辺IDを返す。無向グラフでは逆向きの隣接辺も追加する。
+    /// @brief 辺を追加し、辺IDを返す。自動IDは使用済みを避け、明示IDの重複はinvalid_argument。辺はadd_edgeで追加し、edgesとadjを直接変更しない。無向辺は逆向きの隣接辺も追加する。
     int add_edge(int from, int to, Cost cost = Cost{1}, int id = -1) {
         assert(0 <= from && from < n && 0 <= to && to < n);
-        if (id < 0) id = static_cast<int>(edges.size());
+        if (id < 0) {
+            next_auto_edge_id = max(next_auto_edge_id, static_cast<long long>(edges.size()));
+            while (next_auto_edge_id <= numeric_limits<int>::max() &&
+                   used_edge_ids.contains(static_cast<int>(next_auto_edge_id)))
+                ++next_auto_edge_id;
+            if (next_auto_edge_id > numeric_limits<int>::max())
+                throw overflow_error("no automatic edge id available");
+            id = static_cast<int>(next_auto_edge_id++);
+        }
+        if (!used_edge_ids.insert(id).second)
+            throw invalid_argument("edge ids must be unique");
         edge_type edge{from, to, cost, id};
         edges.push_back(edge);
         adj[from].push_back(edge);

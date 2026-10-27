@@ -51,7 +51,7 @@ inline const char* trace_basename(const char* path) {
 }
 
 /// @brief `trace` の引数文字列を括弧・引用符を考慮して名前へ分割する。
-inline std::vector<std::string> trace_split_names(const char* names) {
+inline std::vector<std::string> trace_split_names(const char* names, bool use_angle = true) {
     std::vector<std::string> result;
     if (names == nullptr || names[0] == '\0') {
         return result;
@@ -134,10 +134,10 @@ inline std::vector<std::string> trace_split_names(const char* names) {
                 --brace;
                 break;
             case '<':
-                ++angle;
+                if (use_angle) ++angle;
                 break;
             case '>':
-                --angle;
+                if (use_angle) --angle;
                 break;
             case ',':
                 if (paren == 0 && bracket == 0 && brace == 0 && angle == 0) {
@@ -442,7 +442,9 @@ void trace_print_all(std::ostream& os, const std::vector<std::string>& names,
 template <typename... Args>
 /// @brief ファイル名・行番号付きでトレースを出力する。
 void trace_impl(const char* file, int line, const char* names, Args&&... args) {
-    const auto name_list = trace_split_names(names);
+    // 引数数と分割数を照合する。マクロ展開や比較式とテンプレートの混在は曖昧さが残る。
+    auto name_list = trace_split_names(names, false);
+    if (name_list.size() != sizeof...(Args)) name_list = trace_split_names(names);
     std::ostringstream body;
     trace_print_all(body, name_list, std::index_sequence_for<Args...>{},
                     std::forward<Args>(args)...);
@@ -508,7 +510,8 @@ void trace_indexed_impl(const char* file, int line, const char* expression_name,
     trace_print(std::cerr, std::forward<Expr>(expression_value));
     std::cerr << '\n';
 
-    const auto names = trace_split_names(index_names);
+    auto names = trace_split_names(index_names, false);
+    if (names.size() != sizeof...(Indices)) names = trace_split_names(index_names);
     trace_print_indices(std::cerr, container_name, names, container,
                         std::index_sequence_for<Indices...>{}, indices...);
 }

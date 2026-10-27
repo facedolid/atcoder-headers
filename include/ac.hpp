@@ -3562,10 +3562,17 @@ optional<ac_detail::algorithm::range_value_t<R>> range_min(const R& values) {
     const auto last = end(values);
     if (it == last) return nullopt;
 
-    auto best = it;
-    for (++it; it != last; ++it)
-        if (*it < *best) best = it;
-    return *best;
+    if constexpr (std::forward_iterator<decltype(it)>) {
+        auto best = it;
+        for (++it; it != last; ++it)
+            if (*it < *best) best = it;
+        return *best;
+    } else {
+        optional<T> best(in_place, *it);
+        for (++it; it != last; ++it)
+            if (*it < *best) best.emplace(*it);
+        return *best;
+    }
 }
 
 // @acf fn range_max — (range) -> optional<T> — 1次元range全体の最大値
@@ -3582,10 +3589,17 @@ optional<ac_detail::algorithm::range_value_t<R>> range_max(const R& values) {
     const auto last = end(values);
     if (it == last) return nullopt;
 
-    auto best = it;
-    for (++it; it != last; ++it)
-        if (*best < *it) best = it;
-    return *best;
+    if constexpr (std::forward_iterator<decltype(it)>) {
+        auto best = it;
+        for (++it; it != last; ++it)
+            if (*best < *it) best = it;
+        return *best;
+    } else {
+        optional<T> best(in_place, *it);
+        for (++it; it != last; ++it)
+            if (*best < *it) best.emplace(*it);
+        return *best;
+    }
 }
 
 // @acf fn range_minmax — (range) -> optional<pair<T,T>> — 1次元range全体の最小値と最大値
@@ -3604,13 +3618,22 @@ range_minmax(const R& values) {
     const auto last = end(values);
     if (it == last) return nullopt;
 
-    auto minimum = it;
-    auto maximum = it;
-    for (++it; it != last; ++it) {
-        if (*it < *minimum) minimum = it;
-        if (*maximum < *it) maximum = it;
+    if constexpr (std::forward_iterator<decltype(it)>) {
+        auto minimum = it;
+        auto maximum = it;
+        for (++it; it != last; ++it) {
+            if (*it < *minimum) minimum = it;
+            if (*maximum < *it) maximum = it;
+        }
+        return pair<T, T>{*minimum, *maximum};
+    } else {
+        optional<T> minimum(in_place, *it), maximum(in_place, *it);
+        for (++it; it != last; ++it) {
+            if (*it < *minimum) minimum.emplace(*it);
+            if (*maximum < *it) maximum.emplace(*it);
+        }
+        return pair<T, T>{*minimum, *maximum};
     }
-    return pair<T, T>{*minimum, *maximum};
 }
 
 // @acf fn range_span — (range) -> optional<ll> — 整数列全体の max-min
@@ -3636,6 +3659,55 @@ optional<ll> range_span(const R& values) {
         if (value > maximum) maximum = value;
     }
     return ac_detail::checked_ll(maximum - minimum, "range_span");
+}
+
+// Non-const-only input ranges (for example views::istream) cannot bind to the
+// const overloads above. Retain values because an input iterator is single-pass.
+template <ranges::input_range R>
+requires (!ranges::range<const remove_reference_t<R>>)
+auto range_min(R&& values) -> optional<ranges::range_value_t<R>> {
+    using T = ranges::range_value_t<R>;
+    static_assert(!ac_detail::io::is_range_v<T>,
+                  "range_min requires a one-dimensional range; use axis_min");
+    auto it = ranges::begin(values);
+    const auto last = ranges::end(values);
+    if (it == last) return nullopt;
+    optional<T> best(in_place, *it);
+    for (++it; it != last; ++it)
+        if (*it < *best) best.emplace(*it);
+    return *best;
+}
+
+template <ranges::input_range R>
+requires (!ranges::range<const remove_reference_t<R>>)
+auto range_max(R&& values) -> optional<ranges::range_value_t<R>> {
+    using T = ranges::range_value_t<R>;
+    static_assert(!ac_detail::io::is_range_v<T>,
+                  "range_max requires a one-dimensional range; use axis_max");
+    auto it = ranges::begin(values);
+    const auto last = ranges::end(values);
+    if (it == last) return nullopt;
+    optional<T> best(in_place, *it);
+    for (++it; it != last; ++it)
+        if (*best < *it) best.emplace(*it);
+    return *best;
+}
+
+template <ranges::input_range R>
+requires (!ranges::range<const remove_reference_t<R>>)
+auto range_minmax(R&& values) -> optional<pair<ranges::range_value_t<R>, ranges::range_value_t<R>>> {
+    using T = ranges::range_value_t<R>;
+    static_assert(!ac_detail::io::is_range_v<T>,
+                  "range_minmax requires a one-dimensional range; use axis_min/axis_max");
+    auto it = ranges::begin(values);
+    const auto last = ranges::end(values);
+    if (it == last) return nullopt;
+    optional<T> minimum(in_place, *it), maximum(in_place, *it);
+    for (++it; it != last; ++it) {
+        if (*it < *minimum) minimum.emplace(*it);
+        if (*maximum < *it) maximum.emplace(*it);
+    }
+    return pair<T, T>{*minimum, *maximum};
 }
 
 // @acf fn read_graph — (int n, int m, bool directed=false) -> vvi — 無向/有向グラフ入力（1-indexed 辺）

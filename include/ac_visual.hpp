@@ -21,6 +21,8 @@ inline constexpr const char* kColors[] = {
 inline constexpr const char* kReset = "\033[0m";
 inline constexpr const char* kDim = "\033[2m";
 inline constexpr const char* kAxisColor = "\033[38;5;245m";
+inline constexpr const char* kInvalidColor = "\033[38;5;15m";
+inline constexpr int kInvalidColorIndex = -2;
 inline constexpr int kDefaultWidth = 56;
 inline constexpr int kDefaultHeight = 20;
 inline constexpr long double kCharAspect = 0.5L;
@@ -322,6 +324,7 @@ struct Canvas {
         if (!cell.overlay.empty()) return cell.overlay;
         if (cell.dots != 0) {
             const char* color =
+                cell.color_idx == kInvalidColorIndex ? kInvalidColor :
                 cell.color_idx >= 0
                     ? kColors[static_cast<size_t>(cell.color_idx) %
                               (sizeof(kColors) / sizeof(kColors[0]))]
@@ -477,23 +480,32 @@ void draw_heatmap(Canvas& canvas, const Mat& mat, int color_idx,
         cols = max(cols, static_cast<size_t>(std::size(row)));
         for (const auto& v : row) {
             const long double x = to_plot_ld(v);
-            lo = min(lo, x);
-            hi = max(hi, x);
+            if (isfinite(x)) {
+                lo = min(lo, x);
+                hi = max(hi, x);
+            }
         }
     }
     if (rows == 0 || cols == 0) return;
-    if (!isfinite(lo) || !isfinite(hi) || fabsl(hi - lo) < 1e-18L) {
-        lo = 0;
-        hi = 1;
-    }
+    const bool has_range = isfinite(lo) && isfinite(hi) && lo != hi;
     constexpr size_t n_c = sizeof(kColors) / sizeof(kColors[0]);
     size_t r = 0;
     for (const auto& row : mat) {
         size_t c = 0;
         for (const auto& v : row) {
-            const long double t = (to_plot_ld(v) - lo) / (hi - lo);
-            const int shade =
-                static_cast<int>((color_idx + static_cast<int>(t * (n_c - 1))) % n_c);
+            const long double value = to_plot_ld(v);
+            int shade = kInvalidColorIndex;
+            if (isfinite(value)) {
+                long double t = 0;
+                if (has_range) {
+                    const long double range = hi - lo;
+                    t = isfinite(range) ? (value - lo) / range
+                                        : (value / 2 - lo / 2) / (hi / 2 - lo / 2);
+                    if (!isfinite(t)) t = 0;
+                    t = clamp(t, 0.0L, 1.0L);
+                }
+                shade = static_cast<int>((color_idx + static_cast<int>(t * (n_c - 1))) % n_c);
+            }
             const long double x = x_offset + static_cast<long double>(c);
             const long double y = static_cast<long double>(rows - 1 - r);
             auto [sx, sy] = canvas.to_subpixel(x, y);
@@ -563,6 +575,8 @@ template <class T>
 struct iter_value<T, enable_if_t<is_iterable<T>::value>> {
     using type = remove_cv_t<remove_reference_t<decltype(*std::begin(declval<const T&>()))>>;
 };
+template <>
+struct iter_value<vector<bool>, void> { using type = bool; };
 template <class T>
 using iter_value_t = typename iter_value<T>::type;
 template <class T>
@@ -577,7 +591,7 @@ inline constexpr bool is_arith_volume_v =
 
 template <class Seq>
 void expand_seq_or_nested(Canvas& canvas, const Seq& seq) {
-    using V = remove_cv_t<remove_reference_t<decltype(*std::begin(seq))>>;
+    using V = iter_value_t<Seq>;
     if constexpr (is_arithmetic_v<V>) {
         expand_stem_seq(canvas, seq);
     } else if constexpr (is_arith_volume_v<Seq>) {
@@ -590,7 +604,7 @@ void expand_seq_or_nested(Canvas& canvas, const Seq& seq) {
 }
 template <class Seq>
 void draw_seq_or_nested(Canvas& canvas, const Seq& seq, int color_idx) {
-    using V = remove_cv_t<remove_reference_t<decltype(*std::begin(seq))>>;
+    using V = iter_value_t<Seq>;
     if constexpr (is_arithmetic_v<V>) {
         draw_stem_seq(canvas, seq, color_idx);
     } else if constexpr (is_arith_volume_v<Seq>) {

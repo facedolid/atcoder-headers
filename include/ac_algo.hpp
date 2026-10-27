@@ -1500,8 +1500,12 @@ ll count_subarrays_with_sum(const R& values, ll target) {
     ll result = 0;
     for (const T& value : values) {
         prefix += static_cast<ll>(value);
-        auto it = frequency.find(prefix - target);
-        if (it != frequency.end()) result += it->second;
+        const i128 complement = static_cast<i128>(prefix) - static_cast<i128>(target);
+        if (complement >= static_cast<i128>(numeric_limits<ll>::min()) &&
+            complement <= static_cast<i128>(numeric_limits<ll>::max())) {
+            auto it = frequency.find(static_cast<ll>(complement));
+            if (it != frequency.end()) result += it->second;
+        }
         ++frequency[prefix];
     }
     return result;
