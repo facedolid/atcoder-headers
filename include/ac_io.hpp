@@ -516,6 +516,24 @@ C split_into(string_view s, char sep) {
     return out;
 }
 
+// Character-separated splitting keeps all empty tokens unless explicitly trimmed.
+// trim_empty removes every empty token at both edges, never an interior token.
+enum class split_edges { keep, trim_empty };
+
+// @acf fn split_into — (string_view s, char sep, split_edges edges) -> C — 両端の空要素の扱いを指定して分割
+/// @acf-doc @brief `split_edges::trim_empty`は両端に連続する空要素をすべて除く。途中の空要素と非空要素は保持。空文字列・区切りだけなら空コンテナ。`keep`は2引数版と同じ。型変換前のトークンに適用する
+/// @acf-doc @code (string_view s, char sep, split_edges edges) -> C
+/// @acf-doc [function] split_into
+template <class C>
+C split_into(string_view s, char sep, split_edges edges) {
+    if (edges == split_edges::trim_empty) {
+        while (!s.empty() && s.front() == sep) s.remove_prefix(1);
+        while (!s.empty() && s.back() == sep) s.remove_suffix(1);
+        if (s.empty()) return C{};
+    }
+    return split_into<C>(s, sep);
+}
+
 // @acf fn split — (string_view s) -> vector<T> — 空白区切りで vector へ
 /// @acf-doc @brief 空白区切りトークンを `vector<T>` へ（`split_into<vector<T>>`）
 /// @acf-doc @code (string_view s) -> vector<T>
@@ -532,6 +550,15 @@ vector<T> split(string_view s) {
 template <class T>
 vector<T> split(string_view s, char sep) {
     return split_into<vector<T>>(s, sep);
+}
+
+// @acf fn split — (string_view s, char sep, split_edges edges) -> vector<T> — 両端の空要素の扱いを指定して分割
+/// @acf-doc @brief `split_edges::trim_empty`は両端に連続する空要素だけをすべて除く。途中の空要素と非空の端要素は保持。空文字列・区切りだけなら空vector。`keep`は2引数版と同じ。数値型などは従来どおり空・不正トークンを飛ばす。入力は変更せず、結果の値を所有する
+/// @acf-doc @code (string_view s, char sep, split_edges edges) -> vector<T>
+/// @acf-doc [function] split
+template <class T>
+vector<T> split(string_view s, char sep, split_edges edges) {
+    return split_into<vector<T>>(s, sep, edges);
 }
 
 // @acf fn getline_into — () -> C — 1行読んでコンテナへ
