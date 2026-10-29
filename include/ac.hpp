@@ -2678,6 +2678,48 @@ T sum_as(const Range& value) {
     return sum_by(value, [](const auto& leaf) -> T { return static_cast<T>(leaf); });
 }
 
+// @acf fn average — (const range& a) -> long double — 平均
+/// @acf-doc @brief 1次元の数値列の平均を返す。空でないこと。計算量 O(N)
+/// @acf-doc @code average(a) -> long double
+/// @acf-doc [function] average
+template <class Range>
+long double average(const Range& a) {
+    long double total = 0;
+    size_t count = 0;
+    for (const auto& x : a) {
+        total += static_cast<long double>(x);
+        ++count;
+    }
+    assert(count > 0);
+    return total / count;
+}
+
+// @acf fn variance — (const range& a) -> long double — 分散
+/// @acf-doc @brief 平均からの偏差の二乗の平均を返す。空でなく、繰り返し走査できること。計算量 O(N)
+/// @acf-doc @code variance(a) -> long double
+/// @acf-doc [function] variance
+template <class Range>
+long double variance(const Range& a) {
+    const long double avg = average(a);
+    long double total = 0;
+    size_t count = 0;
+    for (const auto& x : a) {
+        const long double diff = static_cast<long double>(x) - avg;
+        total += diff * diff;
+        ++count;
+    }
+    return total / count;
+}
+
+// @acf fn stddev — (const range& a) -> long double — 標準偏差
+/// @acf-doc @brief 分散の平方根を返す。空でなく、繰り返し走査できること。計算量 O(N)
+/// @acf-doc @code stddev(a) -> long double
+/// @acf-doc [function] stddev
+template <class Range>
+long double stddev(const Range& a) {
+    return sqrt(variance(a));
+}
+
 // @acf fn product_by — (const nested range& a, Projection projection) -> scalar / (const nested range& a) -> scalar — 葉を変換して全体を乗算
 /// @acf-doc @brief 任意次元の nested range の葉に射影を適用して乗算する。射影を省略した場合は値をそのまま使う。空の配列は `1`
 /// @acf-doc @code (const nested range& a, Projection projection) -> scalar / (const nested range& a) -> scalar
