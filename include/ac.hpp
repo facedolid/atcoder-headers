@@ -3473,6 +3473,23 @@ int find(const R& values, const V& target) {
     return index;
 }
 
+// @acf fn has_common — (range, range) -> bool — 共通する要素があるか判定
+/// @acf-doc @brief 2つのrangeに共通する要素があればtrue、なければfalse。各要素を共通型に変換し、大小比較で同値か判定する。文字列そのものは文字のrangeとして扱う。入力は変更しない。空rangeはfalse。aがN要素・D種類、bがM要素のとき、時間O((N+M) log(D+1))、追加メモリO(D)（要素の変換・コピー・比較の費用を除く）
+/// @acf-doc @code (const input_range& a, const input_range& b) -> bool
+/// @acf-doc [function] has_common
+template <class A, class B>
+requires std::ranges::input_range<const A> && std::ranges::input_range<const B>
+bool has_common(const A& a, const B& b) {
+    using T = common_type_t<std::ranges::range_value_t<const A>,
+                            std::ranges::range_value_t<const B>>;
+    set<T> values;
+    for (const auto& value : a) values.insert(static_cast<T>(value));
+    if (values.empty()) return false;
+    for (const auto& value : b)
+        if (values.contains(static_cast<T>(value))) return true;
+    return false;
+}
+
 // @acf fn rfind — (range, value) -> int — 配列から値を右から探す
 /// @acf-doc @brief 1次元 range を左から走査し、`target` と一致する最後の添字を返す。見つからないときは要素数 `N`
 /// @acf-doc @code (range, const value& target) -> int
