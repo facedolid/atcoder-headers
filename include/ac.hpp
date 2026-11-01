@@ -4761,3 +4761,50 @@ vector<int> argsort(const R& values, Comp comp = {}, Proj projection = {}) {
 #define COLLECT_SET_IF(vars, range, condition, ...) \
     ::ac_detail::collection::collect<true>( \
         (range), AC_COLLECT_LAMBDA_(vars, condition), AC_COLLECT_LAMBDA_(vars, __VA_ARGS__))
+
+
+// @acf fn diagonal — (const grid&) -> row_type — 左上から右下の斜め成分
+/// @acf-doc @brief 長方形の各行の (i,i) を先頭から min(H,W) 個返す。vector<string> は string、vector<vector<T>> は vector<T> を返す。空の行列または幅0なら空。不揃いな行は invalid_argument。要素コピーの費用を除き、時間 O(H)、返り値の領域 O(min(H,W))
+/// @acf-doc [function] diagonal
+template <class T>
+vector<T> diagonal(const vector<vector<T>>& grid) {
+    if (!ac_detail::grid::rectangular(grid)) throw invalid_argument("diagonal: ragged grid");
+    if (grid.empty()) return {};
+    vector<T> result;
+    const size_t n = min(grid.size(), grid.front().size());
+    result.reserve(n);
+    for (size_t i = 0; i < n; ++i) result.push_back(grid[i][i]);
+    return result;
+}
+inline string diagonal(const vector<string>& grid) {
+    if (!ac_detail::grid::rectangular(grid)) throw invalid_argument("diagonal: ragged grid");
+    if (grid.empty()) return {};
+    string result;
+    const size_t n = min(grid.size(), grid.front().size());
+    result.reserve(n);
+    for (size_t i = 0; i < n; ++i) result.push_back(grid[i][i]);
+    return result;
+}
+
+// @acf fn anti_diagonal — (const grid&) -> row_type — 右上から左下の斜め成分
+/// @acf-doc @brief 長方形の各行の (i,W-1-i) を先頭から min(H,W) 個返す。vector<string> は string、vector<vector<T>> は vector<T> を返す。空の行列または幅0なら空。不揃いな行は invalid_argument。要素コピーの費用を除き、時間 O(H)、返り値の領域 O(min(H,W))
+/// @acf-doc [function] anti_diagonal
+template <class T>
+vector<T> anti_diagonal(const vector<vector<T>>& grid) {
+    if (!ac_detail::grid::rectangular(grid)) throw invalid_argument("anti_diagonal: ragged grid");
+    if (grid.empty()) return {};
+    vector<T> result;
+    const size_t w = grid.front().size(), n = min(grid.size(), w);
+    result.reserve(n);
+    for (size_t i = 0; i < n; ++i) result.push_back(grid[i][w - 1 - i]);
+    return result;
+}
+inline string anti_diagonal(const vector<string>& grid) {
+    if (!ac_detail::grid::rectangular(grid)) throw invalid_argument("anti_diagonal: ragged grid");
+    if (grid.empty()) return {};
+    string result;
+    const size_t w = grid.front().size(), n = min(grid.size(), w);
+    result.reserve(n);
+    for (size_t i = 0; i < n; ++i) result.push_back(grid[i][w - 1 - i]);
+    return result;
+}
