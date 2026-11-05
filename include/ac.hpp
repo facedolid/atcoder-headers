@@ -4808,3 +4808,9 @@ inline string anti_diagonal(const vector<string>& grid) {
     for (size_t i = 0; i < n; ++i) result.push_back(grid[i][w - 1 - i]);
     return result;
 }
+
+
+// @acf macro repeach — repeach(value, range): 各要素を読み取り専用の参照で走査
+/// @acf-doc @brief `for (const auto& value : (range))` と同じ。range式は1回評価し、要素をコピーしない。break / continue は通常の範囲forと同じ。走査時間は要素数と本体の処理による
+/// @acf-doc [macro] repeach
+#define repeach(value, range) for (const auto& value : (range))
