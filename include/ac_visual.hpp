@@ -112,51 +112,88 @@ inline constexpr uint8_t kBrailleBit[4][2] = {
     {0x40, 0x80},
 };
 // @acf fn braille_bit — (row,col) -> uint8_t — Braille セル内 (row0..3,col0..1) のビット
-/// @acf-doc @brief `graphical_print` 用。1セルは 2×4 点。`braille_or` / `braille_char` と組み合わせ可
-/// @acf-doc @code (int row, int col) -> uint8_t
-/// @acf-doc [function] braille_bit
+
+/// Brailleセル内の1点に対応するbitを返す。
+///
+/// 引数 `row / col`: row=0..3、col=0..1。範囲外は渡せません。
+///
+/// 戻り値: uint8_tの点マスク。
+///
+/// 注意: 副作用なし。時間O(1)。内部の点配置は左列1,2,4,64、右列8,16,32,128。
+///
+/// 呼び分け: LOCALをinclude前に定義し、ac_visual.hppをinclude。debug::graphical名前空間のLOCAL専用の内部道具です。通常提出ではこの関数自体は定義されません。
+///
+/// 例: `print(static_cast<int>(debug::graphical::braille_bit(3,1)));`
 inline constexpr uint8_t braille_bit(int row, int col) {
     return kBrailleBit[row][col];
 }
 // @acf fn braille_or — (dots,row,col) -> uint8_t — 既存マスクに1点を OR
-/// @acf-doc @brief 既存のドットマスクへ (row,col) を点灯して返す
-/// @acf-doc @code (uint8_t dots, int row, int col) -> uint8_t
-/// @acf-doc [function] braille_or
+
+/// Braille点マスクに1点を追加した値を返す。
+///
+/// 引数 `dots`: 既存の8点マスク。
+///
+/// 引数 `row / col`: row=0..3、col=0..1。
+///
+/// 戻り値: uint8_tの点マスク。
+///
+/// 注意: 副作用なし。時間O(1)。内部の点配置は左列1,2,4,64、右列8,16,32,128。
+///
+/// 呼び分け: LOCALをinclude前に定義し、ac_visual.hppをinclude。debug::graphical名前空間のLOCAL専用の内部道具です。通常提出ではこの関数自体は定義されません。
+///
+/// 例: `print(static_cast<int>(debug::graphical::braille_or(1,3,1)));`
 inline constexpr uint8_t braille_or(uint8_t dots, int row, int col) {
     return static_cast<uint8_t>(dots | braille_bit(row, col));
 }
 // @acf fn braille_char — (dots) -> string — ドットマスクを Braille 1文字（UTF-8）にする
-/// @acf-doc @brief U+2800+dots をUTF-8文字列で返す
-/// @acf-doc @code (uint8_t dots) -> string
-/// @acf-doc [function] braille_char
+
+/// 8点マスクをBraille1文字のUTF-8文字列へ変換する。
+///
+/// 引数 `dots`: 0..255の点マスク。
+///
+/// 戻り値: string（UTF-8の3バイト）でU+2800+dots。
+///
+/// 注意: 副作用なし。時間O(1)。内部の点配置は左列1,2,4,64、右列8,16,32,128。
+///
+/// 呼び分け: LOCALをinclude前に定義し、ac_visual.hppをinclude。debug::graphical名前空間のLOCAL専用の内部道具です。通常提出ではこの関数自体は定義されません。
+///
+/// 例: `print(debug::graphical::braille_char(1));`
 inline string braille_char(uint8_t dots) { return braille_utf8(dots); }
 struct Cell {
+    /// Braille ドットマスク。
     uint8_t dots = 0;
+    /// 色番号（`-1` で無し）。
     int color_idx = -1;
+    /// 軸描画か。
     bool axis = false;
+    /// 軸用グリフ。
     const char* axis_glyph = " ";
+    /// 文字オーバーレイ。
     string overlay;
 };
+/// 点や線を端末へ描くために、ワールド座標の範囲と端末セルの格子を保持する内部描画キャンバスです。座標を Braille の点灯位置へ変換するために使います。
 struct Canvas {
     int width = kDefaultWidth;
     int height = kDefaultHeight;
+    /// セル配列。
     vector<vector<Cell>> grid;
     long double min_x = 0, max_x = 1, min_y = 0, max_y = 1;
     bool has_bounds = false;
+    /// 凡例。
     vector<string> legend;
 
-    /// @brief 端末セル数 `w`×`h` の描画キャンバスを構築する（最小8×6）。
+    /// 端末セル数 `w`×`h` の描画キャンバスを構築する（最小8×6）。
     explicit Canvas(int w, int h) : width(max(w, 8)), height(max(h, 6)) {
         grid.assign(height, vector<Cell>(width));
     }
 
-    /// @brief Brailleの横方向ピクセル数を返す。
+    /// Brailleの横方向ピクセル数を返す。
     int px_w() const { return width * 2; }
 
-    /// @brief Brailleの縦方向ピクセル数を返す。
+    /// Brailleの縦方向ピクセル数を返す。
     int px_h() const { return height * 4; }
 
-    /// @brief 描画範囲へワールド座標の点を追加する。
+    /// 描画範囲へワールド座標の点を追加する。
     void expand(long double x, long double y) {
         if (!has_bounds) {
             min_x = max_x = x;
@@ -170,13 +207,13 @@ struct Canvas {
         max_y = max(max_y, y);
     }
 
-    /// @brief ワールド座標を端末セル座標へ変換する。
+    /// ワールド座標を端末セル座標へ変換する。
     pair<int, int> to_cell(long double x, long double y) const {
         auto [sx, sy] = to_subpixel(x, y);
         return {sx / 2, sy / 4};
     }
 
-    /// @brief ワールド座標をBrailleサブピクセル座標へ変換する。
+    /// ワールド座標をBrailleサブピクセル座標へ変換する。
     pair<int, int> to_subpixel(long double x, long double y) const {
         long double dx = max_x - min_x;
         long double dy = max_y - min_y;
@@ -189,7 +226,7 @@ struct Canvas {
         return {clamp(sx, 0, px_w() - 1), clamp(sy, 0, px_h() - 1)};
     }
 
-    /// @brief 指定したサブピクセルを点灯する。
+    /// 指定したサブピクセルを点灯する。
     void plot_subpixel(int sx, int sy, int color_idx) {
         if (sx < 0 || sy < 0 || sx >= px_w() || sy >= px_h()) return;
         Cell& cell = grid[sy / 4][sx / 2];
@@ -198,14 +235,14 @@ struct Canvas {
         cell.axis = false;
     }
 
-    /// @brief ワールド座標の点を描画する。
+    /// ワールド座標の点を描画する。
     void plot_point(long double x, long double y, int color_idx) {
         auto [sx, sy] = to_subpixel(x, y);
         for (int dy = 0; dy < 2; ++dy)
             for (int dx = 0; dx < 2; ++dx) plot_subpixel(sx + dx, sy + dy, color_idx);
     }
 
-    /// @brief 2点間をサブピクセルの線分として描画する。
+    /// 2点間をサブピクセルの線分として描画する。
     void draw_segment(long double x0, long double y0, long double x1, long double y1,
                       int color_idx) {
         auto [c0, r0] = to_subpixel(x0, y0);
@@ -229,7 +266,7 @@ struct Canvas {
         }
     }
 
-    /// @brief 空のセルに軸記号を設定する。図形があれば上書きしない。
+    /// 空のセルに軸記号を設定する。図形があれば上書きしない。
     void set_axis_cell(int col, int row, const char* glyph) {
         if (0 <= col && col < width && 0 <= row && row < height) {
             Cell& cell = grid[row][col];
@@ -240,7 +277,7 @@ struct Canvas {
         }
     }
 
-    /// @brief セルへ軸記号を設定する。点がなければ既存の軸記号を上書きする。
+    /// セルへ軸記号を設定する。点がなければ既存の軸記号を上書きする。
     void force_axis_cell(int col, int row, const char* glyph) {
         if (0 <= col && col < width && 0 <= row && row < height) {
             Cell& cell = grid[row][col];
@@ -251,7 +288,7 @@ struct Canvas {
         }
     }
 
-    /// @brief 指定セルから凡例などのオーバーレイ文字列を描画する。
+    /// 指定セルから凡例などのオーバーレイ文字列を描画する。
     void draw_overlay_text(int col, int row, string_view text) {
         if (row < 0 || row >= height) return;
         for (char ch : text) {
@@ -260,7 +297,7 @@ struct Canvas {
         }
     }
 
-    /// @brief 現在の範囲に合わせて座標軸と目盛りを描画する。
+    /// 現在の範囲に合わせて座標軸と目盛りを描画する。
     void draw_axes() {
         if (!has_bounds) return;
         optional<int> zero_col, zero_row;
@@ -283,7 +320,7 @@ struct Canvas {
             for (int col = 0; col < width; col += 8) set_axis_cell(col, row, "·");
     }
 
-    /// @brief 描画範囲に余白を追加し、端末の縦横比に合わせる。
+    /// 描画範囲に余白を追加し、端末の縦横比に合わせる。
     void pad_bounds() {
         if (!has_bounds) {
             min_x = -1;
@@ -319,7 +356,7 @@ struct Canvas {
         }
     }
 
-    /// @brief 1セルをBraille・軸記号・文字オーバーレイとして文字列化する。
+    /// 1セルをBraille・軸記号・文字オーバーレイとして文字列化する。
     string render_cell(const Cell& cell) const {
         if (!cell.overlay.empty()) return cell.overlay;
         if (cell.dots != 0) {
@@ -335,7 +372,7 @@ struct Canvas {
         return " ";
     }
 
-    /// @brief キャンバスを軸・凡例付きでストリームへ出力する。
+    /// キャンバスを軸・凡例付きでストリームへ出力する。
     void write(ostream& os) const {
         const int label_w = 8;
         auto repeat_glyph = [](string_view glyph, int n) {
@@ -1059,6 +1096,7 @@ inline constexpr bool size_prefix_v<A, B, Rest...> =
     is_integral_v<A> && is_integral_v<B> && (sizeof...(Rest) >= 1);
 }  // namespace ac_detail::graphical_print_detail
 
+/// 指定した幅・高さで図形や配列を標準エラーへ描く。LOCAL時だけ有効。
 template <class A, class B, class... Rest,
           enable_if_t<is_integral_v<A> && is_integral_v<B> && (sizeof...(Rest) >= 1),
                       int> = 0>
@@ -1067,6 +1105,7 @@ void graphical_print(A width, B height, const Rest&... rest) {
                              rest...);
 }
 
+/// 図形や配列を既定の56×20セルで標準エラーへ描く。LOCAL時だけ有効。
 template <class... Shapes,
           enable_if_t<(sizeof...(Shapes) >= 1) &&
                           !ac_detail::graphical_print_detail::size_prefix_v<Shapes...>,
@@ -1077,15 +1116,19 @@ void graphical_print(const Shapes&... shapes) {
 }
 #else
 #ifndef graphical_print
+/// 提出用の無処理版。出力せず、引数も評価しない。
 #define graphical_print(...) ((void)0)
 #endif
 #ifndef braille_char
+/// 提出用の無処理版。空文字列を返し、引数は評価しない。
 #define braille_char(...) (::std::string{})
 #endif
 #ifndef braille_bit
+/// 提出用の無処理版。0を返し、引数は評価しない。
 #define braille_bit(...) (0)
 #endif
 #ifndef braille_or
+/// 提出用の無処理版。dotsをそのまま返し、残りの引数は評価しない。
 #define braille_or(dots, ...) (dots)
 #endif
 #endif

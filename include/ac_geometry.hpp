@@ -11,8 +11,10 @@
 #endif
 
 // @acf using Point — Point<T,N> — 固定次元の点・ベクトル型
-/// @acf-doc @brief `Point<T,N>` はT型のN次元座標。make_point、添字・x/y/z、構造化束縛、入出力、比較、算術演算に対応。2次元では右・左90度回転も提供
-/// @acf-doc [type] Point
+
+/// 固定個数の座標を持つ点、または移動量・方向を表すベクトルです。点の座標アクセス、加減算、スカラー倍と、2次元の90度回転に使います。
+///
+/// 注意: `Point<T,N>` の N は正の次元数、coordinates は N 個の T。添字は0からN-1で x/y/z は0/1/2番目。operator[] は範囲検査なし、at は範囲外で out_of_range。既定構築は全座標 T{}。Point は点が1個なので empty() は false。回転は2次元限定で、x右・y上の座標系です。整数 T の演算・型変換は整数の精度に従います。
 // 固定次元の点・ベクトル。解答側では make_point(...) の型推論を基本にする。
 // Point と Vector は競プロでは同じ座標表現を共有し、意味は変数名とAPIで区別する。
 template <class T, size_t N>
@@ -22,32 +24,33 @@ struct Point {
     using value_type = T;
     static constexpr size_t dimension = N;
 
+    /// 座標配列。
     array<T, N> coordinates{};
 
-    /// @brief 全座標を値初期化した点を構築する。
+    /// 全座標を値初期化した点を構築する。
     constexpr Point() = default;
 
-    /// @brief 指定したN個の座標から点を構築する。
+    /// 指定したN個の座標から点を構築する。
     template <class... U,
               enable_if_t<sizeof...(U) == N && (is_convertible_v<U, T> && ...), int> = 0>
     constexpr Point(U&&... values)
         : coordinates{static_cast<T>(std::forward<U>(values))...} {}
 
-    /// @brief 同じ次元の別型の点を座標変換して構築する。
+    /// 同じ次元の別型の点を座標変換して構築する。
     template <class U>
     constexpr explicit Point(const Point<U, N>& other) {
         for (size_t i = 0; i < N; ++i)
             coordinates[i] = static_cast<T>(other[i]);
     }
 
-    /// @brief `array` の各要素を座標変換して点を構築する。
+    /// `array` の各要素を座標変換して点を構築する。
     template <class U>
     constexpr explicit Point(const array<U, N>& values) {
         for (size_t i = 0; i < N; ++i)
             coordinates[i] = static_cast<T>(values[i]);
     }
 
-    /// @brief N要素の `vector` から点を構築する。
+    /// N要素の `vector` から点を構築する。
     template <class U>
     explicit Point(const vector<U>& values) {
         assert(values.size() == N);
@@ -55,84 +58,84 @@ struct Point {
             coordinates[i] = static_cast<T>(values[i]);
     }
 
-    /// @brief i番目の座標へ範囲チェックなしでアクセスする。
+    /// i番目の座標へ範囲チェックなしでアクセスする。
     constexpr T& operator[](size_t i) { return coordinates[i]; }
 
-    /// @brief i番目の座標へ範囲チェックなしでconstアクセスする。
+    /// i番目の座標へ範囲チェックなしでconstアクセスする。
     constexpr const T& operator[](size_t i) const { return coordinates[i]; }
 
-    /// @brief i番目の座標へ範囲チェック付きでアクセスする。
+    /// i番目の座標へ範囲チェック付きでアクセスする。
     constexpr T& at(size_t i) { return coordinates.at(i); }
 
-    /// @brief i番目の座標へ範囲チェック付きでconstアクセスする。
+    /// i番目の座標へ範囲チェック付きでconstアクセスする。
     constexpr const T& at(size_t i) const { return coordinates.at(i); }
 
-    /// @brief 座標配列の先頭ポインタを返す。
+    /// 座標配列の先頭ポインタを返す。
     constexpr T* data() { return coordinates.data(); }
 
-    /// @brief 座標配列の先頭constポインタを返す。
+    /// 座標配列の先頭constポインタを返す。
     constexpr const T* data() const { return coordinates.data(); }
 
-    /// @brief 次元数Nを返す。
+    /// 次元数Nを返す。
     constexpr size_t size() const { return N; }
 
-    /// @brief Pointは常に1個以上の座標を持つためfalseを返す。
+    /// Pointは常に1個以上の座標を持つためfalseを返す。
     constexpr bool empty() const { return false; }
 
-    /// @brief 先頭座標へのmutable iteratorを返す。
+    /// 先頭座標へのmutable iteratorを返す。
     constexpr auto begin() { return coordinates.begin(); }
 
-    /// @brief 先頭座標へのconst iteratorを返す。
+    /// 先頭座標へのconst iteratorを返す。
     constexpr auto begin() const { return coordinates.begin(); }
 
-    /// @brief 末尾の次を指すmutable iteratorを返す。
+    /// 末尾の次を指すmutable iteratorを返す。
     constexpr auto end() { return coordinates.end(); }
 
-    /// @brief 末尾の次を指すconst iteratorを返す。
+    /// 末尾の次を指すconst iteratorを返す。
     constexpr auto end() const { return coordinates.end(); }
 
-    /// @brief x座標（0番目の座標）へアクセスする。
+    /// x座標（0番目の座標）へアクセスする。
     constexpr T& x() {
         static_assert(N >= 1, "x() requires at least one dimension");
         return coordinates[0];
     }
-    /// @brief x座標へconstアクセスする。
+    /// x座標へconstアクセスする。
     constexpr const T& x() const {
         static_assert(N >= 1, "x() requires at least one dimension");
         return coordinates[0];
     }
-    /// @brief y座標（1番目の座標）へアクセスする。
+    /// y座標（1番目の座標）へアクセスする。
     constexpr T& y() {
         static_assert(N >= 2, "y() requires at least two dimensions");
         return coordinates[1];
     }
-    /// @brief y座標へconstアクセスする。
+    /// y座標へconstアクセスする。
     constexpr const T& y() const {
         static_assert(N >= 2, "y() requires at least two dimensions");
         return coordinates[1];
     }
-    /// @brief z座標（2番目の座標）へアクセスする。
+    /// z座標（2番目の座標）へアクセスする。
     constexpr T& z() {
         static_assert(N >= 3, "z() requires at least three dimensions");
         return coordinates[2];
     }
-    /// @brief z座標へconstアクセスする。
+    /// z座標へconstアクセスする。
     constexpr const T& z() const {
         static_assert(N >= 3, "z() requires at least three dimensions");
         return coordinates[2];
     }
 
-    /// @brief x右・y上の座標系で右へ90度回転した `(y,-x)` を返す。
+    /// x右・y上の座標系で右へ90度回転した `(y,-x)` を返す。
     constexpr Point rot90_right() const requires(N == 2) {
         return {coordinates[1], -coordinates[0]};
     }
 
-    /// @brief x右・y上の座標系で左へ90度回転した `(-y,x)` を返す。
+    /// x右・y上の座標系で左へ90度回転した `(-y,x)` を返す。
     constexpr Point rot90_left() const requires(N == 2) {
         return {-coordinates[1], coordinates[0]};
     }
 
-    /// @brief 対応する座標を加算して自身を更新する。
+    /// 対応する座標を加算して自身を更新する。
     template <class U>
     constexpr Point& operator+=(const Point<U, N>& other) {
         for (size_t i = 0; i < N; ++i)
@@ -140,7 +143,7 @@ struct Point {
         return *this;
     }
 
-    /// @brief 対応する座標を減算して自身を更新する。
+    /// 対応する座標を減算して自身を更新する。
     template <class U>
     constexpr Point& operator-=(const Point<U, N>& other) {
         for (size_t i = 0; i < N; ++i)
@@ -148,7 +151,7 @@ struct Point {
         return *this;
     }
 
-    /// @brief 全座標をスカラー倍して自身を更新する。
+    /// 全座標をスカラー倍して自身を更新する。
     template <class S, enable_if_t<is_arithmetic_v<S>, int> = 0>
     constexpr Point& operator*=(S scalar) {
         for (auto& value : coordinates)
@@ -156,7 +159,7 @@ struct Point {
         return *this;
     }
 
-    /// @brief 全座標をスカラーで割って自身を更新する。
+    /// 全座標をスカラーで割って自身を更新する。
     template <class S, enable_if_t<is_arithmetic_v<S>, int> = 0>
     constexpr Point& operator/=(S scalar) {
         assert(scalar != 0);
@@ -177,46 +180,59 @@ using Point3 = Point<T, 3>;
 
 // 短いエイリアスはコアの vi / pll / stdb と同じく小文字。
 // @acf using p2i — Point2<int>
-/// @acf-doc [type] p2i
+
+/// Point2<int>
 using p2i = Point2<int>;
 // @acf using p2ll — Point2<ll>
-/// @acf-doc [type] p2ll
+
+/// Point2<ll>
 using p2ll = Point2<ll>;
 // @acf using p2db — Point2<db>
-/// @acf-doc [type] p2db
+
+/// Point2<db>
 using p2db = Point2<db>;
 // @acf using p2ld — Point2<ld>
-/// @acf-doc [type] p2ld
+
+/// Point2<ld>
 using p2ld = Point2<ld>;
 // @acf using p3i — Point3<int>
-/// @acf-doc [type] p3i
+
+/// Point3<int>
 using p3i = Point3<int>;
 // @acf using p3ll — Point3<ll>
-/// @acf-doc [type] p3ll
+
+/// Point3<ll>
 using p3ll = Point3<ll>;
 // @acf using p3ld — Point3<ld>
-/// @acf-doc [type] p3ld
+
+/// Point3<ld>
 using p3ld = Point3<ld>;
 // @acf using vp2i — vector<p2i>
-/// @acf-doc [type] vp2i
+
+/// vector<p2i>
 using vp2i = vector<p2i>;
 // @acf using vp2ll — vector<p2ll>
-/// @acf-doc [type] vp2ll
+
+/// vector<p2ll>
 using vp2ll = vector<p2ll>;
 // @acf using vp2ld — vector<p2ld>
-/// @acf-doc [type] vp2ld
+
+/// vector<p2ld>
 using vp2ld = vector<p2ld>;
 
+/// PointのI番目の座標を参照で返す。Iは0始まりで、次元数未満の定数を指定する。
 template <size_t I, class T, size_t N>
 constexpr T& get(Point<T, N>& point) {
     static_assert(I < N);
     return point[I];
 }
+/// PointのI番目の座標を読み取り専用の参照で返す。Iは0始まり。
 template <size_t I, class T, size_t N>
 constexpr const T& get(const Point<T, N>& point) {
     static_assert(I < N);
     return point[I];
 }
+/// 一時オブジェクトのPointからI番目の座標を右辺値参照で取り出す。参照先の寿命に注意。
 template <size_t I, class T, size_t N>
 constexpr T&& get(Point<T, N>&& point) {
     static_assert(I < N);
@@ -655,7 +671,7 @@ struct tuple_element<I, ::Point<T, N>> {
 };
 template <class T, size_t N>
 struct hash<::Point<T, N>> {
-    /// @brief 点の全座標からハッシュ値を計算する。
+    /// 点の全座標からハッシュ値を計算する。
     size_t operator()(const ::Point<T, N>& point) const {
         size_t seed = 0;
         for (const auto& value : point) {
@@ -669,8 +685,16 @@ struct hash<::Point<T, N>> {
 
 
 // @acf fn directions4 — (order="RLUD") -> array<Point2<int>,4> — 指定順の上下左右の移動ベクトル
-/// @acf-doc @brief xは右が正、yは上が正。R=(1,0), L=(-1,0), U=(0,1), D=(0,-1)。orderは4文字の順列、不正ならinvalid_argument
-/// @acf-doc [function] directions4
+
+/// R/L/U/Dの指定順で、x右正・y上正の4方向のPoint移動ベクトルを作る。
+///
+/// 引数 `order`: R/L/U/Dを各1回含む4文字の順列。空・重複・未知文字・長さ違いはinvalid_argument。省略時は `"RLUD"`。
+///
+/// 戻り値: `array<Point2<int>,4>`。R=(1,0)、L=(-1,0)、U=(0,1)、D=(0,-1)をorder順に返す。
+///
+/// 注意: 入力を変更しません。構築・記憶量O(1)。不正なorderはassertの有効無効にかかわらずinvalid_argument。
+///
+/// 呼び分け: directions4() / directions4(order)。既存の行・列用dx4/dy4とは軸・符号の規則が異なります。
 constexpr array<Point2<int>, 4> directions4(string_view order = "RLUD") {
     if (order.size() != 4)
         throw invalid_argument("directions4: order must be a permutation of RLUD");
@@ -694,23 +718,41 @@ constexpr array<Point2<int>, 4> directions4(string_view order = "RLUD") {
 }
 
 // @acf fn direction_map4 — () -> unordered_map<char,Point2<int>> — 方向文字から移動ベクトルを引く
-/// @acf-doc @brief R/L/U/Dをx右正・y上正のPoint2<int>へ対応させる。毎回独立したmapを返す
-/// @acf-doc [function] direction_map4
+
+/// 方向文字R/L/U/Dから、x右正・y上正のPoint移動ベクトルを引く。
+///
+/// 戻り値: `unordered_map<char,Point2<int>>`。R=(1,0)、L=(-1,0)、U=(0,1)、D=(0,-1)の4キーを持つ独立したマップ。走査順の保証はありません。
+///
+/// 注意: 引数・共有状態を変更しません。構築・記憶量O(1)。戻りの[]は未知キーへ零ベクトルを追加するので、命令の検査にはatを使います。
+///
+/// 呼び分け: direction_map4()は従来どおりdirection_map4_xy()と同じ(x,y)の規則です。(行,列)で下向きを正にする場合はdirection_map4_grid()を使います。違いは軸の順序と向きで、原点や0/1始まりには依存しません。返るマップのat(未知文字)はout_of_range、[]では例外になりません。
 inline unordered_map<char, Point2<int>> direction_map4() {
     const auto steps = directions4();
     return {{'R', steps[0]}, {'L', steps[1]}, {'U', steps[2]}, {'D', steps[3]}};
 }
 
 // @acf fn direction_map4_xy — () -> unordered_map<char,Point2<int>> — 方向文字から(x,y)の移動ベクトルを引く
-/// @acf-doc @brief xは右が正、yは上が正。U=(0,1), D=(0,-1), L=(-1,0), R=(1,0)。direction_map4と同じで、毎回独立したmapを返す
-/// @acf-doc [function] direction_map4_xy
+
+/// 方向文字R/L/U/Dから、(x,y)の移動ベクトルを引く。xは右が正、yは上が正。
+///
+/// 戻り値: `unordered_map<char,Point2<int>>`。U=(0,1)、D=(0,-1)、L=(-1,0)、R=(1,0)の4キーを持つ独立したマップ。走査順の保証はありません。
+///
+/// 注意: 共有状態を変更しません。構築・記憶量O(1)。戻りの[]は未知キーへ零ベクトルを追加するので、命令の検査にはatを使います。
+///
+/// 呼び分け: 引数なし。従来のdirection_map4()と同じ規則・型です。direction_map4_grid()との違いは軸の順序と向きで、原点や0/1始まりには依存しません。at(未知文字)はout_of_rangeです。
 inline unordered_map<char, Point2<int>> direction_map4_xy() {
     return direction_map4();
 }
 
 // @acf fn direction_map4_grid — () -> unordered_map<char,Point2<int>> — 方向文字から(行,列)の移動ベクトルを引く
-/// @acf-doc @brief 行は下が正、列は右が正。U=(-1,0), D=(1,0), L=(0,-1), R=(0,1)。毎回独立したmapを返す
-/// @acf-doc [function] direction_map4_grid
+
+/// 方向文字R/L/U/Dから、(行,列)の移動ベクトルを引く。行は下が正、列は右が正。
+///
+/// 戻り値: `unordered_map<char,Point2<int>>`。U=(-1,0)、D=(1,0)、L=(0,-1)、R=(0,1)の4キーを持つ独立したマップ。Point2の0番目が行、1番目が列です。走査順の保証はありません。
+///
+/// 注意: 共有状態を変更しません。構築・記憶量O(1)。戻りの[]は未知キーへ零ベクトルを追加するので、命令の検査にはatを使います。
+///
+/// 呼び分け: 引数なし。direction_map4_xy()との違いは軸の順序と向きで、原点や0/1始まりには依存しません。1始まりの位置を保持する場合は、候補の各座標から1を引いてin_gridと壁を確認します。at(未知文字)はout_of_rangeです。
 inline unordered_map<char, Point2<int>> direction_map4_grid() {
     return {{'R', {0, 1}}, {'L', {0, -1}}, {'U', {-1, 0}}, {'D', {1, 0}}};
 }
@@ -724,9 +766,18 @@ constexpr auto point_from_tuple(const Tuple& values, index_sequence<I...>) {
 }  // namespace ac_detail::geometry
 
 // @acf fn make_point — coordinates / pair / tuple / array -> Point — 座標から固定次元の点を作る
-/// @acf-doc @brief `make_point(x,y,...)` は座標型をcommon_typeに揃えた `Point<T,N>` を返す。pair・tuple・array、`make_point<N>(vector)` からも変換できる
-/// @acf-doc @code (coordinates...) / (container) -> Point<common_type, dimension>
-/// @acf-doc [function] make_point
+
+/// 座標から固定次元の点・ベクトルを作る。
+///
+/// 引数 `values / source`: 座標を共通型に揃える。tuple・arrayは空不可。Pointはコピー。
+///
+/// 引数 `N（vector版の型引数）`: `make_point<N>`(vector)ではN>0、vector.size()==Nをassertで確認。
+///
+/// 戻り値: `Point<T,N>`。生座標は個数が次元、1つの算術値なら1次元。入力の座標順を保持します。
+///
+/// 注意: 新しいPointを返し、入力を変更しません。N座標のコピー・変換でO(N)。
+///
+/// 呼び分け: make_point(x,y,...) / make_point(source)。動的vectorは`make_point<N>`(source)と次元を指定。
 template <class First, class Second, class... Rest>
 constexpr auto make_point(First&& first, Second&& second, Rest&&... rest) {
     using R = common_type_t<remove_cv_t<remove_reference_t<First>>,
@@ -738,6 +789,17 @@ constexpr auto make_point(First&& first, Second&& second, Rest&&... rest) {
         static_cast<R>(std::forward<Rest>(rest))...};
 }
 
+/// 座標から固定次元の点・ベクトルを作る。
+///
+/// 引数 `values / source`: 座標を共通型に揃える。tuple・arrayは空不可。Pointはコピー。
+///
+/// 引数 `N（vector版の型引数）`: `make_point<N>`(vector)ではN>0、vector.size()==Nをassertで確認。
+///
+/// 戻り値: `Point<T,N>`。生座標は個数が次元、1つの算術値なら1次元。入力の座標順を保持します。
+///
+/// 注意: 新しいPointを返し、入力を変更しません。N座標のコピー・変換でO(N)。
+///
+/// 呼び分け: make_point(x,y,...) / make_point(source)。動的vectorは`make_point<N>`(source)と次元を指定。
 template <class T,
           enable_if_t<is_arithmetic_v<remove_cv_t<remove_reference_t<T>>>, int> = 0>
 constexpr auto make_point(T&& value) {
@@ -745,47 +807,120 @@ constexpr auto make_point(T&& value) {
     return Point<R, 1>{static_cast<R>(std::forward<T>(value))};
 }
 
+/// 座標から固定次元の点・ベクトルを作る。
+///
+/// 引数 `values / source`: 座標を共通型に揃える。tuple・arrayは空不可。Pointはコピー。
+///
+/// 引数 `N（vector版の型引数）`: `make_point<N>`(vector)ではN>0、vector.size()==Nをassertで確認。
+///
+/// 戻り値: `Point<T,N>`。生座標は個数が次元、1つの算術値なら1次元。入力の座標順を保持します。
+///
+/// 注意: 新しいPointを返し、入力を変更しません。N座標のコピー・変換でO(N)。
+///
+/// 呼び分け: make_point(x,y,...) / make_point(source)。動的vectorは`make_point<N>`(source)と次元を指定。
 template <class A, class B>
 constexpr auto make_point(const pair<A, B>& values) {
     using R = common_type_t<A, B>;
     return Point<R, 2>{static_cast<R>(values.first), static_cast<R>(values.second)};
 }
 
+/// 座標から固定次元の点・ベクトルを作る。
+///
+/// 引数 `values / source`: 座標を共通型に揃える。tuple・arrayは空不可。Pointはコピー。
+///
+/// 引数 `N（vector版の型引数）`: `make_point<N>`(vector)ではN>0、vector.size()==Nをassertで確認。
+///
+/// 戻り値: `Point<T,N>`。生座標は個数が次元、1つの算術値なら1次元。入力の座標順を保持します。
+///
+/// 注意: 新しいPointを返し、入力を変更しません。N座標のコピー・変換でO(N)。
+///
+/// 呼び分け: make_point(x,y,...) / make_point(source)。動的vectorは`make_point<N>`(source)と次元を指定。
 template <class... T>
 constexpr auto make_point(const tuple<T...>& values) {
     static_assert(sizeof...(T) > 0, "make_point requires at least one coordinate");
     return ac_detail::geometry::point_from_tuple(values, index_sequence_for<T...>{});
 }
 
+/// 座標から固定次元の点・ベクトルを作る。
+///
+/// 引数 `values / source`: 座標を共通型に揃える。tuple・arrayは空不可。Pointはコピー。
+///
+/// 引数 `N（vector版の型引数）`: `make_point<N>`(vector)ではN>0、vector.size()==Nをassertで確認。
+///
+/// 戻り値: `Point<T,N>`。生座標は個数が次元、1つの算術値なら1次元。入力の座標順を保持します。
+///
+/// 注意: 新しいPointを返し、入力を変更しません。N座標のコピー・変換でO(N)。
+///
+/// 呼び分け: make_point(x,y,...) / make_point(source)。動的vectorは`make_point<N>`(source)と次元を指定。
 template <class T, size_t N>
 constexpr auto make_point(const array<T, N>& values) {
     static_assert(N > 0, "make_point requires at least one coordinate");
     return Point<T, N>{values};
 }
 
+/// 座標から固定次元の点・ベクトルを作る。
+///
+/// 引数 `values / source`: 座標を共通型に揃える。tuple・arrayは空不可。Pointはコピー。
+///
+/// 引数 `N（vector版の型引数）`: `make_point<N>`(vector)ではN>0、vector.size()==Nをassertで確認。
+///
+/// 戻り値: `Point<T,N>`。生座標は個数が次元、1つの算術値なら1次元。入力の座標順を保持します。
+///
+/// 注意: 新しいPointを返し、入力を変更しません。N座標のコピー・変換でO(N)。
+///
+/// 呼び分け: make_point(x,y,...) / make_point(source)。動的vectorは`make_point<N>`(source)と次元を指定。
 template <class T, size_t N>
 constexpr auto make_point(const Point<T, N>& point) {
     return point;
 }
 
+/// 座標から固定次元の点・ベクトルを作る。
+///
+/// 引数 `values / source`: 座標を共通型に揃える。tuple・arrayは空不可。Pointはコピー。
+///
+/// 引数 `N（vector版の型引数）`: `make_point<N>`(vector)ではN>0、vector.size()==Nをassertで確認。
+///
+/// 戻り値: `Point<T,N>`。生座標は個数が次元、1つの算術値なら1次元。入力の座標順を保持します。
+///
+/// 注意: 新しいPointを返し、入力を変更しません。N座標のコピー・変換でO(N)。
+///
+/// 呼び分け: make_point(x,y,...) / make_point(source)。動的vectorは`make_point<N>`(source)と次元を指定。
 template <size_t N, class T>
 auto make_point(const vector<T>& values) {
     return Point<T, N>{values};
 }
 
 // @acf fn point_cast — (Point<U,N>) -> Point<T,N> — 点の座標型を変換する
-/// @acf-doc @brief `point_cast<T>(point)` は次元を保ったまま全座標をTへ変換する
-/// @acf-doc @code <class T>(const Point<U,N>&) -> Point<T,N>
-/// @acf-doc [function] point_cast
+
+/// 点の次元を保って各座標の型を変換する。
+///
+/// 引数 `T（型引数）`: `static_cast<T>`が定義された値域で使う。
+///
+/// 引数 `p`: 変換元の点。
+///
+/// 戻り値: `Point<T,N>`。各座標をstatic_cast。浮動小数点から整数への変換は小数部を切り捨て、範囲超過を独自検査しません。
+///
+/// 注意: 入力を変更せずO(N)で新しいPointを作ります。
+///
+/// 呼び分け: `point_cast<T>`(p)。次元を変更する形式はありません。
 template <class T, class U, size_t N>
 constexpr auto point_cast(const Point<U, N>& point) {
     return Point<T, N>{point};
 }
 
 // @acf fn manhattan_distance — (a,b) / coordinates -> common_type — 2点間のマンハッタン距離
-/// @acf-doc @brief 2点のマンハッタン距離。Point・pair・tuple・vector・array、または2D・3Dの生座標に対応
-/// @acf-doc @code (a, b) / (x1, y1, [z1,] x2, y2, [z2]) -> common_type
-/// @acf-doc [function] manhattan_distance
+
+/// 各座標の絶対差の和としてマンハッタン距離を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: 座標のcommon_typeの値。空vector・空arrayは0。差・絶対値・和がその型へ収まること。符号なしの減算は折り返すため、通常の距離には符号付き/浮動小数点型を使います。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、生座標版はO(1)。型を広げた差ではありません。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 tuple版は非空かつ同じ要素数。
+///
+/// 例: `print(manhattan_distance(1,2,4,6));`
 template <class A, class B, class C, class D>
 constexpr auto manhattan_distance(A r1, B c1, C r2, D c2) {
     using R = common_type_t<A, B, C, D>;
@@ -794,6 +929,17 @@ constexpr auto manhattan_distance(A r1, B c1, C r2, D c2) {
     return (dr < 0 ? -dr : dr) + (dc < 0 ? -dc : dc);
 }
 
+/// 各座標の絶対差の和としてマンハッタン距離を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: 座標のcommon_typeの値。空vector・空arrayは0。差・絶対値・和がその型へ収まること。符号なしの減算は折り返すため、通常の距離には符号付き/浮動小数点型を使います。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、生座標版はO(1)。型を広げた差ではありません。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 tuple版は非空かつ同じ要素数。
+///
+/// 例: `print(manhattan_distance(1,2,4,6));`
 template <class A, class B, class C, class D, class E, class F>
 constexpr auto manhattan_distance(A x1, B y1, C z1, D x2, E y2, F z2) {
     using R = common_type_t<A, B, C, D, E, F>;
@@ -804,11 +950,33 @@ constexpr auto manhattan_distance(A x1, B y1, C z1, D x2, E y2, F z2) {
          + (dz < 0 ? -dz : dz);
 }
 
+/// 各座標の絶対差の和としてマンハッタン距離を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: 座標のcommon_typeの値。空vector・空arrayは0。差・絶対値・和がその型へ収まること。符号なしの減算は折り返すため、通常の距離には符号付き/浮動小数点型を使います。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、生座標版はO(1)。型を広げた差ではありません。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 tuple版は非空かつ同じ要素数。
+///
+/// 例: `print(manhattan_distance(1,2,4,6));`
 template <class A, class B, class C, class D>
 constexpr auto manhattan_distance(const pair<A, B>& a, const pair<C, D>& b) {
     return manhattan_distance(a.first, a.second, b.first, b.second);
 }
 
+/// 各座標の絶対差の和としてマンハッタン距離を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: 座標のcommon_typeの値。空vector・空arrayは0。差・絶対値・和がその型へ収まること。符号なしの減算は折り返すため、通常の距離には符号付き/浮動小数点型を使います。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、生座標版はO(1)。型を広げた差ではありません。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 tuple版は非空かつ同じ要素数。
+///
+/// 例: `print(manhattan_distance(1,2,4,6));`
 template <class A, class B, size_t N>
 constexpr auto manhattan_distance(const array<A, N>& a, const array<B, N>& b) {
     using R = common_type_t<A, B>;
@@ -820,6 +988,17 @@ constexpr auto manhattan_distance(const array<A, N>& a, const array<B, N>& b) {
     return result;
 }
 
+/// 各座標の絶対差の和としてマンハッタン距離を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: 座標のcommon_typeの値。空vector・空arrayは0。差・絶対値・和がその型へ収まること。符号なしの減算は折り返すため、通常の距離には符号付き/浮動小数点型を使います。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、生座標版はO(1)。型を広げた差ではありません。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 tuple版は非空かつ同じ要素数。
+///
+/// 例: `print(manhattan_distance(1,2,4,6));`
 template <class A, class B, size_t N>
 constexpr auto manhattan_distance(const Point<A, N>& a, const Point<B, N>& b) {
     using R = common_type_t<A, B>;
@@ -831,6 +1010,17 @@ constexpr auto manhattan_distance(const Point<A, N>& a, const Point<B, N>& b) {
     return result;
 }
 
+/// 各座標の絶対差の和としてマンハッタン距離を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: 座標のcommon_typeの値。空vector・空arrayは0。差・絶対値・和がその型へ収まること。符号なしの減算は折り返すため、通常の距離には符号付き/浮動小数点型を使います。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、生座標版はO(1)。型を広げた差ではありません。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 tuple版は非空かつ同じ要素数。
+///
+/// 例: `print(manhattan_distance(1,2,4,6));`
 template <class A, class B>
 auto manhattan_distance(const vector<A>& a, const vector<B>& b) {
     assert(a.size() == b.size());
@@ -858,6 +1048,17 @@ constexpr auto manhattan_tuple(const tuple<A...>& a, const tuple<B...>& b,
 }
 }  // namespace ac_detail::geometry
 
+/// 各座標の絶対差の和としてマンハッタン距離を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: 座標のcommon_typeの値。空vector・空arrayは0。差・絶対値・和がその型へ収まること。符号なしの減算は折り返すため、通常の距離には符号付き/浮動小数点型を使います。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、生座標版はO(1)。型を広げた差ではありません。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 tuple版は非空かつ同じ要素数。
+///
+/// 例: `print(manhattan_distance(1,2,4,6));`
 template <class... A, class... B>
 constexpr auto manhattan_distance(const tuple<A...>& a, const tuple<B...>& b) {
     static_assert(sizeof...(A) == sizeof...(B));
@@ -867,9 +1068,18 @@ constexpr auto manhattan_distance(const tuple<A...>& a, const tuple<B...>& b) {
 }
 
 // @acf fn euclidean_distance_squared — (a,b) / coordinates -> product_result — 2点間の平方ユークリッド距離
-/// @acf-doc @brief 2点の平方ユークリッド距離（sqrtなし）。整数は中間を広げ、戻りは `product_result_t`（`int`→`ll`、`ll`はそのまま）
-/// @acf-doc @code (a, b) / (x1, y1, [z1,] x2, y2, [z2]) -> product_result
-/// @acf-doc [function] euclidean_distance_squared
+
+/// 平方根を取らず2点間のユークリッド距離の2乗を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: product_result_t。int座標は通常ll、ll座標はllのまま。空vector・空arrayは0。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。差は座標の共通型で先に計算します。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、生座標版はO(1)。積の中間だけ広げます。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。
+///
+/// 例: `print(euclidean_distance_squared(1,2,4,6));`
 template <class A, class B, class C, class D>
 constexpr auto euclidean_distance_squared(A r1, B c1, C r2, D c2) {
     using D0 = common_type_t<A, B, C, D>;
@@ -879,6 +1089,17 @@ constexpr auto euclidean_distance_squared(A r1, B c1, C r2, D c2) {
         wide_mul(dr, dr) + wide_mul(dc, dc));
 }
 
+/// 平方根を取らず2点間のユークリッド距離の2乗を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: product_result_t。int座標は通常ll、ll座標はllのまま。空vector・空arrayは0。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。差は座標の共通型で先に計算します。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、生座標版はO(1)。積の中間だけ広げます。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。
+///
+/// 例: `print(euclidean_distance_squared(1,2,4,6));`
 template <class A, class B, class C, class D, class E, class F>
 constexpr auto euclidean_distance_squared(A x1, B y1, C z1,
                                           D x2, E y2, F z2) {
@@ -890,13 +1111,31 @@ constexpr auto euclidean_distance_squared(A x1, B y1, C z1,
         wide_mul(dx, dx) + wide_mul(dy, dy) + wide_mul(dz, dz));
 }
 
+/// 平方根を取らず2点間のユークリッド距離の2乗を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: product_result_t。int座標は通常ll、ll座標はllのまま。空vector・空arrayは0。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。差は座標の共通型で先に計算します。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、生座標版はO(1)。積の中間だけ広げます。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。
+///
+/// 例: `print(euclidean_distance_squared(1,2,4,6));`
 template <class A, class B>
 constexpr auto euclidean_distance_squared(const A& a, const B& b);
 
 // @acf fn make_vec — (from,to) / (x1,y1,x2,y2) / (x1,y1,z1,x2,y2,z2) -> 同形の差ベクトル — from→to
-/// @acf-doc @brief `make_vec(from,to)` は `to-from`。Point・pair・tuple・vector・array対応。2Dは `x1,y1,x2,y2`、3Dは6引数の生座標版もあり
-/// @acf-doc @code (from, to) / (x1,y1,x2,y2) / (x1,y1,z1,x2,y2,z2) -> same-shaped common_type
-/// @acf-doc [function] make_vec
+
+/// 始点から終点への差ベクトルを作る。
+///
+/// 引数 `from / to`: 同じ次元のPoint・pair・tuple・array・vector。vectorの長さ一致はassert。終点-始点が座標の共通型へ収まること。
+///
+/// 戻り値: 元と同じ表現のto-from。Point・pair・vector・arrayは共通座標型、tupleは座標ごとの共通型。空vector・空tupleは空。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、差の型は自動で広がりません。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 生座標2Dはpair、3Dはtupleを返します。
 template <class A, class B, class C, class D>
 constexpr auto make_vec(const pair<A, B>& from, const pair<C, D>& to) {
     using R = common_type_t<A, B, C, D>;
@@ -904,6 +1143,15 @@ constexpr auto make_vec(const pair<A, B>& from, const pair<C, D>& to) {
                       static_cast<R>(to.second) - static_cast<R>(from.second)};
 }
 
+/// 始点から終点への差ベクトルを作る。
+///
+/// 引数 `from / to`: 同じ次元のPoint・pair・tuple・array・vector。vectorの長さ一致はassert。終点-始点が座標の共通型へ収まること。
+///
+/// 戻り値: 元と同じ表現のto-from。Point・pair・vector・arrayは共通座標型、tupleは座標ごとの共通型。空vector・空tupleは空。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、差の型は自動で広がりません。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 生座標2Dはpair、3Dはtupleを返します。
 template <class A, class B>
 auto make_vec(const vector<A>& from, const vector<B>& to) {
     assert(from.size() == to.size());
@@ -914,6 +1162,15 @@ auto make_vec(const vector<A>& from, const vector<B>& to) {
     return result;
 }
 
+/// 始点から終点への差ベクトルを作る。
+///
+/// 引数 `from / to`: 同じ次元のPoint・pair・tuple・array・vector。vectorの長さ一致はassert。終点-始点が座標の共通型へ収まること。
+///
+/// 戻り値: 元と同じ表現のto-from。Point・pair・vector・arrayは共通座標型、tupleは座標ごとの共通型。空vector・空tupleは空。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、差の型は自動で広がりません。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 生座標2Dはpair、3Dはtupleを返します。
 template <class A, class B, size_t N>
 constexpr auto make_vec(const array<A, N>& from, const array<B, N>& to) {
     using R = common_type_t<A, B>;
@@ -923,6 +1180,15 @@ constexpr auto make_vec(const array<A, N>& from, const array<B, N>& to) {
     return result;
 }
 
+/// 始点から終点への差ベクトルを作る。
+///
+/// 引数 `from / to`: 同じ次元のPoint・pair・tuple・array・vector。vectorの長さ一致はassert。終点-始点が座標の共通型へ収まること。
+///
+/// 戻り値: 元と同じ表現のto-from。Point・pair・vector・arrayは共通座標型、tupleは座標ごとの共通型。空vector・空tupleは空。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、差の型は自動で広がりません。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 生座標2Dはpair、3Dはtupleを返します。
 template <class A, class B, size_t N>
 constexpr auto make_vec(const Point<A, N>& from, const Point<B, N>& to) {
     return to - from;
@@ -942,6 +1208,15 @@ constexpr auto tuple_difference(const tuple<A...>& from, const tuple<B...>& to,
 }
 }  // namespace ac_detail::geometry
 
+/// 始点から終点への差ベクトルを作る。
+///
+/// 引数 `from / to`: 同じ次元のPoint・pair・tuple・array・vector。vectorの長さ一致はassert。終点-始点が座標の共通型へ収まること。
+///
+/// 戻り値: 元と同じ表現のto-from。Point・pair・vector・arrayは共通座標型、tupleは座標ごとの共通型。空vector・空tupleは空。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、差の型は自動で広がりません。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 生座標2Dはpair、3Dはtupleを返します。
 template <class... A, class... B>
 constexpr auto make_vec(const tuple<A...>& from, const tuple<B...>& to) {
     static_assert(sizeof...(A) == sizeof...(B));
@@ -949,26 +1224,64 @@ constexpr auto make_vec(const tuple<A...>& from, const tuple<B...>& to) {
         from, to, index_sequence_for<A...>{});
 }
 
+/// 始点から終点への差ベクトルを作る。
+///
+/// 引数 `from / to`: 同じ次元のPoint・pair・tuple・array・vector。vectorの長さ一致はassert。終点-始点が座標の共通型へ収まること。
+///
+/// 戻り値: 元と同じ表現のto-from。Point・pair・vector・arrayは共通座標型、tupleは座標ごとの共通型。空vector・空tupleは空。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、差の型は自動で広がりません。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 生座標2Dはpair、3Dはtupleを返します。
 template <class A, class B, class C, class D>
 constexpr auto make_vec(A x1, B y1, C x2, D y2) {
     return make_vec(pair{x1, y1}, pair{x2, y2});
 }
 
+/// 始点から終点への差ベクトルを作る。
+///
+/// 引数 `from / to`: 同じ次元のPoint・pair・tuple・array・vector。vectorの長さ一致はassert。終点-始点が座標の共通型へ収まること。
+///
+/// 戻り値: 元と同じ表現のto-from。Point・pair・vector・arrayは共通座標型、tupleは座標ごとの共通型。空vector・空tupleは空。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、差の型は自動で広がりません。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 生座標2Dはpair、3Dはtupleを返します。
 template <class A, class B, class C, class D, class E, class F>
 constexpr auto make_vec(A x1, B y1, C z1, D x2, E y2, F z2) {
     return make_vec(tuple{x1, y1, z1}, tuple{x2, y2, z2});
 }
 
 // @acf fn dot_product — (a,b) / coordinates -> product_result — 内積。Point・pair・tuple・vector・array・生座標対応
-/// @acf-doc @brief 2ベクトルの内積。整数は中間を広げ、戻りは `product_result_t`。2Dは `x1,y1,x2,y2`、3Dは6引数の生座標版あり
-/// @acf-doc @code (a, b) / (x1,y1,[z1,]x2,y2,[z2]) -> product_result
-/// @acf-doc [function] dot_product
+
+/// 同次元の2ベクトルの内積を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: product_result_tの座標積の和。空vector・空arrayは0。intなら通常ll、llならll。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 注意: 入力を変更せずO(N)。wide_mulで積を広げて加算し、最後の戻り型へ変換します。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 tupleは同じ非零次元。
+///
+/// 例: `print(dot_product(1,2,3,4));`
 template <class A, class B, class C, class D>
 constexpr auto dot_product(const pair<A, B>& a, const pair<C, D>& b) {
     return ac_detail::as_product_result<A, B, C, D>(
         wide_mul(a.first, b.first) + wide_mul(a.second, b.second));
 }
 
+/// 同次元の2ベクトルの内積を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: product_result_tの座標積の和。空vector・空arrayは0。intなら通常ll、llならll。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 注意: 入力を変更せずO(N)。wide_mulで積を広げて加算し、最後の戻り型へ変換します。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 tupleは同じ非零次元。
+///
+/// 例: `print(dot_product(1,2,3,4));`
 template <class A, class B>
 auto dot_product(const vector<A>& a, const vector<B>& b) {
     assert(a.size() == b.size());
@@ -979,6 +1292,17 @@ auto dot_product(const vector<A>& a, const vector<B>& b) {
     return ac_detail::as_product_result<A, B>(result);
 }
 
+/// 同次元の2ベクトルの内積を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: product_result_tの座標積の和。空vector・空arrayは0。intなら通常ll、llならll。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 注意: 入力を変更せずO(N)。wide_mulで積を広げて加算し、最後の戻り型へ変換します。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 tupleは同じ非零次元。
+///
+/// 例: `print(dot_product(1,2,3,4));`
 template <class A, class B, size_t N>
 constexpr auto dot_product(const array<A, N>& a, const array<B, N>& b) {
     using W = product_type_t<A, B>;
@@ -988,6 +1312,17 @@ constexpr auto dot_product(const array<A, N>& a, const array<B, N>& b) {
     return ac_detail::as_product_result<A, B>(result);
 }
 
+/// 同次元の2ベクトルの内積を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: product_result_tの座標積の和。空vector・空arrayは0。intなら通常ll、llならll。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 注意: 入力を変更せずO(N)。wide_mulで積を広げて加算し、最後の戻り型へ変換します。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 tupleは同じ非零次元。
+///
+/// 例: `print(dot_product(1,2,3,4));`
 template <class A, class B, size_t N>
 constexpr auto dot_product(const Point<A, N>& a, const Point<B, N>& b) {
     using W = product_type_t<A, B>;
@@ -1008,6 +1343,17 @@ constexpr auto dot_tuple(const tuple<A...>& a, const tuple<B...>& b,
 }
 }  // namespace ac_detail::geometry
 
+/// 同次元の2ベクトルの内積を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: product_result_tの座標積の和。空vector・空arrayは0。intなら通常ll、llならll。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 注意: 入力を変更せずO(N)。wide_mulで積を広げて加算し、最後の戻り型へ変換します。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 tupleは同じ非零次元。
+///
+/// 例: `print(dot_product(1,2,3,4));`
 template <class... A, class... B>
 constexpr auto dot_product(const tuple<A...>& a, const tuple<B...>& b) {
     static_assert(sizeof...(A) == sizeof...(B));
@@ -1015,11 +1361,33 @@ constexpr auto dot_product(const tuple<A...>& a, const tuple<B...>& b) {
     return ac_detail::geometry::dot_tuple(a, b, index_sequence_for<A...>{});
 }
 
+/// 同次元の2ベクトルの内積を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: product_result_tの座標積の和。空vector・空arrayは0。intなら通常ll、llならll。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 注意: 入力を変更せずO(N)。wide_mulで積を広げて加算し、最後の戻り型へ変換します。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 tupleは同じ非零次元。
+///
+/// 例: `print(dot_product(1,2,3,4));`
 template <class A, class B, class C, class D>
 constexpr auto dot_product(A x1, B y1, C x2, D y2) {
     return dot_product(pair{x1, y1}, pair{x2, y2});
 }
 
+/// 同次元の2ベクトルの内積を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: product_result_tの座標積の和。空vector・空arrayは0。intなら通常ll、llならll。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 注意: 入力を変更せずO(N)。wide_mulで積を広げて加算し、最後の戻り型へ変換します。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。 tupleは同じ非零次元。
+///
+/// 例: `print(dot_product(1,2,3,4));`
 template <class A, class B, class C, class D, class E, class F>
 constexpr auto dot_product(A x1, B y1, C z1, D x2, E y2, F z2) {
     return dot_product(tuple{x1, y1, z1}, tuple{x2, y2, z2});
@@ -1072,15 +1440,39 @@ long double dot_ld(const tuple<A...>& a, const tuple<B...>& b) {
 }
 }  // namespace ac_detail::geometry
 // @acf fn cross_product2d — (a,b) / (o,a,b) / coordinates -> product_result — 2次元外積（符号付き）
-/// @acf-doc @brief 符号付き外積 `ax*by-ay*bx`。整数は中間を広げ、戻りは `product_result_t`。3点版は向き判定
-/// @acf-doc @code (a, b) / (origin, a, b) / (ax,ay,bx,by) / (ox,oy,ax,ay,bx,by) -> product_result
-/// @acf-doc [function] cross_product2d
+
+/// 2D外積の符号で回転方向・3点の向きを調べる。
+///
+/// 引数 `a / b`: Point2・pair・tuple2・array2・vector。vectorは長さ2をassert。
+///
+/// 引数 `origin（3点版）`: originからa,bへの差を取る基準点。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 戻り値: product_result_tのax*by-ay*bx。正は反時計回り、負は時計回り、0は平行/一直線。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 注意: 入力を変更しません。固定2次元でO(1)。3点版の差は座標型で計算します。
+///
+/// 呼び分け: cross_product2d(a,b) / (origin,a,b) / (ax,ay,bx,by) / (ox,oy,ax,ay,bx,by)。
+///
+/// 例: `print(cross_product2d(1,0,0,1));`
 template <class A, class B, class C, class D>
 constexpr auto cross_product2d(const pair<A, B>& a, const pair<C, D>& b) {
     return ac_detail::as_product_result<A, B, C, D>(
         wide_mul(a.first, b.second) - wide_mul(a.second, b.first));
 }
 
+/// 2D外積の符号で回転方向・3点の向きを調べる。
+///
+/// 引数 `a / b`: Point2・pair・tuple2・array2・vector。vectorは長さ2をassert。
+///
+/// 引数 `origin（3点版）`: originからa,bへの差を取る基準点。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 戻り値: product_result_tのax*by-ay*bx。正は反時計回り、負は時計回り、0は平行/一直線。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 注意: 入力を変更しません。固定2次元でO(1)。3点版の差は座標型で計算します。
+///
+/// 呼び分け: cross_product2d(a,b) / (origin,a,b) / (ax,ay,bx,by) / (ox,oy,ax,ay,bx,by)。
+///
+/// 例: `print(cross_product2d(1,0,0,1));`
 template <class A, class B>
 auto cross_product2d(const vector<A>& a, const vector<B>& b) {
     assert(a.size() == 2 && b.size() == 2);
@@ -1088,43 +1480,128 @@ auto cross_product2d(const vector<A>& a, const vector<B>& b) {
         wide_mul(a[0], b[1]) - wide_mul(a[1], b[0]));
 }
 
+/// 2D外積の符号で回転方向・3点の向きを調べる。
+///
+/// 引数 `a / b`: Point2・pair・tuple2・array2・vector。vectorは長さ2をassert。
+///
+/// 引数 `origin（3点版）`: originからa,bへの差を取る基準点。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 戻り値: product_result_tのax*by-ay*bx。正は反時計回り、負は時計回り、0は平行/一直線。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 注意: 入力を変更しません。固定2次元でO(1)。3点版の差は座標型で計算します。
+///
+/// 呼び分け: cross_product2d(a,b) / (origin,a,b) / (ax,ay,bx,by) / (ox,oy,ax,ay,bx,by)。
+///
+/// 例: `print(cross_product2d(1,0,0,1));`
 template <class A, class B>
 constexpr auto cross_product2d(const array<A, 2>& a, const array<B, 2>& b) {
     return ac_detail::as_product_result<A, B>(
         wide_mul(a[0], b[1]) - wide_mul(a[1], b[0]));
 }
 
+/// 2D外積の符号で回転方向・3点の向きを調べる。
+///
+/// 引数 `a / b`: Point2・pair・tuple2・array2・vector。vectorは長さ2をassert。
+///
+/// 引数 `origin（3点版）`: originからa,bへの差を取る基準点。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 戻り値: product_result_tのax*by-ay*bx。正は反時計回り、負は時計回り、0は平行/一直線。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 注意: 入力を変更しません。固定2次元でO(1)。3点版の差は座標型で計算します。
+///
+/// 呼び分け: cross_product2d(a,b) / (origin,a,b) / (ax,ay,bx,by) / (ox,oy,ax,ay,bx,by)。
+///
+/// 例: `print(cross_product2d(1,0,0,1));`
 template <class A, class B>
 constexpr auto cross_product2d(const Point<A, 2>& a, const Point<B, 2>& b) {
     return ac_detail::as_product_result<A, B>(
         wide_mul(a[0], b[1]) - wide_mul(a[1], b[0]));
 }
 
+/// 2D外積の符号で回転方向・3点の向きを調べる。
+///
+/// 引数 `a / b`: Point2・pair・tuple2・array2・vector。vectorは長さ2をassert。
+///
+/// 引数 `origin（3点版）`: originからa,bへの差を取る基準点。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 戻り値: product_result_tのax*by-ay*bx。正は反時計回り、負は時計回り、0は平行/一直線。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 注意: 入力を変更しません。固定2次元でO(1)。3点版の差は座標型で計算します。
+///
+/// 呼び分け: cross_product2d(a,b) / (origin,a,b) / (ax,ay,bx,by) / (ox,oy,ax,ay,bx,by)。
+///
+/// 例: `print(cross_product2d(1,0,0,1));`
 template <class A, class B, class C, class D>
 constexpr auto cross_product2d(const tuple<A, B>& a, const tuple<C, D>& b) {
     return ac_detail::as_product_result<A, B, C, D>(
         wide_mul(get<0>(a), get<1>(b)) - wide_mul(get<1>(a), get<0>(b)));
 }
 
+/// 2D外積の符号で回転方向・3点の向きを調べる。
+///
+/// 引数 `a / b`: Point2・pair・tuple2・array2・vector。vectorは長さ2をassert。
+///
+/// 引数 `origin（3点版）`: originからa,bへの差を取る基準点。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 戻り値: product_result_tのax*by-ay*bx。正は反時計回り、負は時計回り、0は平行/一直線。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 注意: 入力を変更しません。固定2次元でO(1)。3点版の差は座標型で計算します。
+///
+/// 呼び分け: cross_product2d(a,b) / (origin,a,b) / (ax,ay,bx,by) / (ox,oy,ax,ay,bx,by)。
+///
+/// 例: `print(cross_product2d(1,0,0,1));`
 template <class O, class A, class B>
 constexpr auto cross_product2d(const O& origin, const A& a, const B& b) {
     return cross_product2d(make_vec(origin, a), make_vec(origin, b));
 }
 
+/// 2D外積の符号で回転方向・3点の向きを調べる。
+///
+/// 引数 `a / b`: Point2・pair・tuple2・array2・vector。vectorは長さ2をassert。
+///
+/// 引数 `origin（3点版）`: originからa,bへの差を取る基準点。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 戻り値: product_result_tのax*by-ay*bx。正は反時計回り、負は時計回り、0は平行/一直線。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 注意: 入力を変更しません。固定2次元でO(1)。3点版の差は座標型で計算します。
+///
+/// 呼び分け: cross_product2d(a,b) / (origin,a,b) / (ax,ay,bx,by) / (ox,oy,ax,ay,bx,by)。
+///
+/// 例: `print(cross_product2d(1,0,0,1));`
 template <class A, class B, class C, class D>
 constexpr auto cross_product2d(A ax, B ay, C bx, D by) {
     return cross_product2d(pair{ax, ay}, pair{bx, by});
 }
 
+/// 2D外積の符号で回転方向・3点の向きを調べる。
+///
+/// 引数 `a / b`: Point2・pair・tuple2・array2・vector。vectorは長さ2をassert。
+///
+/// 引数 `origin（3点版）`: originからa,bへの差を取る基準点。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 戻り値: product_result_tのax*by-ay*bx。正は反時計回り、負は時計回り、0は平行/一直線。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 注意: 入力を変更しません。固定2次元でO(1)。3点版の差は座標型で計算します。
+///
+/// 呼び分け: cross_product2d(a,b) / (origin,a,b) / (ax,ay,bx,by) / (ox,oy,ax,ay,bx,by)。
+///
+/// 例: `print(cross_product2d(1,0,0,1));`
 template <class A, class B, class C, class D, class E, class F>
 constexpr auto cross_product2d(A ox, B oy, C ax, D ay, E bx, F by) {
     return cross_product2d(pair{ox, oy}, pair{ax, ay}, pair{bx, by});
 }
 
 // @acf fn cross_product3d — (a,b) / coordinates -> Point/tuple/vector/array — 3次元外積
-/// @acf-doc @brief 3次元外積。整数は中間を広げ、成分の戻りは `product_result_t`。6引数版の戻りは tuple
-/// @acf-doc @code (a, b) / (ax,ay,az,bx,by,bz) -> Point3
-/// @acf-doc [function] cross_product3d
+
+/// 2つの3Dベクトルへ垂直な外積ベクトルを求める。
+///
+/// 引数 `a / b`: Point3・tuple3・array3・vector。vectorの長さ3をassert。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 戻り値: 同じ表現で(y1*z2-z1*y2,z1*x2-x1*z2,x1*y2-y1*x2)。各成分はproduct_result_t。平行なら零ベクトル。
+///
+/// 注意: 入力を変更せずO(1)。広い中間から各成分の戻り型へ検査なしで変換します。
+///
+/// 呼び分け: cross_product3d(a,b) / (ax,ay,az,bx,by,bz)。生座標版の戻りはtuple。
 template <class A, class B>
 auto cross_product3d(const vector<A>& a, const vector<B>& b) {
     assert(a.size() == 3 && b.size() == 3);
@@ -1139,6 +1616,15 @@ auto cross_product3d(const vector<A>& a, const vector<B>& b) {
     };
 }
 
+/// 2つの3Dベクトルへ垂直な外積ベクトルを求める。
+///
+/// 引数 `a / b`: Point3・tuple3・array3・vector。vectorの長さ3をassert。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 戻り値: 同じ表現で(y1*z2-z1*y2,z1*x2-x1*z2,x1*y2-y1*x2)。各成分はproduct_result_t。平行なら零ベクトル。
+///
+/// 注意: 入力を変更せずO(1)。広い中間から各成分の戻り型へ検査なしで変換します。
+///
+/// 呼び分け: cross_product3d(a,b) / (ax,ay,az,bx,by,bz)。生座標版の戻りはtuple。
 template <class A, class B>
 constexpr auto cross_product3d(const array<A, 3>& a, const array<B, 3>& b) {
     using R = product_result_t<A, B>;
@@ -1152,6 +1638,15 @@ constexpr auto cross_product3d(const array<A, 3>& a, const array<B, 3>& b) {
     };
 }
 
+/// 2つの3Dベクトルへ垂直な外積ベクトルを求める。
+///
+/// 引数 `a / b`: Point3・tuple3・array3・vector。vectorの長さ3をassert。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 戻り値: 同じ表現で(y1*z2-z1*y2,z1*x2-x1*z2,x1*y2-y1*x2)。各成分はproduct_result_t。平行なら零ベクトル。
+///
+/// 注意: 入力を変更せずO(1)。広い中間から各成分の戻り型へ検査なしで変換します。
+///
+/// 呼び分け: cross_product3d(a,b) / (ax,ay,az,bx,by,bz)。生座標版の戻りはtuple。
 template <class A, class B>
 constexpr auto cross_product3d(const Point<A, 3>& a, const Point<B, 3>& b) {
     using R = product_result_t<A, B>;
@@ -1165,6 +1660,15 @@ constexpr auto cross_product3d(const Point<A, 3>& a, const Point<B, 3>& b) {
     };
 }
 
+/// 2つの3Dベクトルへ垂直な外積ベクトルを求める。
+///
+/// 引数 `a / b`: Point3・tuple3・array3・vector。vectorの長さ3をassert。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 戻り値: 同じ表現で(y1*z2-z1*y2,z1*x2-x1*z2,x1*y2-y1*x2)。各成分はproduct_result_t。平行なら零ベクトル。
+///
+/// 注意: 入力を変更せずO(1)。広い中間から各成分の戻り型へ検査なしで変換します。
+///
+/// 呼び分け: cross_product3d(a,b) / (ax,ay,az,bx,by,bz)。生座標版の戻りはtuple。
 template <class A, class B, class C, class D, class E, class F>
 constexpr auto cross_product3d(const tuple<A, B, C>& a,
                                const tuple<D, E, F>& b) {
@@ -1179,64 +1683,166 @@ constexpr auto cross_product3d(const tuple<A, B, C>& a,
     };
 }
 
+/// 2つの3Dベクトルへ垂直な外積ベクトルを求める。
+///
+/// 引数 `a / b`: Point3・tuple3・array3・vector。vectorの長さ3をassert。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 戻り値: 同じ表現で(y1*z2-z1*y2,z1*x2-x1*z2,x1*y2-y1*x2)。各成分はproduct_result_t。平行なら零ベクトル。
+///
+/// 注意: 入力を変更せずO(1)。広い中間から各成分の戻り型へ検査なしで変換します。
+///
+/// 呼び分け: cross_product3d(a,b) / (ax,ay,az,bx,by,bz)。生座標版の戻りはtuple。
 template <class A, class B, class C, class D, class E, class F>
 constexpr auto cross_product3d(A ax, B ay, C az, D bx, E by, F bz) {
     return cross_product3d(tuple{ax, ay, az}, tuple{bx, by, bz});
 }
 
 // @acf fn vector_norm_squared — (v) / coordinates -> value_type — ベクトル長の二乗
-/// @acf-doc @brief `dot_product(v,v)`。生座標は2D `(x,y)`、3D `(x,y,z)`
-/// @acf-doc @code (v) / (x,y) / (x,y,z) -> value_type
-/// @acf-doc [function] vector_norm_squared
+
+/// 平方根を取らずベクトルの長さの2乗を求める。
+///
+/// 引数 `v`: Point・pair・tuple・array・vector。dot_product(v,v)が有効であること。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 戻り値: product_result_tの座標平方和。零ベクトル・空vectorは0。
+///
+/// 注意: 入力を変更せずO(N)。整数の戻り型は座標llでもllのままです。
+///
+/// 呼び分け: vector_norm_squared(v) / (x,y) / (x,y,z)。
+///
+/// 例: `print(vector_norm_squared(3,4));`
 template <class V>
 constexpr auto vector_norm_squared(const V& v) {
     return dot_product(v, v);
 }
 
+/// 平方根を取らずベクトルの長さの2乗を求める。
+///
+/// 引数 `v`: Point・pair・tuple・array・vector。dot_product(v,v)が有効であること。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 戻り値: product_result_tの座標平方和。零ベクトル・空vectorは0。
+///
+/// 注意: 入力を変更せずO(N)。整数の戻り型は座標llでもllのままです。
+///
+/// 呼び分け: vector_norm_squared(v) / (x,y) / (x,y,z)。
+///
+/// 例: `print(vector_norm_squared(3,4));`
 template <class X, class Y>
 constexpr auto vector_norm_squared(X x, Y y) {
     return vector_norm_squared(pair{x, y});
 }
 
+/// 平方根を取らずベクトルの長さの2乗を求める。
+///
+/// 引数 `v`: Point・pair・tuple・array・vector。dot_product(v,v)が有効であること。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。
+///
+/// 戻り値: product_result_tの座標平方和。零ベクトル・空vectorは0。
+///
+/// 注意: 入力を変更せずO(N)。整数の戻り型は座標llでもllのままです。
+///
+/// 呼び分け: vector_norm_squared(v) / (x,y) / (x,y,z)。
+///
+/// 例: `print(vector_norm_squared(3,4));`
 template <class X, class Y, class Z>
 constexpr auto vector_norm_squared(X x, Y y, Z z) {
     return vector_norm_squared(tuple{x, y, z});
 }
 
 // @acf fn vector_norm — (v) / coordinates -> long double — ベクトル長
-/// @acf-doc @brief ユークリッド長。生座標は2D `(x,y)`、3D `(x,y,z)`
-/// @acf-doc @code (v) / (x,y) / (x,y,z) -> long double
-/// @acf-doc [function] vector_norm
+
+/// ベクトルのユークリッド長を求める。
+///
+/// 引数 `v`: 有限のPoint・pair・tuple・array・vector。ldで平方和を計算できる座標。
+///
+/// 戻り値: ld。ldへ変換した座標の平方和の平方根。零ベクトル・空vectorは0。
+///
+/// 注意: 入力を変更せずO(N)。整数の内積戻り型を経由せずldで積を計算します。
+///
+/// 呼び分け: vector_norm(v) / (x,y) / (x,y,z)。
+///
+/// 例: `print_fixed(6,vector_norm(3,4));`
 template <class V>
 long double vector_norm(const V& v) {
     return sqrt(max(0.0L, ac_detail::geometry::dot_ld(v, v)));
 }
 
+/// ベクトルのユークリッド長を求める。
+///
+/// 引数 `v`: 有限のPoint・pair・tuple・array・vector。ldで平方和を計算できる座標。
+///
+/// 戻り値: ld。ldへ変換した座標の平方和の平方根。零ベクトル・空vectorは0。
+///
+/// 注意: 入力を変更せずO(N)。整数の内積戻り型を経由せずldで積を計算します。
+///
+/// 呼び分け: vector_norm(v) / (x,y) / (x,y,z)。
+///
+/// 例: `print_fixed(6,vector_norm(3,4));`
 template <class X, class Y>
 long double vector_norm(X x, Y y) {
     return vector_norm(pair{x, y});
 }
 
+/// ベクトルのユークリッド長を求める。
+///
+/// 引数 `v`: 有限のPoint・pair・tuple・array・vector。ldで平方和を計算できる座標。
+///
+/// 戻り値: ld。ldへ変換した座標の平方和の平方根。零ベクトル・空vectorは0。
+///
+/// 注意: 入力を変更せずO(N)。整数の内積戻り型を経由せずldで積を計算します。
+///
+/// 呼び分け: vector_norm(v) / (x,y) / (x,y,z)。
+///
+/// 例: `print_fixed(6,vector_norm(3,4));`
 template <class X, class Y, class Z>
 long double vector_norm(X x, Y y, Z z) {
     return vector_norm(tuple{x, y, z});
 }
 
 // @acf fn euclidean_distance — (a,b) / coordinates -> long double — 2点間のユークリッド距離
-/// @acf-doc @brief `euclidean_distance` は2点間の距離をlong doubleで返す。点コンテナ2個、または2D・3Dの生座標で呼べる
-/// @acf-doc @code (a, b) / (x1, y1, [z1,] x2, y2, [z2]) -> long double
-/// @acf-doc [function] euclidean_distance
+
+/// 2点のユークリッド距離を実数で求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: ldの非負距離。同一点・空vectorは0。コンテナ形式は座標の共通型で差を取るため整数の減算が収まること。生座標形式はldへ変換してから差を取ります。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、生座標版はO(1)。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。
+///
+/// 例: `print_fixed(6,euclidean_distance(1,2,4,6));`
 template <class A, class B>
 long double euclidean_distance(const A& a, const B& b) {
     return vector_norm(make_vec(a, b));
 }
 
 
+/// 平方根を取らず2点間のユークリッド距離の2乗を求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: product_result_t。int座標は通常ll、ll座標はllのまま。空vector・空arrayは0。整数は差・積・和が中間型と戻り型へ収まる範囲で使います。戻りのキャストは範囲検査をしません。差は座標の共通型で先に計算します。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、生座標版はO(1)。積の中間だけ広げます。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。
+///
+/// 例: `print(euclidean_distance_squared(1,2,4,6));`
 template <class A, class B>
 constexpr auto euclidean_distance_squared(const A& a, const B& b) {
     return vector_norm_squared(make_vec(a, b));
 }
 
+/// 2点のユークリッド距離を実数で求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: ldの非負距離。同一点・空vectorは0。コンテナ形式は座標の共通型で差を取るため整数の減算が収まること。生座標形式はldへ変換してから差を取ります。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、生座標版はO(1)。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。
+///
+/// 例: `print_fixed(6,euclidean_distance(1,2,4,6));`
 template <class A, class B, class C, class D>
 long double euclidean_distance(A x1, B y1, C x2, D y2) {
     const long double dx = static_cast<long double>(x1) - static_cast<long double>(x2);
@@ -1244,6 +1850,17 @@ long double euclidean_distance(A x1, B y1, C x2, D y2) {
     return hypot(dx, dy);
 }
 
+/// 2点のユークリッド距離を実数で求める。
+///
+/// 引数 `a / b`: 同じ表現・同じ次元の2点または2ベクトル。Point・pair・tuple・array・vector。vectorの長さ一致はassert。
+///
+/// 戻り値: ldの非負距離。同一点・空vectorは0。コンテナ形式は座標の共通型で差を取るため整数の減算が収まること。生座標形式はldへ変換してから差を取ります。
+///
+/// 注意: 入力を変更しません。N次元はO(N)、生座標版はO(1)。
+///
+/// 呼び分け: 2Dの生座標版はx1,y1,x2,y2、3Dはx1,y1,z1,x2,y2,z2。
+///
+/// 例: `print_fixed(6,euclidean_distance(1,2,4,6));`
 template <class A, class B, class C, class D, class E, class F>
 long double euclidean_distance(A x1, B y1, C z1, D x2, E y2, F z2) {
     const long double dx = static_cast<long double>(x1) - static_cast<long double>(x2);
@@ -1253,9 +1870,18 @@ long double euclidean_distance(A x1, B y1, C z1, D x2, E y2, F z2) {
 }
 
 // @acf fn point_line_distance — (p,a,b) -> long double — 点 p と直線 ab の距離。2D/3D以上対応
-/// @acf-doc @brief `point_line_distance(p,a,b)` は点 `p` と、2点 `a,b` を通る無限直線の距離。2D/3D以上に対応し、`a==b` なら点 `a` までの距離
-/// @acf-doc @code (const Point& p, const Point& a, const Point& b) -> long double
-/// @acf-doc [function] point_line_distance
+
+/// 点から無限直線への最短距離を求める。
+///
+/// 引数 `p / a / b`: 点pと直線の端点a,b。同じ次元で座標差が型へ収まること。vectorは長さ一致をassert。
+///
+/// 戻り値: ldの非負距離。a==bは点aへの距離。射影はa,bの間へ制限しません。
+///
+/// 注意: 入力を変更せずO(N)。2Dの生座標はpair、3Dはld配列を介して計算します。
+///
+/// 呼び分け: point_line_distance(p,a,b) / (px,py,ax,ay,bx,by) / (px,py,pz,ax,ay,az,bx,by,bz)。
+///
+/// 例: `print_fixed(6,point_line_distance(3,2,0,0,2,0));`
 template <class P, class A, class B>
 long double point_line_distance(const P& p, const A& a, const B& b) {
     const auto ab = make_vec(a, b);
@@ -1268,12 +1894,34 @@ long double point_line_distance(const P& p, const A& a, const B& b) {
 }
 
 
+/// 点から無限直線への最短距離を求める。
+///
+/// 引数 `p / a / b`: 点pと直線の端点a,b。同じ次元で座標差が型へ収まること。vectorは長さ一致をassert。
+///
+/// 戻り値: ldの非負距離。a==bは点aへの距離。射影はa,bの間へ制限しません。
+///
+/// 注意: 入力を変更せずO(N)。2Dの生座標はpair、3Dはld配列を介して計算します。
+///
+/// 呼び分け: point_line_distance(p,a,b) / (px,py,ax,ay,bx,by) / (px,py,pz,ax,ay,az,bx,by,bz)。
+///
+/// 例: `print_fixed(6,point_line_distance(3,2,0,0,2,0));`
 template <class X, class Y, class AX, class AY, class BX, class BY>
 long double point_line_distance(X x, Y y, AX ax, AY ay, BX bx, BY by) {
     return point_line_distance(pair<X, Y>{x, y}, pair<AX, AY>{ax, ay},
                                pair<BX, BY>{bx, by});
 }
 
+/// 点から無限直線への最短距離を求める。
+///
+/// 引数 `p / a / b`: 点pと直線の端点a,b。同じ次元で座標差が型へ収まること。vectorは長さ一致をassert。
+///
+/// 戻り値: ldの非負距離。a==bは点aへの距離。射影はa,bの間へ制限しません。
+///
+/// 注意: 入力を変更せずO(N)。2Dの生座標はpair、3Dはld配列を介して計算します。
+///
+/// 呼び分け: point_line_distance(p,a,b) / (px,py,ax,ay,bx,by) / (px,py,pz,ax,ay,az,bx,by,bz)。
+///
+/// 例: `print_fixed(6,point_line_distance(3,2,0,0,2,0));`
 template <class X, class Y, class Z,
           class AX, class AY, class AZ, class BX, class BY, class BZ>
 long double point_line_distance(X x, Y y, Z z,
@@ -1290,9 +1938,18 @@ long double point_line_distance(X x, Y y, Z z,
 }
 
 // @acf fn point_segment_distance — (p,a,b) -> long double — 点 p と線分 ab の最短距離。2D/3D以上対応
-/// @acf-doc @brief `point_segment_distance(p,a,b)` は点 `p` と線分 `ab` の最短距離。垂線の足が線分外なら近い端点まで、線分上なら `point_line_distance` を返す。`a==b` にも対応
-/// @acf-doc @code (const Point& p, const Point& a, const Point& b) -> long double
-/// @acf-doc [function] point_segment_distance
+
+/// 点から端点を含む線分への最短距離を求める。
+///
+/// 引数 `p / a / b`: 点pと線分の端点a,b。同じ次元で座標差が型へ収まること。vectorは長さ一致をassert。
+///
+/// 戻り値: ldの非負距離。a==bは点aへの距離。射影が外側なら近い端点への距離。
+///
+/// 注意: 入力を変更せずO(N)。2Dの生座標はpair、3Dはld配列を介して計算します。
+///
+/// 呼び分け: point_segment_distance(p,a,b) / (px,py,ax,ay,bx,by) / (px,py,pz,ax,ay,az,bx,by,bz)。
+///
+/// 例: `print_fixed(6,point_segment_distance(3,2,0,0,2,0));`
 template <class P, class A, class B>
 long double point_segment_distance(const P& p, const A& a, const B& b) {
     const auto ab = make_vec(a, b);
@@ -1305,12 +1962,34 @@ long double point_segment_distance(const P& p, const A& a, const B& b) {
 }
 
 
+/// 点から端点を含む線分への最短距離を求める。
+///
+/// 引数 `p / a / b`: 点pと線分の端点a,b。同じ次元で座標差が型へ収まること。vectorは長さ一致をassert。
+///
+/// 戻り値: ldの非負距離。a==bは点aへの距離。射影が外側なら近い端点への距離。
+///
+/// 注意: 入力を変更せずO(N)。2Dの生座標はpair、3Dはld配列を介して計算します。
+///
+/// 呼び分け: point_segment_distance(p,a,b) / (px,py,ax,ay,bx,by) / (px,py,pz,ax,ay,az,bx,by,bz)。
+///
+/// 例: `print_fixed(6,point_segment_distance(3,2,0,0,2,0));`
 template <class X, class Y, class AX, class AY, class BX, class BY>
 long double point_segment_distance(X x, Y y, AX ax, AY ay, BX bx, BY by) {
     return point_segment_distance(pair<X, Y>{x, y}, pair<AX, AY>{ax, ay},
                                   pair<BX, BY>{bx, by});
 }
 
+/// 点から端点を含む線分への最短距離を求める。
+///
+/// 引数 `p / a / b`: 点pと線分の端点a,b。同じ次元で座標差が型へ収まること。vectorは長さ一致をassert。
+///
+/// 戻り値: ldの非負距離。a==bは点aへの距離。射影が外側なら近い端点への距離。
+///
+/// 注意: 入力を変更せずO(N)。2Dの生座標はpair、3Dはld配列を介して計算します。
+///
+/// 呼び分け: point_segment_distance(p,a,b) / (px,py,ax,ay,bx,by) / (px,py,pz,ax,ay,az,bx,by,bz)。
+///
+/// 例: `print_fixed(6,point_segment_distance(3,2,0,0,2,0));`
 template <class X, class Y, class Z,
           class AX, class AY, class AZ, class BX, class BY, class BZ>
 long double point_segment_distance(X x, Y y, Z z,
@@ -1327,65 +2006,96 @@ long double point_segment_distance(X x, Y y, Z z,
 }
 
 // 基本2D図形。解答側では型引数を書かず make_* で作る。
+/// 2点を通って両方向へ無限に伸びる直線を表す値です。線分と区別して、射影・交点・直線への距離を計算するときに使います。
 template <class A, class B = A>
 struct Line {
+    /// 直線上の1点。
     A a;
+    /// 直線上のもう1点。
     B b;
 };
 
 // 2Dの直線を一般形 ax + by = c で表す。
+/// 2次元の直線を方程式 ax+by=c の係数で表す値です。一般形の入力や、直線の交点計算へ渡すときに使います。
 template <class T>
 struct LineEquation {
+    /// x係数。
     T a;
+    /// y係数。
     T b;
+    /// 右辺。
     T c;
 };
 
+/// 2端点の間だけを含む線分を表す値です。線分の長さ、交差、点が線分上にあるかを計算するときに使います。
 template <class A, class B = A>
 struct Segment {
+    /// 端点1。
     A a;
+    /// 端点2。
     B b;
 };
 
+/// 2次元の中心と半径で円を表す値です。面積、周長、点の包含や円同士の位置関係を計算するときに使います。
 template <class P, class Radius>
 struct Circle {
+    /// 中心。
     P center;
+    /// 半径。
     Radius radius;
 };
 
+/// 座標軸に平行な長方形を対角の2点で表す値です。面積や点の包含、長方形の頂点への展開に使います。
 template <class A, class B = A>
 struct Rectangle {
+    /// 対角の一方。
     A corner1;
+    /// 対角の他方。
     B corner2;
 };
 
+/// 座標軸に平行な正方形を左下の角と辺長で表す値です。正方形の面積・周長・包含判定に使います。
 template <class P, class Side>
 struct Square {
+    /// 基準の隅。
     P corner;
+    /// 辺の長さ。
     Side side;
 };
 
+/// 3頂点で三角形を表す値です。面積、頂点の位置関係、外接円・内接円を計算するときに使います。
 template <class A, class B = A, class C = A>
 struct Triangle {
+    /// 頂点1。
     A a;
+    /// 頂点2。
     B b;
+    /// 頂点3。
     C c;
 };
 
+/// 周回順に並んだ頂点列で多角形の境界を表す値です。凸・凹の多角形の面積、周長、包含判定や凸包の結果に使います。
 template <class P>
 struct Polygon {
+    /// 頂点列。
     vector<P> vertices;
 };
 
+/// 3次元の中心と半径で球を表す値です。体積や、点が球内にあるかを計算するときに使います。
 template <class P, class Radius>
 struct Sphere {
+    /// 中心。
     P center;
+    /// 半径。
     Radius radius;
 };
 
+/// 座標軸に平行な直方体を対角の2点で表す値です。3次元の箱の体積や点の包含を計算するときに使います。
 template <class A, class B = A>
 struct Cuboid {
+    /// 対角の一方。
     A corner1;
+    /// 対角の他方。
     B corner2;
 };
 
@@ -2118,8 +2828,8 @@ constexpr Cuboid<A, B>& operator/=(Cuboid<A, B>& lhs, S scalar) {
     return lhs;
 }
 // @acf helper operator<< — 幾何図形（Line / LineEquation / Segment / Circle など）の構造化出力
-/// @acf-doc @brief Line・LineEquation・Segment・Circle・Rectangle・Square・Triangle・Polygon・Sphere・Cuboid を構造化して出力。`print` からも使える。Point は従来どおり座標のみ（`x y`）
-/// @acf-doc [helper] operator<<
+
+/// Line・LineEquation・Segment・Circle・Rectangle・Square・Triangle・Polygon・Sphere・Cuboid を構造化して出力。`print` からも使える。Point は従来どおり座標のみ（`x y`）
 template <class A, class B>
 ostream& operator<<(ostream& os, const Line<A, B>& line) {
     return os << "Line(" << line.a << ", " << line.b << ')';
@@ -2171,26 +2881,60 @@ ostream& operator<<(ostream& os, const Cuboid<A, B>& cuboid) {
 }
 
 // @acf fn make_line — (a,b) / (x1,y1,x2,y2) / (x1,y1,z1,x2,y2,z2) -> Line — 2点を通る無限直線
-/// @acf-doc @brief 2点を通る無限直線。点コンテナ、2Dは4引数、3Dは6引数の生座標で渡せる
-/// @acf-doc [function] make_line
+
+/// 2端点から無限直線を構築する。
+///
+/// 引数 `a / b`: 点表現の2端点。座標演算用には次元・座標型を合わせる。同一点も構築できます。
+///
+/// 戻り値: `Line<A,B>`。a,bをそのまま保存し、並べ替え・正規化しません。同一点の直線は後続APIごとに退化の扱いを確認。
+///
+/// 注意: 値渡しした端点を移動して保存します。入力のlvalueはコピーされ、変更しません。固定次元はO(1)、動的な点表現のコピーは座標数に比例。
+///
+/// 呼び分け: make_line(a,b) / (x1,y1,x2,y2) / (x1,y1,z1,x2,y2,z2)。生座標2Dはpair、3Dはtuple端点。
 template <class A, class B>
 constexpr auto make_line(A a, B b) {
     return Line<A, B>{std::move(a), std::move(b)};
 }
 
+/// 2端点から無限直線を構築する。
+///
+/// 引数 `a / b`: 点表現の2端点。座標演算用には次元・座標型を合わせる。同一点も構築できます。
+///
+/// 戻り値: `Line<A,B>`。a,bをそのまま保存し、並べ替え・正規化しません。同一点の直線は後続APIごとに退化の扱いを確認。
+///
+/// 注意: 値渡しした端点を移動して保存します。入力のlvalueはコピーされ、変更しません。固定次元はO(1)、動的な点表現のコピーは座標数に比例。
+///
+/// 呼び分け: make_line(a,b) / (x1,y1,x2,y2) / (x1,y1,z1,x2,y2,z2)。生座標2Dはpair、3Dはtuple端点。
 template <class X1, class Y1, class X2, class Y2>
 constexpr auto make_line(X1 x1, Y1 y1, X2 x2, Y2 y2) {
     return make_line(pair<X1, Y1>{x1, y1}, pair<X2, Y2>{x2, y2});
 }
 
+/// 2端点から無限直線を構築する。
+///
+/// 引数 `a / b`: 点表現の2端点。座標演算用には次元・座標型を合わせる。同一点も構築できます。
+///
+/// 戻り値: `Line<A,B>`。a,bをそのまま保存し、並べ替え・正規化しません。同一点の直線は後続APIごとに退化の扱いを確認。
+///
+/// 注意: 値渡しした端点を移動して保存します。入力のlvalueはコピーされ、変更しません。固定次元はO(1)、動的な点表現のコピーは座標数に比例。
+///
+/// 呼び分け: make_line(a,b) / (x1,y1,x2,y2) / (x1,y1,z1,x2,y2,z2)。生座標2Dはpair、3Dはtuple端点。
 template <class X1, class Y1, class Z1, class X2, class Y2, class Z2>
 constexpr auto make_line(X1 x1, Y1 y1, Z1 z1, X2 x2, Y2 y2, Z2 z2) {
     return make_line(tuple{x1, y1, z1}, tuple{x2, y2, z2});
 }
 
 // @acf fn make_line_equation — (a,b,c) -> LineEquation — ax+by=c の直線
-/// @acf-doc @brief 一般形 `ax+by=c` の2D直線を作る。`a` と `b` は同時に0でない
-/// @acf-doc [function] make_line_equation
+
+/// ax+by=cの係数から2D直線を構築する。
+///
+/// 引数 `a / b / c`: 共通型へ変換できる有限係数。aまたはbが非零であることをassert。
+///
+/// 戻り値: `LineEquation<common_type_t<A,B,C>>`。係数を保存し、単位法線へ正規化しません。右辺はcで、ax+by+c=0ではありません。
+///
+/// 注意: 入力を変更せずO(1)。a=b=0はassertで拒否します。
+///
+/// 呼び分け: make_line_equation(a,b,c)。
 template <class A, class B, class C>
 constexpr auto make_line_equation(A a, B b, C c) {
     using T = common_type_t<A, B, C>;
@@ -2201,72 +2945,174 @@ constexpr auto make_line_equation(A a, B b, C c) {
 }
 
 // @acf fn make_segment — (a,b) / (x1,y1,x2,y2) / (x1,y1,z1,x2,y2,z2) -> Segment — 2点を端点とする線分
-/// @acf-doc @brief 2点を端点とする線分。点コンテナ、2Dは4引数、3Dは6引数の生座標で渡せる
-/// @acf-doc [function] make_segment
+
+/// 2端点から端点を含む線分を構築する。
+///
+/// 引数 `a / b`: 点表現の2端点。座標演算用には次元・座標型を合わせる。同一点も構築できます。
+///
+/// 戻り値: `Segment<A,B>`。a,bをそのまま保存し、並べ替え・正規化しません。同一点なら長さ0の線分。
+///
+/// 注意: 値渡しした端点を移動して保存します。入力のlvalueはコピーされ、変更しません。固定次元はO(1)、動的な点表現のコピーは座標数に比例。
+///
+/// 呼び分け: make_segment(a,b) / (x1,y1,x2,y2) / (x1,y1,z1,x2,y2,z2)。生座標2Dはpair、3Dはtuple端点。
 template <class A, class B>
 constexpr auto make_segment(A a, B b) {
     return Segment<A, B>{std::move(a), std::move(b)};
 }
 
+/// 2端点から端点を含む線分を構築する。
+///
+/// 引数 `a / b`: 点表現の2端点。座標演算用には次元・座標型を合わせる。同一点も構築できます。
+///
+/// 戻り値: `Segment<A,B>`。a,bをそのまま保存し、並べ替え・正規化しません。同一点なら長さ0の線分。
+///
+/// 注意: 値渡しした端点を移動して保存します。入力のlvalueはコピーされ、変更しません。固定次元はO(1)、動的な点表現のコピーは座標数に比例。
+///
+/// 呼び分け: make_segment(a,b) / (x1,y1,x2,y2) / (x1,y1,z1,x2,y2,z2)。生座標2Dはpair、3Dはtuple端点。
 template <class X1, class Y1, class X2, class Y2>
 constexpr auto make_segment(X1 x1, Y1 y1, X2 x2, Y2 y2) {
     return make_segment(pair<X1, Y1>{x1, y1}, pair<X2, Y2>{x2, y2});
 }
 
+/// 2端点から端点を含む線分を構築する。
+///
+/// 引数 `a / b`: 点表現の2端点。座標演算用には次元・座標型を合わせる。同一点も構築できます。
+///
+/// 戻り値: `Segment<A,B>`。a,bをそのまま保存し、並べ替え・正規化しません。同一点なら長さ0の線分。
+///
+/// 注意: 値渡しした端点を移動して保存します。入力のlvalueはコピーされ、変更しません。固定次元はO(1)、動的な点表現のコピーは座標数に比例。
+///
+/// 呼び分け: make_segment(a,b) / (x1,y1,x2,y2) / (x1,y1,z1,x2,y2,z2)。生座標2Dはpair、3Dはtuple端点。
 template <class X1, class Y1, class Z1, class X2, class Y2, class Z2>
 constexpr auto make_segment(X1 x1, Y1 y1, Z1 z1, X2 x2, Y2 y2, Z2 z2) {
     return make_segment(tuple{x1, y1, z1}, tuple{x2, y2, z2});
 }
 
 // @acf fn make_circle — (center,r) / (x,y,r) -> Circle — 中心と半径から円を作る
-/// @acf-doc @brief `make_circle(center,r)` は中心と半径から円を作る。3引数版は `x,y,r`。半径は0以上
-/// @acf-doc [function] make_circle
+
+/// 中心と半径から円を構築する。
+///
+/// 引数 `center`: 2次元の中心。
+///
+/// 引数 `radius`: 非負の半径。負はassert。0は有効。
+///
+/// 戻り値: `Circle<P,Radius>`。中心の表現と半径の型を保持します。
+///
+/// 注意: 値渡しした中心を移動して保存します。中心のlvalueはコピーされます。固定次元の構築はO(1)。
+///
+/// 呼び分け: make_circle(center,radius) / (x,y,radius)。生座標の中心はpair。
 template <class P, class Radius>
 constexpr auto make_circle(P center, Radius radius) {
     assert(radius >= 0);
     return Circle<P, Radius>{std::move(center), radius};
 }
 
+/// 中心と半径から円を構築する。
+///
+/// 引数 `center`: 2次元の中心。
+///
+/// 引数 `radius`: 非負の半径。負はassert。0は有効。
+///
+/// 戻り値: `Circle<P,Radius>`。中心の表現と半径の型を保持します。
+///
+/// 注意: 値渡しした中心を移動して保存します。中心のlvalueはコピーされます。固定次元の構築はO(1)。
+///
+/// 呼び分け: make_circle(center,radius) / (x,y,radius)。生座標の中心はpair。
 template <class X, class Y, class Radius>
 constexpr auto make_circle(X x, Y y, Radius radius) {
     return make_circle(pair<X, Y>{x, y}, radius);
 }
 
 // @acf fn make_rectangle — (corner1,corner2) / (x1,y1,x2,y2) -> Rectangle — 座標軸に平行な長方形
-/// @acf-doc @brief `make_rectangle(a,b)` は対角の2点から座標軸に平行な長方形を作る。点の順序は自由
-/// @acf-doc [function] make_rectangle
+
+/// 対角2点から軸に平行な長方形を構築する。
+///
+/// 引数 `corner1 / corner2`: 2次元の対角点。順序は自由。同じ座標・退化した辺も有効。
+///
+/// 戻り値: `Rectangle<A,B>`。入力の角の順序をそのまま保存。包含・面積/体積などのAPI側で各軸のmin/maxを取ります。
+///
+/// 注意: 値渡しした角を移動して保存します。lvalueはコピーされます。固定次元はO(1)。
+///
+/// 呼び分け: make_rectangle(corner1,corner2) / (x1,y1,x2,y2)。生座標はpair端点。
 template <class A, class B>
 constexpr auto make_rectangle(A corner1, B corner2) {
     return Rectangle<A, B>{std::move(corner1), std::move(corner2)};
 }
 
+/// 対角2点から軸に平行な長方形を構築する。
+///
+/// 引数 `corner1 / corner2`: 2次元の対角点。順序は自由。同じ座標・退化した辺も有効。
+///
+/// 戻り値: `Rectangle<A,B>`。入力の角の順序をそのまま保存。包含・面積/体積などのAPI側で各軸のmin/maxを取ります。
+///
+/// 注意: 値渡しした角を移動して保存します。lvalueはコピーされます。固定次元はO(1)。
+///
+/// 呼び分け: make_rectangle(corner1,corner2) / (x1,y1,x2,y2)。生座標はpair端点。
 template <class X1, class Y1, class X2, class Y2>
 constexpr auto make_rectangle(X1 x1, Y1 y1, X2 x2, Y2 y2) {
     return make_rectangle(pair<X1, Y1>{x1, y1}, pair<X2, Y2>{x2, y2});
 }
 
 // @acf fn make_square — (corner,side) / (x,y,side) -> Square — 座標軸に平行な正方形
-/// @acf-doc @brief `make_square(corner,side)` は左下の角と辺長から座標軸に平行な正方形を作る。辺長は0以上
-/// @acf-doc [function] make_square
+
+/// 左下の角から+x,+yへ延びる軸平行の正方形を作る。
+///
+/// 引数 `corner`: 2Dの角。
+///
+/// 引数 `side`: 非負の辺長。負はassert、0は有効。
+///
+/// 戻り値: `Square<P,Side>`。cornerとsideを保存します。
+///
+/// 注意: 角を値渡しして移動保存します。lvalueはコピー。固定次元はO(1)。
+///
+/// 呼び分け: make_square(corner,side) / (x,y,side)。生座標の角はpair。
 template <class P, class Side>
 constexpr auto make_square(P corner, Side side) {
     assert(side >= 0);
     return Square<P, Side>{std::move(corner), side};
 }
 
+/// 左下の角から+x,+yへ延びる軸平行の正方形を作る。
+///
+/// 引数 `corner`: 2Dの角。
+///
+/// 引数 `side`: 非負の辺長。負はassert、0は有効。
+///
+/// 戻り値: `Square<P,Side>`。cornerとsideを保存します。
+///
+/// 注意: 角を値渡しして移動保存します。lvalueはコピー。固定次元はO(1)。
+///
+/// 呼び分け: make_square(corner,side) / (x,y,side)。生座標の角はpair。
 template <class X, class Y, class Side>
 constexpr auto make_square(X x, Y y, Side side) {
     return make_square(pair<X, Y>{x, y}, side);
 }
 
 // @acf fn make_triangle — (a,b,c) / (x1,y1,x2,y2,x3,y3) -> Triangle — 3頂点から三角形を作る
-/// @acf-doc @brief `make_triangle(a,b,c)` は3頂点から三角形を作る。点は Point・pair・tuple・vector・array、または6個の座標で渡せる
-/// @acf-doc [function] make_triangle
+
+/// 3頂点の順序を保って三角形を構築する。
+///
+/// 引数 `a / b / c`: 2Dの3頂点。一直線・重複点も構築でき、後続APIごとに退化条件を確認。
+///
+/// 戻り値: `Triangle<A,B,C>`。向きの変更や非退化の検査をしません。
+///
+/// 注意: 頂点を値渡しして移動保存します。lvalueはコピー。固定次元はO(1)。
+///
+/// 呼び分け: make_triangle(a,b,c) / (x1,y1,x2,y2,x3,y3)。生座標はpair頂点。
 template <class A, class B, class C>
 constexpr auto make_triangle(A a, B b, C c) {
     return Triangle<A, B, C>{std::move(a), std::move(b), std::move(c)};
 }
 
+/// 3頂点の順序を保って三角形を構築する。
+///
+/// 引数 `a / b / c`: 2Dの3頂点。一直線・重複点も構築でき、後続APIごとに退化条件を確認。
+///
+/// 戻り値: `Triangle<A,B,C>`。向きの変更や非退化の検査をしません。
+///
+/// 注意: 頂点を値渡しして移動保存します。lvalueはコピー。固定次元はO(1)。
+///
+/// 呼び分け: make_triangle(a,b,c) / (x1,y1,x2,y2,x3,y3)。生座標はpair頂点。
 template <class X1, class Y1, class X2, class Y2, class X3, class Y3>
 constexpr auto make_triangle(X1 x1, Y1 y1, X2 x2, Y2 y2, X3 x3, Y3 y3) {
     return make_triangle(pair<X1, Y1>{x1, y1}, pair<X2, Y2>{x2, y2},
@@ -2274,35 +3120,81 @@ constexpr auto make_triangle(X1 x1, Y1 y1, X2 x2, Y2 y2, X3 x3, Y3 y3) {
 }
 
 // @acf fn make_polygon — (vector<Point>) -> Polygon — 頂点列から多角形を作る
-/// @acf-doc @brief `make_polygon(points)` は周回順の頂点列から多角形を作る。凸・凹のどちらにも対応
-/// @acf-doc [function] make_polygon
+
+/// 境界の周回順の頂点列を多角形として保存する。
+///
+/// 引数 `points`: 頂点列。面積/包含の通常の用途は単純多角形の周回順で、凸でなくても有効。空も構築できます。
+///
+/// 戻り値: `Polygon<P>`。点表現・順序・重複を保持。ソートや自己交差の検査はしません。各辺を使うAPIは最後から最初へ閉じるため末尾へ最初の点を重ねる必要はありません。
+///
+/// 注意: lvalueの頂点列はO(N)でコピー。rvalueはvectorを移動して保存します。入力lvalueは変更しません。
+///
+/// 呼び分け: make_polygon(`vector<P>`)。点型を変換せず、pair列はpairのまま。
 template <class P>
 auto make_polygon(vector<P> points) {
     return Polygon<P>{std::move(points)};
 }
 
 // @acf fn make_sphere — (center,r) / (x,y,z,r) -> Sphere — 中心と半径から球を作る
-/// @acf-doc @brief `make_sphere(center,r)` は3次元の球を作る。半径は0以上
-/// @acf-doc [function] make_sphere
+
+/// 中心と半径から球を構築する。
+///
+/// 引数 `center`: 3次元の中心。
+///
+/// 引数 `radius`: 非負の半径。負はassert。0は有効。
+///
+/// 戻り値: `Sphere<P,Radius>`。中心の表現と半径の型を保持します。
+///
+/// 注意: 値渡しした中心を移動して保存します。中心のlvalueはコピーされます。固定次元の構築はO(1)。
+///
+/// 呼び分け: make_sphere(center,radius) / (x,y,z,radius)。生座標の中心はPoint3で共通座標型。
 template <class P, class Radius>
 constexpr auto make_sphere(P center, Radius radius) {
     assert(radius >= 0);
     return Sphere<P, Radius>{std::move(center), radius};
 }
 
+/// 中心と半径から球を構築する。
+///
+/// 引数 `center`: 3次元の中心。
+///
+/// 引数 `radius`: 非負の半径。負はassert。0は有効。
+///
+/// 戻り値: `Sphere<P,Radius>`。中心の表現と半径の型を保持します。
+///
+/// 注意: 値渡しした中心を移動して保存します。中心のlvalueはコピーされます。固定次元の構築はO(1)。
+///
+/// 呼び分け: make_sphere(center,radius) / (x,y,z,radius)。生座標の中心はPoint3で共通座標型。
 template <class X, class Y, class Z, class Radius>
 constexpr auto make_sphere(X x, Y y, Z z, Radius radius) {
     return make_sphere(Point3<common_type_t<X, Y, Z>>{x, y, z}, radius);
 }
 
 // @acf fn make_cuboid — (corner1,corner2) / (x1,y1,z1,x2,y2,z2) -> Cuboid — 対角2点から直方体を作る
-/// @acf-doc @brief `make_cuboid(a,b)` は対角の2点から座標軸に平行な直方体を作る。点の順序は自由
-/// @acf-doc [function] make_cuboid
+
+/// 対角2点から軸に平行な直方体を構築する。
+///
+/// 引数 `corner1 / corner2`: 3次元の対角点。順序は自由。同じ座標・退化した辺も有効。
+///
+/// 戻り値: `Cuboid<A,B>`。入力の角の順序をそのまま保存。包含・面積/体積などのAPI側で各軸のmin/maxを取ります。
+///
+/// 注意: 値渡しした角を移動して保存します。lvalueはコピーされます。固定次元はO(1)。
+///
+/// 呼び分け: make_cuboid(corner1,corner2) / (x1,y1,z1,x2,y2,z2)。生座標は6座標の共通型のPoint3端点。
 template <class A, class B>
 constexpr auto make_cuboid(A corner1, B corner2) {
     return Cuboid<A, B>{std::move(corner1), std::move(corner2)};
 }
 
+/// 対角2点から軸に平行な直方体を構築する。
+///
+/// 引数 `corner1 / corner2`: 3次元の対角点。順序は自由。同じ座標・退化した辺も有効。
+///
+/// 戻り値: `Cuboid<A,B>`。入力の角の順序をそのまま保存。包含・面積/体積などのAPI側で各軸のmin/maxを取ります。
+///
+/// 注意: 値渡しした角を移動して保存します。lvalueはコピーされます。固定次元はO(1)。
+///
+/// 呼び分け: make_cuboid(corner1,corner2) / (x1,y1,z1,x2,y2,z2)。生座標は6座標の共通型のPoint3端点。
 template <class X1, class Y1, class Z1, class X2, class Y2, class Z2>
 constexpr auto make_cuboid(X1 x1, Y1 y1, Z1 z1, X2 x2, Y2 y2, Z2 z2) {
     using R = common_type_t<X1, Y1, Z1, X2, Y2, Z2>;
@@ -2315,36 +3207,45 @@ constexpr auto make_cuboid(X1 x1, Y1 y1, Z1 z1, X2 x2, Y2 y2, Z2 z2) {
 // ---------------------------------------------------------------------------
 
 // @acf using linell — Line<pll>
-/// @acf-doc [type] linell
+
+/// Line<pll>
 using linell = Line<pll>;
 // @acf using segll — Segment<pll>
-/// @acf-doc [type] segll
+
+/// Segment<pll>
 using segll = Segment<pll>;
 // @acf using cirll — Circle<pll,ll>
-/// @acf-doc [type] cirll
+
+/// Circle<pll,ll>
 using cirll = Circle<pll, ll>;
 // @acf using rectll — Rectangle<pll>
-/// @acf-doc [type] rectll
+
+/// Rectangle<pll>
 using rectll = Rectangle<pll>;
 // @acf using sqll — Square<pll,ll>
-/// @acf-doc [type] sqll
+
+/// Square<pll,ll>
 using sqll = Square<pll, ll>;
 // @acf using trill — Triangle<pll>
-/// @acf-doc [type] trill
+
+/// Triangle<pll>
 using trill = Triangle<pll>;
 // @acf using polyll — Polygon<p2ll>
-/// @acf-doc [type] polyll
+
+/// Polygon<p2ll>
 using polyll = Polygon<p2ll>;
 // @acf using sphll — Sphere<p3ll,ll>
-/// @acf-doc [type] sphll
+
+/// Sphere<p3ll,ll>
 using sphll = Sphere<p3ll, ll>;
 // @acf using cubll — Cuboid<p3ll>
-/// @acf-doc [type] cubll
+
+/// Cuboid<p3ll>
 using cubll = Cuboid<p3ll>;
 
 // @acf helper operator>> — 幾何図形のフラット入力
-/// @acf-doc @brief Line/Segment は2点、Circle は中心+半径、Rectangle は対角2点、Square は角+辺、Triangle は3点、Polygon は事前サイズの頂点列、Sphere は中心+半径、Cuboid は対角2点。`in` / `rd` / `in_*` からも使える
-/// @acf-doc [helper] operator>>
+
+/// Line/Segment は2点、Circle は中心+半径、Rectangle は対角2点、Square は角+辺、Triangle は3点、Polygon は事前サイズの頂点列、Sphere は中心+半径、Cuboid は対角2点。`in` / `rd` / `in_*` からも使える
 template <class A, class B>
 istream& operator>>(istream& is, Line<A, B>& line) {
     return is >> line.a >> line.b;
@@ -2790,8 +3691,16 @@ bool in_rectangle(const P& p, const A& a, const B& b) {
 }  // namespace ac_detail::geometry
 
 // @acf fn to_line — (LineEquation) -> Line<Point2<ld>> — 係数形式の直線を2点形式へ変換
-/// @acf-doc @brief `LineEquation<T>` の `ax+by=c` を `Line<Point2<ld>>` へ変換する。`a,b` は同時に0でない
-/// @acf-doc [function] to_line
+
+/// ax+by=cの係数表現を2点の直線へ変換する。
+///
+/// 引数 `equation`: aまたはbが非零の有限係数。a=b=0はassert。
+///
+/// 戻り値: `Line<Point2<ld>>`。同じ直線上の異なる2点を返す。係数と点の変換にはldの丸め誤差があります。
+///
+/// 注意: 入力を変更せずO(1)。b非零ならx=0,1、b=0ならy=0,1の点を選びます。
+///
+/// 呼び分け: to_line(equation)。
 template <class T>
 auto to_line(const LineEquation<T>& equation) {
     assert(equation.a != 0 || equation.b != 0);
@@ -2807,8 +3716,16 @@ auto to_line(const LineEquation<T>& equation) {
 }
 
 // @acf fn to_line_equation — (Line) -> LineEquation<ld> — 2点形式の直線を係数形式へ変換
-/// @acf-doc @brief 2点形式の `Line` を一般形 `ax+by=c` の `LineEquation<ld>` へ変換する。2点は異なる必要がある
-/// @acf-doc [function] to_line_equation
+
+/// 2点表現の直線をax+by=cへ変換する。
+///
+/// 引数 `line`: 有限の2D端点。方向の平方長がtolerance(scale*scale)より大きいこと。ほぼ同一点の退化直線はassert。
+///
+/// 戻り値: `LineEquation<ld>`。a=y1-y2、b=x2-x1、c=a*x1+b*y1。係数は正規化せず、端点を反転すると係数の符号も反転。
+///
+/// 注意: 入力を変更せずO(1)。先頭2座標をldへ変換して計算します。
+///
+/// 呼び分け: to_line_equation(line)。
 template <class A, class B>
 auto to_line_equation(const Line<A, B>& line) {
     using namespace ac_detail::geometry;
@@ -2825,8 +3742,16 @@ auto to_line_equation(const Line<A, B>& line) {
 }
 
 // @acf fn to_rectangle — (Square) -> Rectangle — 正方形を長方形へ変換する
-/// @acf-doc @brief 座標軸に平行な正方形を、同じ領域の `Rectangle` にする
-/// @acf-doc [function] to_rectangle
+
+/// 正方形を対角2点の軸平行長方形へ変換する。
+///
+/// 引数 `square`: 有限の2D角と非負の辺長。
+///
+/// 戻り値: `Rectangle<Point2<ld>,Point2<ld>>`。cornerとcorner+(side,side)を持つ。side=0は同じ対角点。
+///
+/// 注意: 入力を変更せずO(1)。座標と辺長をldへ変換します。
+///
+/// 呼び分け: to_rectangle(square)。
 template <class P, class S>
 auto to_rectangle(const Square<P, S>& shape) {
     using namespace ac_detail::geometry;
@@ -2837,8 +3762,16 @@ auto to_rectangle(const Square<P, S>& shape) {
 }
 
 // @acf fn to_polygon — (Rectangle/Square/Triangle/Polygon) -> Polygon<Point2<ld>> — 塗りつぶし図形を多角形へ
-/// @acf-doc @brief 長方形・正方形・三角形・多角形を `Polygon<Point2<ld>>` にする。軸平行長方形は反時計回り
-/// @acf-doc [function] to_polygon
+
+/// 長方形・正方形・三角形・多角形を2Dのld頂点列へ揃える。
+///
+/// 引数 `shape`: Rectangle・Square・Triangle・Polygon。有限の2D座標。
+///
+/// 戻り値: `Polygon<Point2<ld>>`。長方形/正方形はmin/maxを取り反時計回りの4点、三角形は元の3点順、多角形は元の順序と要素数。空Polygonは空。退化図形の重複頂点も保持。
+///
+/// 注意: 入力を変更せず新しい頂点列を作ります。PolygonはO(N)、他の固定頂点図形はO(1)。先頭2座標を使用。
+///
+/// 呼び分け: to_polygon(shape)。Circleからの近似多角形化は提供しません。
 template <class A, class B>
 auto to_polygon(const Rectangle<A, B>& shape) {
     using namespace ac_detail::geometry;
@@ -2850,11 +3783,29 @@ auto to_polygon(const Rectangle<A, B>& shape) {
         {x1, y1}, {x2, y1}, {x2, y2}, {x1, y2}});
 }
 
+/// 長方形・正方形・三角形・多角形を2Dのld頂点列へ揃える。
+///
+/// 引数 `shape`: Rectangle・Square・Triangle・Polygon。有限の2D座標。
+///
+/// 戻り値: `Polygon<Point2<ld>>`。長方形/正方形はmin/maxを取り反時計回りの4点、三角形は元の3点順、多角形は元の順序と要素数。空Polygonは空。退化図形の重複頂点も保持。
+///
+/// 注意: 入力を変更せず新しい頂点列を作ります。PolygonはO(N)、他の固定頂点図形はO(1)。先頭2座標を使用。
+///
+/// 呼び分け: to_polygon(shape)。Circleからの近似多角形化は提供しません。
 template <class P, class S>
 auto to_polygon(const Square<P, S>& shape) {
     return to_polygon(to_rectangle(shape));
 }
 
+/// 長方形・正方形・三角形・多角形を2Dのld頂点列へ揃える。
+///
+/// 引数 `shape`: Rectangle・Square・Triangle・Polygon。有限の2D座標。
+///
+/// 戻り値: `Polygon<Point2<ld>>`。長方形/正方形はmin/maxを取り反時計回りの4点、三角形は元の3点順、多角形は元の順序と要素数。空Polygonは空。退化図形の重複頂点も保持。
+///
+/// 注意: 入力を変更せず新しい頂点列を作ります。PolygonはO(N)、他の固定頂点図形はO(1)。先頭2座標を使用。
+///
+/// 呼び分け: to_polygon(shape)。Circleからの近似多角形化は提供しません。
 template <class A, class B, class C>
 auto to_polygon(const Triangle<A, B, C>& shape) {
     using namespace ac_detail::geometry;
@@ -2862,6 +3813,15 @@ auto to_polygon(const Triangle<A, B, C>& shape) {
         point2_ld(shape.a), point2_ld(shape.b), point2_ld(shape.c)});
 }
 
+/// 長方形・正方形・三角形・多角形を2Dのld頂点列へ揃える。
+///
+/// 引数 `shape`: Rectangle・Square・Triangle・Polygon。有限の2D座標。
+///
+/// 戻り値: `Polygon<Point2<ld>>`。長方形/正方形はmin/maxを取り反時計回りの4点、三角形は元の3点順、多角形は元の順序と要素数。空Polygonは空。退化図形の重複頂点も保持。
+///
+/// 注意: 入力を変更せず新しい頂点列を作ります。PolygonはO(N)、他の固定頂点図形はO(1)。先頭2座標を使用。
+///
+/// 呼び分け: to_polygon(shape)。Circleからの近似多角形化は提供しません。
 template <class P>
 auto to_polygon(const Polygon<P>& shape) {
     using namespace ac_detail::geometry;
@@ -2872,16 +3832,34 @@ auto to_polygon(const Polygon<P>& shape) {
 }
 
 // @acf fn segment_length — (Segment) -> long double — 線分の長さ
-/// @acf-doc @brief 線分の端点間距離を返す。変数名 `length` との衝突を避ける
-/// @acf-doc [function] segment_length
+
+/// 線分の2端点間の長さを求める。
+///
+/// 引数 `segment`: 同じ次元の2端点。整数形式は端点差が共通座標型へ収まること。
+///
+/// 戻り値: ldの非負ユークリッド距離。同じ端点なら0。
+///
+/// 注意: 入力を変更せず次元数Dに対しO(D)。euclidean_distance(segment.a,segment.b)を呼びます。
+///
+/// 呼び分け: segment_length(segment)。2Dと3Dを含め、端点表現の全次元を使います。
+///
+/// 例: `print_fixed(6,segment_length(make_segment(0,0,3,4)));`
 template <class A, class B>
 long double segment_length(const Segment<A, B>& shape) {
     return euclidean_distance(shape.a, shape.b);
 }
 
 // @acf fn bounding_rectangle — (shape) -> Rectangle<Point2<ld>,Point2<ld>> — 軸平行な外接長方形
-/// @acf-doc @brief 2D図形を囲む座標軸に平行な最小長方形を返す
-/// @acf-doc [function] bounding_rectangle
+
+/// 有界2D図形を囲む最小の軸平行長方形を求める。
+///
+/// 引数 `shape`: Rectangle・Square・Triangle・Polygon・Circle・Segment。Polygonは非空をassert。有限座標、非負半径/辺長。
+///
+/// 戻り値: `Rectangle<Point2<ld>,Point2<ld>>`。各軸の最小/最大点を対角に持つ。Circleは中心±半径、1頂点Polygonや零長Segmentは退化長方形。
+///
+/// 注意: 入力を変更しません。Polygonの走査はO(N)、固定頂点/円はO(1)。
+///
+/// 呼び分け: bounding_rectangle(shape)。無限Lineの外接矩形はありません。
 template <class A, class B>
 auto bounding_rectangle(const Rectangle<A, B>& shape) {
     using namespace ac_detail::geometry;
@@ -2892,11 +3870,29 @@ auto bounding_rectangle(const Rectangle<A, B>& shape) {
     return make_rectangle(Point2<long double>{x1, y1}, Point2<long double>{x2, y2});
 }
 
+/// 有界2D図形を囲む最小の軸平行長方形を求める。
+///
+/// 引数 `shape`: Rectangle・Square・Triangle・Polygon・Circle・Segment。Polygonは非空をassert。有限座標、非負半径/辺長。
+///
+/// 戻り値: `Rectangle<Point2<ld>,Point2<ld>>`。各軸の最小/最大点を対角に持つ。Circleは中心±半径、1頂点Polygonや零長Segmentは退化長方形。
+///
+/// 注意: 入力を変更しません。Polygonの走査はO(N)、固定頂点/円はO(1)。
+///
+/// 呼び分け: bounding_rectangle(shape)。無限Lineの外接矩形はありません。
 template <class P, class S>
 auto bounding_rectangle(const Square<P, S>& shape) {
     return to_rectangle(shape);
 }
 
+/// 有界2D図形を囲む最小の軸平行長方形を求める。
+///
+/// 引数 `shape`: Rectangle・Square・Triangle・Polygon・Circle・Segment。Polygonは非空をassert。有限座標、非負半径/辺長。
+///
+/// 戻り値: `Rectangle<Point2<ld>,Point2<ld>>`。各軸の最小/最大点を対角に持つ。Circleは中心±半径、1頂点Polygonや零長Segmentは退化長方形。
+///
+/// 注意: 入力を変更しません。Polygonの走査はO(N)、固定頂点/円はO(1)。
+///
+/// 呼び分け: bounding_rectangle(shape)。無限Lineの外接矩形はありません。
 template <class P>
 auto bounding_rectangle(const Polygon<P>& shape) {
     using namespace ac_detail::geometry;
@@ -2912,11 +3908,29 @@ auto bounding_rectangle(const Polygon<P>& shape) {
     return make_rectangle(Point2<long double>{x1, y1}, Point2<long double>{x2, y2});
 }
 
+/// 有界2D図形を囲む最小の軸平行長方形を求める。
+///
+/// 引数 `shape`: Rectangle・Square・Triangle・Polygon・Circle・Segment。Polygonは非空をassert。有限座標、非負半径/辺長。
+///
+/// 戻り値: `Rectangle<Point2<ld>,Point2<ld>>`。各軸の最小/最大点を対角に持つ。Circleは中心±半径、1頂点Polygonや零長Segmentは退化長方形。
+///
+/// 注意: 入力を変更しません。Polygonの走査はO(N)、固定頂点/円はO(1)。
+///
+/// 呼び分け: bounding_rectangle(shape)。無限Lineの外接矩形はありません。
 template <class A, class B, class C>
 auto bounding_rectangle(const Triangle<A, B, C>& shape) {
     return bounding_rectangle(to_polygon(shape));
 }
 
+/// 有界2D図形を囲む最小の軸平行長方形を求める。
+///
+/// 引数 `shape`: Rectangle・Square・Triangle・Polygon・Circle・Segment。Polygonは非空をassert。有限座標、非負半径/辺長。
+///
+/// 戻り値: `Rectangle<Point2<ld>,Point2<ld>>`。各軸の最小/最大点を対角に持つ。Circleは中心±半径、1頂点Polygonや零長Segmentは退化長方形。
+///
+/// 注意: 入力を変更しません。Polygonの走査はO(N)、固定頂点/円はO(1)。
+///
+/// 呼び分け: bounding_rectangle(shape)。無限Lineの外接矩形はありません。
 template <class P, class R>
 auto bounding_rectangle(const Circle<P, R>& shape) {
     using namespace ac_detail::geometry;
@@ -2926,6 +3940,15 @@ auto bounding_rectangle(const Circle<P, R>& shape) {
                           Point2<long double>{center.x() + radius, center.y() + radius});
 }
 
+/// 有界2D図形を囲む最小の軸平行長方形を求める。
+///
+/// 引数 `shape`: Rectangle・Square・Triangle・Polygon・Circle・Segment。Polygonは非空をassert。有限座標、非負半径/辺長。
+///
+/// 戻り値: `Rectangle<Point2<ld>,Point2<ld>>`。各軸の最小/最大点を対角に持つ。Circleは中心±半径、1頂点Polygonや零長Segmentは退化長方形。
+///
+/// 注意: 入力を変更しません。Polygonの走査はO(N)、固定頂点/円はO(1)。
+///
+/// 呼び分け: bounding_rectangle(shape)。無限Lineの外接矩形はありません。
 template <class A, class B>
 auto bounding_rectangle(const Segment<A, B>& shape) {
     using namespace ac_detail::geometry;
@@ -2936,13 +3959,30 @@ auto bounding_rectangle(const Segment<A, B>& shape) {
 }
 
 // @acf fn centroid — (shape) -> Point2<ld> — 2D図形の重心
-/// @acf-doc @brief 円は中心、長方形・正方形は対角線の交点、三角形・多角形は面積重心
-/// @acf-doc [function] centroid
+
+/// 有界2D図形の面積重心を求める。
+///
+/// 引数 `shape`: Circle・Rectangle・Square・Triangle・非空Polygon。有限座標。Polygonの非空をassert。
+///
+/// 戻り値: `Point2<ld>`。円は中心、長方形/正方形は対角中点、三角形は3頂点平均。Polygonは符号付き面積から計算し、符号付き面積の2倍の絶対値がtolerance(1)以下なら全頂点の算術平均にフォールバック（重複も数える）。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定頂点/円はO(1)。
+///
+/// 呼び分け: centroid(shape)。周長に沿った重心ではありません。
 template <class P, class R>
 auto centroid(const Circle<P, R>& shape) {
     return ac_detail::geometry::point2_ld(shape.center);
 }
 
+/// 有界2D図形の面積重心を求める。
+///
+/// 引数 `shape`: Circle・Rectangle・Square・Triangle・非空Polygon。有限座標。Polygonの非空をassert。
+///
+/// 戻り値: `Point2<ld>`。円は中心、長方形/正方形は対角中点、三角形は3頂点平均。Polygonは符号付き面積から計算し、符号付き面積の2倍の絶対値がtolerance(1)以下なら全頂点の算術平均にフォールバック（重複も数える）。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定頂点/円はO(1)。
+///
+/// 呼び分け: centroid(shape)。周長に沿った重心ではありません。
 template <class A, class B>
 auto centroid(const Rectangle<A, B>& shape) {
     using namespace ac_detail::geometry;
@@ -2951,11 +3991,29 @@ auto centroid(const Rectangle<A, B>& shape) {
         (y_ld(shape.corner1) + y_ld(shape.corner2)) / 2};
 }
 
+/// 有界2D図形の面積重心を求める。
+///
+/// 引数 `shape`: Circle・Rectangle・Square・Triangle・非空Polygon。有限座標。Polygonの非空をassert。
+///
+/// 戻り値: `Point2<ld>`。円は中心、長方形/正方形は対角中点、三角形は3頂点平均。Polygonは符号付き面積から計算し、符号付き面積の2倍の絶対値がtolerance(1)以下なら全頂点の算術平均にフォールバック（重複も数える）。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定頂点/円はO(1)。
+///
+/// 呼び分け: centroid(shape)。周長に沿った重心ではありません。
 template <class P, class S>
 auto centroid(const Square<P, S>& shape) {
     return centroid(to_rectangle(shape));
 }
 
+/// 有界2D図形の面積重心を求める。
+///
+/// 引数 `shape`: Circle・Rectangle・Square・Triangle・非空Polygon。有限座標。Polygonの非空をassert。
+///
+/// 戻り値: `Point2<ld>`。円は中心、長方形/正方形は対角中点、三角形は3頂点平均。Polygonは符号付き面積から計算し、符号付き面積の2倍の絶対値がtolerance(1)以下なら全頂点の算術平均にフォールバック（重複も数える）。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定頂点/円はO(1)。
+///
+/// 呼び分け: centroid(shape)。周長に沿った重心ではありません。
 template <class A, class B, class C>
 auto centroid(const Triangle<A, B, C>& shape) {
     using namespace ac_detail::geometry;
@@ -2964,6 +4022,15 @@ auto centroid(const Triangle<A, B, C>& shape) {
         (y_ld(shape.a) + y_ld(shape.b) + y_ld(shape.c)) / 3};
 }
 
+/// 有界2D図形の面積重心を求める。
+///
+/// 引数 `shape`: Circle・Rectangle・Square・Triangle・非空Polygon。有限座標。Polygonの非空をassert。
+///
+/// 戻り値: `Point2<ld>`。円は中心、長方形/正方形は対角中点、三角形は3頂点平均。Polygonは符号付き面積から計算し、符号付き面積の2倍の絶対値がtolerance(1)以下なら全頂点の算術平均にフォールバック（重複も数える）。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定頂点/円はO(1)。
+///
+/// 呼び分け: centroid(shape)。周長に沿った重心ではありません。
 template <class P>
 auto centroid(const Polygon<P>& shape) {
     using namespace ac_detail::geometry;
@@ -2998,8 +4065,18 @@ enum class Ccw {
 };
 
 // @acf fn ccw — (a,b,p) / (ax,ay,bx,by,px,py) -> Ccw — 有向線分abに対する点pの位置を5分類する
-/// @acf-doc @brief 反時計回り・時計回り・後方・前方・線分上を `Ccw` で返す。整数座標は厳密、実数はEPS。6引数の生座標版あり
-/// @acf-doc [function] ccw
+
+/// 有向線分a→bに対する点pの向きと一直線上の位置を分類する。
+///
+/// 引数 `a / b / p`: 有限の2D点。整数は座標差と広い積/和が中間型へ収まる範囲。
+///
+/// 戻り値: Ccw。CounterClockwise=1、Clockwise=-1、OnSegment=0、OnlineBack=2、OnlineFront=-2。一直線ならaより後ろ/線分上/bより前を分類。a==bではp==aがOnSegment、それ以外がOnlineFront。
+///
+/// 注意: 入力を変更せずO(1)。整数の差は積を広げる前に座標型で計算します。
+///
+/// 呼び分け: ccw(a,b,p)。整数点は向きの厳密判定、実数点は方向ベクトルのスケールに応じたtoleranceを使用。
+///
+/// 例: `print(static_cast<int>(ccw(p2i{0,0},p2i{2,0},p2i{0,1})));`
 template <class A, class B, class P>
 Ccw ccw(const A& a_value, const B& b_value, const P& p_value) {
     using namespace ac_detail::geometry;
@@ -3034,14 +4111,35 @@ Ccw ccw(const A& a_value, const B& b_value, const P& p_value) {
     }
 }
 
+/// 有向線分a→bに対する点pの向きと一直線上の位置を分類する。
+///
+/// 引数 `a / b / p`: 有限の2D点。整数は座標差と広い積/和が中間型へ収まる範囲。
+///
+/// 戻り値: Ccw。CounterClockwise=1、Clockwise=-1、OnSegment=0、OnlineBack=2、OnlineFront=-2。一直線ならaより後ろ/線分上/bより前を分類。a==bではp==aがOnSegment、それ以外がOnlineFront。
+///
+/// 注意: 入力を変更せずO(1)。整数の差は積を広げる前に座標型で計算します。
+///
+/// 呼び分け: ccw(a,b,p)。整数点は向きの厳密判定、実数点は方向ベクトルのスケールに応じたtoleranceを使用。
+///
+/// 例: `print(static_cast<int>(ccw(p2i{0,0},p2i{2,0},p2i{0,1})));`
 template <class A, class B, class C, class D, class E, class F>
 Ccw ccw(A ax, B ay, C bx, D by, E px, F py) {
     return ccw(pair{ax, ay}, pair{bx, by}, pair{px, py});
 }
 
 // @acf fn projection_point — (p,a,b) / (p,line) / coordinates -> Point2<ld> — 点を直線へ正射影する
-/// @acf-doc @brief 点pから直線abへ下ろした垂線の足。a==bならaを返す。6引数の生座標版あり
-/// @acf-doc [function] projection_point
+
+/// 点を無限直線へ正射影して垂線の足を求める。
+///
+/// 引数 `p`: 有限の2D点。
+///
+/// 引数 `a / b またはline`: 基準の無限直線。端点間へ結果を制限しません。
+///
+/// 戻り値: `Point2<ld>`。a+(b-a)*dot(p-a,b-a)/|b-a|²。a==bならa。
+///
+/// 注意: 入力を変更せずO(1)。先頭2座標をldへ変換し、退化は方向の平方長がちょうど0で判定。
+///
+/// 呼び分け: projection_point(p,a,b) / (p,line) / (px,py,ax,ay,bx,by)。
 template <class P, class A, class B>
 auto projection_point(const P& p_value, const A& a_value, const B& b_value) {
     using namespace ac_detail::geometry;
@@ -3054,30 +4152,84 @@ auto projection_point(const P& p_value, const A& a_value, const B& b_value) {
     return a + ab * (dot_product(p - a, ab) / length2);
 }
 
+/// 点を無限直線へ正射影して垂線の足を求める。
+///
+/// 引数 `p`: 有限の2D点。
+///
+/// 引数 `a / b またはline`: 基準の無限直線。端点間へ結果を制限しません。
+///
+/// 戻り値: `Point2<ld>`。a+(b-a)*dot(p-a,b-a)/|b-a|²。a==bならa。
+///
+/// 注意: 入力を変更せずO(1)。先頭2座標をldへ変換し、退化は方向の平方長がちょうど0で判定。
+///
+/// 呼び分け: projection_point(p,a,b) / (p,line) / (px,py,ax,ay,bx,by)。
 template <class P, class A, class B>
 auto projection_point(const P& p, const Line<A, B>& line) {
     return projection_point(p, line.a, line.b);
 }
 
+/// 点を無限直線へ正射影して垂線の足を求める。
+///
+/// 引数 `p`: 有限の2D点。
+///
+/// 引数 `a / b またはline`: 基準の無限直線。端点間へ結果を制限しません。
+///
+/// 戻り値: `Point2<ld>`。a+(b-a)*dot(p-a,b-a)/|b-a|²。a==bならa。
+///
+/// 注意: 入力を変更せずO(1)。先頭2座標をldへ変換し、退化は方向の平方長がちょうど0で判定。
+///
+/// 呼び分け: projection_point(p,a,b) / (p,line) / (px,py,ax,ay,bx,by)。
 template <class A, class B, class C, class D, class E, class F>
 auto projection_point(A px, B py, C ax, D ay, E bx, F by) {
     return projection_point(pair{px, py}, pair{ax, ay}, pair{bx, by});
 }
 
 // @acf fn reflection_point — (p,a,b) / (p,line) / coordinates -> Point2<ld> — 点を直線に関して反転する
-/// @acf-doc @brief 点pを直線abに関して線対称移動した点を返す。6引数の生座標版あり
-/// @acf-doc [function] reflection_point
+
+/// 点を無限直線へ鏡映する。
+///
+/// 引数 `p`: 有限の2D点。
+///
+/// 引数 `a / b またはline`: 基準の無限直線。端点間へ結果を制限しません。
+///
+/// 戻り値: `Point2<ld>`。2*projection_point-p。a==bなら点aを中心とした点対称2*a-p。
+///
+/// 注意: 入力を変更せずO(1)。先頭2座標をldへ変換し、退化は方向の平方長がちょうど0で判定。
+///
+/// 呼び分け: reflection_point(p,a,b) / (p,line) / (px,py,ax,ay,bx,by)。
 template <class P, class A, class B>
 auto reflection_point(const P& p_value, const A& a, const B& b) {
     const auto p = ac_detail::geometry::point2_ld(p_value);
     return projection_point(p, a, b) * 2 - p;
 }
 
+/// 点を無限直線へ鏡映する。
+///
+/// 引数 `p`: 有限の2D点。
+///
+/// 引数 `a / b またはline`: 基準の無限直線。端点間へ結果を制限しません。
+///
+/// 戻り値: `Point2<ld>`。2*projection_point-p。a==bなら点aを中心とした点対称2*a-p。
+///
+/// 注意: 入力を変更せずO(1)。先頭2座標をldへ変換し、退化は方向の平方長がちょうど0で判定。
+///
+/// 呼び分け: reflection_point(p,a,b) / (p,line) / (px,py,ax,ay,bx,by)。
 template <class P, class A, class B>
 auto reflection_point(const P& p, const Line<A, B>& line) {
     return reflection_point(p, line.a, line.b);
 }
 
+/// 点を無限直線へ鏡映する。
+///
+/// 引数 `p`: 有限の2D点。
+///
+/// 引数 `a / b またはline`: 基準の無限直線。端点間へ結果を制限しません。
+///
+/// 戻り値: `Point2<ld>`。2*projection_point-p。a==bなら点aを中心とした点対称2*a-p。
+///
+/// 注意: 入力を変更せずO(1)。先頭2座標をldへ変換し、退化は方向の平方長がちょうど0で判定。
+///
+/// 呼び分け: reflection_point(p,a,b) / (p,line) / (px,py,ax,ay,bx,by)。
 template <class A, class B, class C, class D, class E, class F>
 auto reflection_point(A px, B py, C ax, D ay, E bx, F by) {
     return reflection_point(pair{px, py}, pair{ax, ay}, pair{bx, by});
@@ -3205,8 +4357,16 @@ vector<Point2<long double>> line_intersection_points(
 }  // namespace ac_detail::geometry
 
 // @acf fn intersection_points — (shape1,shape2) -> vector<Point2<ld>> — 交点を列挙する
-/// @acf-doc @brief 直線・`LineEquation`・線分・円の交点を重複なしで返す。完全一致で交点が無限個なら空配列
-/// @acf-doc [function] intersection_points
+
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class A, class B, class C, class D>
 auto intersection_points(const Line<A, B>& first,
                          const Line<C, D>& second) {
@@ -3214,6 +4374,15 @@ auto intersection_points(const Line<A, B>& first,
         first.a, first.b, second.a, second.b);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class T, class U>
 auto intersection_points(const LineEquation<T>& first,
                          const LineEquation<U>& second) {
@@ -3243,6 +4412,15 @@ auto intersection_points(const LineEquation<T>& first,
                             (a1 * c2 - a2 * c1) / det}};
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class A, class B, class C, class D>
 auto intersection_points(const Segment<A, B>& first,
                          const Segment<C, D>& second) {
@@ -3289,6 +4467,15 @@ auto intersection_points(const Segment<A, B>& first,
     return result;
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class A, class B, class C, class D>
 auto intersection_points(const Line<A, B>& line,
                          const Segment<C, D>& segment) {
@@ -3323,12 +4510,30 @@ auto intersection_points(const Line<A, B>& line,
     return result;
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class A, class B, class C, class D>
 auto intersection_points(const Segment<A, B>& segment,
                          const Line<C, D>& line) {
     return intersection_points(line, segment);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class C, class R, class A, class B>
 auto intersection_points(const Circle<C, R>& circle,
                          const Line<A, B>& line) {
@@ -3362,12 +4567,30 @@ auto intersection_points(const Circle<C, R>& circle,
     return result;
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class A, class B, class C, class R>
 auto intersection_points(const Line<A, B>& line,
                          const Circle<C, R>& circle) {
     return intersection_points(circle, line);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class C, class R, class A, class B>
 auto intersection_points(const Circle<C, R>& circle,
                          const Segment<A, B>& segment) {
@@ -3379,12 +4602,30 @@ auto intersection_points(const Circle<C, R>& circle,
     return result;
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class A, class B, class C, class R>
 auto intersection_points(const Segment<A, B>& segment,
                          const Circle<C, R>& circle) {
     return intersection_points(circle, segment);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class C1, class R1, class C2, class R2>
 auto intersection_points(const Circle<C1, R1>& first,
                          const Circle<C2, R2>& second) {
@@ -3430,129 +4671,355 @@ auto polygon_boundary_intersections(const Poly& poly, const Other& other) {
 }
 }  // namespace ac_detail::geometry
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class P, class A, class B>
 auto intersection_points(const Polygon<P>& polygon, const Line<A, B>& line) {
     return ac_detail::geometry::polygon_boundary_intersections(polygon, line);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class A, class B, class P>
 auto intersection_points(const Line<A, B>& line, const Polygon<P>& polygon) {
     return intersection_points(polygon, line);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class P, class A, class B>
 auto intersection_points(const Polygon<P>& polygon, const Segment<A, B>& segment) {
     return ac_detail::geometry::polygon_boundary_intersections(polygon, segment);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class A, class B, class P>
 auto intersection_points(const Segment<A, B>& segment, const Polygon<P>& polygon) {
     return intersection_points(polygon, segment);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class P, class C, class R>
 auto intersection_points(const Polygon<P>& polygon, const Circle<C, R>& circle) {
     return ac_detail::geometry::polygon_boundary_intersections(polygon, circle);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class C, class R, class P>
 auto intersection_points(const Circle<C, R>& circle, const Polygon<P>& polygon) {
     return intersection_points(polygon, circle);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class A, class B, class C, class D>
 auto intersection_points(const Rectangle<A, B>& rectangle, const Line<C, D>& line) {
     return intersection_points(to_polygon(rectangle), line);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class C, class D, class A, class B>
 auto intersection_points(const Line<C, D>& line, const Rectangle<A, B>& rectangle) {
     return intersection_points(rectangle, line);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class A, class B, class C, class D>
 auto intersection_points(const Rectangle<A, B>& rectangle, const Segment<C, D>& segment) {
     return intersection_points(to_polygon(rectangle), segment);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class C, class D, class A, class B>
 auto intersection_points(const Segment<C, D>& segment, const Rectangle<A, B>& rectangle) {
     return intersection_points(rectangle, segment);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class A, class B, class C, class R>
 auto intersection_points(const Rectangle<A, B>& rectangle, const Circle<C, R>& circle) {
     return intersection_points(to_polygon(rectangle), circle);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class C, class R, class A, class B>
 auto intersection_points(const Circle<C, R>& circle, const Rectangle<A, B>& rectangle) {
     return intersection_points(rectangle, circle);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class P, class S, class A, class B>
 auto intersection_points(const Square<P, S>& square, const Line<A, B>& line) {
     return intersection_points(to_polygon(square), line);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class A, class B, class P, class S>
 auto intersection_points(const Line<A, B>& line, const Square<P, S>& square) {
     return intersection_points(square, line);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class P, class S, class A, class B>
 auto intersection_points(const Square<P, S>& square, const Segment<A, B>& segment) {
     return intersection_points(to_polygon(square), segment);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class A, class B, class P, class S>
 auto intersection_points(const Segment<A, B>& segment, const Square<P, S>& square) {
     return intersection_points(square, segment);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class P, class S, class C, class R>
 auto intersection_points(const Square<P, S>& square, const Circle<C, R>& circle) {
     return intersection_points(to_polygon(square), circle);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class C, class R, class P, class S>
 auto intersection_points(const Circle<C, R>& circle, const Square<P, S>& square) {
     return intersection_points(square, circle);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class A, class B, class C, class D, class E>
 auto intersection_points(const Triangle<A, B, C>& triangle, const Line<D, E>& line) {
     return intersection_points(to_polygon(triangle), line);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class D, class E, class A, class B, class C>
 auto intersection_points(const Line<D, E>& line, const Triangle<A, B, C>& triangle) {
     return intersection_points(triangle, line);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class A, class B, class C, class D, class E>
 auto intersection_points(const Triangle<A, B, C>& triangle, const Segment<D, E>& segment) {
     return intersection_points(to_polygon(triangle), segment);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class D, class E, class A, class B, class C>
 auto intersection_points(const Segment<D, E>& segment, const Triangle<A, B, C>& triangle) {
     return intersection_points(triangle, segment);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class A, class B, class C, class Cent, class R>
 auto intersection_points(const Triangle<A, B, C>& triangle, const Circle<Cent, R>& circle) {
     return intersection_points(to_polygon(triangle), circle);
 }
 
+/// 2D図形の境界交点の座標を求める。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。対応する組合せは下の呼び分けを確認。
+///
+/// 戻り値: `vector<Point2<ld>>`。交点なしは空。非退化の一致直線・平行なLineEquation・同心円も空になるため、空だけで共有部分なしとは判断できません。接点は通常1点、2円の交点は通常2点。線分の重なる区間は区間の両端を返し、無限個の点を列挙しません。多角形の辺上の交点はtoleranceで重複を除きます。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)。多角形のN辺を調べ、既出点を線形探索するため最悪O(N²)。交点はld計算で、同一点/平行等にスケール付きtoleranceを使用。交点の一般的な整列順は保証しません。
+///
+/// 呼び分け: Line同士、LineEquation同士、Segment同士、Line/Segment、CircleとLine/Segment/Circle。Polygon・Rectangle・Square・TriangleとLine/Segment/Circleも対応（引数反転可）。多角形同士の境界列挙、3D、LineEquationと他形状は直接の形式なし。多角形が0/1頂点なら境界交点は空。
 template <class Cent, class R, class A, class B, class C>
 auto intersection_points(const Circle<Cent, R>& circle, const Triangle<A, B, C>& triangle) {
     return intersection_points(triangle, circle);
 }
 
 // @acf fn intersects — (shape1,shape2) -> bool — 2D・3D図形の交差を判定する
-/// @acf-doc @brief 直線・線分・円・多角形など2D図形と球・直方体が共有部分を持つか判定する。完全一致や内包もtrue。線分・直線の整数座標は厳密判定
-/// @acf-doc [function] intersects
+
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class C, class D>
 bool intersects(const Line<A, B>& first, const Line<C, D>& second) {
     using namespace ac_detail::geometry;
@@ -3562,6 +5029,17 @@ bool intersects(const Line<A, B>& first, const Line<C, D>& second) {
         return lines_intersect_ld(first.a, first.b, second.a, second.b);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class C, class D>
 bool intersects(const Segment<A, B>& first, const Segment<C, D>& second) {
     using namespace ac_detail::geometry;
@@ -3571,6 +5049,17 @@ bool intersects(const Segment<A, B>& first, const Segment<C, D>& second) {
         return segments_intersect_ld(first.a, first.b, second.a, second.b);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class C, class D>
 bool intersects(const Line<A, B>& line, const Segment<C, D>& segment) {
     using namespace ac_detail::geometry;
@@ -3580,21 +5069,65 @@ bool intersects(const Line<A, B>& line, const Segment<C, D>& segment) {
         return line_segment_intersect_ld(line.a, line.b, segment.a, segment.b);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class C, class D>
 bool intersects(const Segment<A, B>& segment, const Line<C, D>& line) {
     return intersects(line, segment);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class C, class R, class A, class B>
 bool intersects(const Circle<C, R>& circle, const Line<A, B>& line) {
     return !intersection_points(circle, line).empty();
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class C, class R>
 bool intersects(const Line<A, B>& line, const Circle<C, R>& circle) {
     return intersects(circle, line);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class C, class R, class A, class B>
 bool intersects(const Circle<C, R>& circle, const Segment<A, B>& segment) {
     const long double radius = static_cast<long double>(circle.radius);
@@ -3604,11 +5137,33 @@ bool intersects(const Circle<C, R>& circle, const Segment<A, B>& segment) {
         || ac_detail::geometry::distance2d(circle.center, segment.b) <= radius + eps;
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class C, class R>
 bool intersects(const Segment<A, B>& segment, const Circle<C, R>& circle) {
     return intersects(circle, segment);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class C1, class R1, class C2, class R2>
 bool intersects(const Circle<C1, R1>& first,
                 const Circle<C2, R2>& second) {
@@ -3621,8 +5176,18 @@ bool intersects(const Circle<C1, R1>& first,
 }
 
 // @acf fn convex_hull — (points,include_collinear=false) -> Polygon<P> — 凸包を反時計回りで作る
-/// @acf-doc @brief 点集合の凸包。重複点を除き、最小点から反時計回りに頂点を返す。整数座標は厳密な向き判定
-/// @acf-doc [function] convex_hull
+
+/// 点集合を包む凸包の境界頂点を反時計回りに作る。
+///
+/// 引数 `points`: 有限の2D座標。整数の差・積・和は中間型へ収まること。順序は自由。
+///
+/// 引数 `include_collinear`: trueは境界上の一直線の点も残す。falseは中間点を省く。省略時は `false`。
+///
+/// 戻り値: `Polygon<P>`。重複する先頭2座標を除き、(x,y)辞書順の最小点から反時計回り。始点を末尾へ重ねません。空なら空、1/2点はそのまま。全点が一直線ならfalseで両端、trueで辞書順の全点。浮動小数点の重複除去は座標の厳密な==、向きはtoleranceを使います。
+///
+/// 注意: 入力lvalueは変更せずコピーをソートします。O(N log N)、追加記憶O(N)。整数の向きは広い積で判定しますが、積の前の座標差が元の型へ収まることが必要。
+///
+/// 呼び分け: convex_hull(points[,include_collinear])。入力の点型を保持し、入力順や元添字は返しません。
 template <class P>
 auto convex_hull(vector<P> points, bool include_collinear = false) {
     using namespace ac_detail::geometry;
@@ -3696,12 +5261,16 @@ auto convex_hull(vector<P> points, bool include_collinear = false) {
     return Polygon<P>{std::move(lower)};
 }
 
+/// 2次元の点集合の中で最も近い2点について、その距離と入力配列での位置を表す結果です。選ばれた2点の元の情報を取り出すときに使います。
 struct ClosestPairResult {
+    /// 選ばれた2点のユークリッド距離。無効な結果は infinity。
     long double distance = numeric_limits<long double>::infinity();
+    /// 元の点配列の0-indexed添字。無効な結果は`size_t`の最大値。
     size_t first_index = numeric_limits<size_t>::max();
+    /// もう一方の元配列添字。無効な結果は`size_t`の最大値。
     size_t second_index = numeric_limits<size_t>::max();
 
-    /// @brief 2点以上の入力から有効な最近点対が得られたか判定する。
+    /// 2点以上の入力から有効な最近点対が得られたか判定する。
     constexpr bool valid() const {
         return first_index != numeric_limits<size_t>::max();
     }
@@ -3715,8 +5284,16 @@ inline ostream& operator<<(ostream& os, const ClosestPairResult& result) {
 }
 
 // @acf fn closest_pair — (points) -> ClosestPairResult — 最近点対をO(N log N)で求める
-/// @acf-doc @brief 最短距離と元配列での2添字を返す。2点未満ではvalid()==false
-/// @acf-doc [function] closest_pair
+
+/// 2D点集合の最近点対と元配列の添字を求める。
+///
+/// 引数 `points`: 有限の2D点。先頭2座標をldへ変換して距離を計算。
+///
+/// 戻り値: ClosestPairResult。distanceは最短のld距離、first_index/second_indexは元配列の0始まり添字。2点未満はvalid()==false、distance=+infinity、両添字=size_tの最大値。重複点があれば有効な距離0。同率の点対の選び方や添字の大小順は保証しません。
+///
+/// 注意: 入力を変更せず、作業配列をソートして平面走査します。O(N log N)、追加記憶O(N)。ldへの変換とhypotの丸め誤差があります。
+///
+/// 呼び分け: closest_pair(points)。凸包の頂点だけへ減らすと内部の最近点を失うので、元の点集合を渡します。
 template <class P>
 ClosestPairResult closest_pair(const vector<P>& points) {
     using namespace ac_detail::geometry;
@@ -3767,8 +5344,18 @@ ClosestPairResult closest_pair(const vector<P>& points) {
 }
 
 // @acf fn tangent_points — (circle,p) -> vector<Point2<ld>> — 点から円へ引いた接線の接点を返す
-/// @acf-doc @brief 円外の点からは2点、円上からは1点、円内からは0点を返す
-/// @acf-doc [function] tangent_points
+
+/// 指定点から円へ引く接線の接点を求める。
+///
+/// 引数 `circle`: 有限の2D中心と非負半径。
+///
+/// 引数 `point_value`: 接線を引く有限の2D点。
+///
+/// 戻り値: `vector<Point2<ld>>`。円外は2点、円周上は1点、円内は空（toleranceで判定）。半径0では入力点の位置にかかわらず中心1点。円周近傍の1点は入力点を返すため、円上への正規化ではありません。接点の整列順は保証しません。
+///
+/// 注意: 入力を変更せずO(1)。先頭2座標をldへ変換し、半径の平方・点間距離の平方に応じたtoleranceで分岐します。
+///
+/// 呼び分け: tangent_points(circle,point)。返るのは接線自体ではなく接点です。
 template <class C, class R, class P>
 auto tangent_points(const Circle<C, R>& circle, const P& point_value) {
     using namespace ac_detail::geometry;
@@ -3799,8 +5386,16 @@ auto tangent_points(const Circle<C, R>& circle, const P& point_value) {
 }
 
 // @acf fn common_tangents — (circle1,circle2) -> vector<Line<Point2<ld>>> — 2円の共通接線を返す
-/// @acf-doc @brief 2円の共通接線を0〜4本返す。同心円や同一円では空配列
-/// @acf-doc [function] common_tangents
+
+/// 2円へ共通に接する直線の候補を求める。
+///
+/// 引数 `first / second`: 有限の2D中心と非負半径。通常の独立した接線の列挙は正の半径で使います。
+///
+/// 戻り値: `vector<Line<Point2<ld>>>`の0..4候補。離れた2円は4本、外接は3本、交わる2円は2本、内接は1本、厳密な内包は0本。同心/ほぼ同心は空（同一円の無限本も列挙しない）。半径0を含む場合は重複した候補が返り得て、一般の重複除去や整列はしません。
+///
+/// 注意: 入力を変更せずO(1)。ldへ変換し、中心距離の平方と半径平方のスケール付きtoleranceで接する/交わる条件を判定します。
+///
+/// 呼び分け: common_tangents(first,second)。両円で接点が一致する場合も、その接点と接線方向の別点で直線を表します。
 template <class C1, class R1, class C2, class R2>
 auto common_tangents(const Circle<C1, R1>& first,
                      const Circle<C2, R2>& second) {
@@ -3837,8 +5432,16 @@ auto common_tangents(const Circle<C1, R1>& first,
 }
 
 // @acf fn make_circumcircle — (a,b,c) / (x1,y1,x2,y2,x3,y3) -> Circle<Point2<ld>,ld> — 3点の外接円を作る
-/// @acf-doc @brief 一直線上でない3点を通る円を返す。6引数の生座標版あり
-/// @acf-doc [function] make_circumcircle
+
+/// 一直線上でない3点を通る外接円を構築する。
+///
+/// 引数 `a_value / b_value / c_value`: 有限の2Dの3点。外積から求めた分母の絶対値がtolerance(1+|b-a|*|c-a|)より大きいこと。
+///
+/// 戻り値: `Circle<Point2<ld>,ld>`。中心は3点から等距離、半径は中心からaへの距離。一直線/ほぼ一直線はassertで拒否し、optionalや空の円は返しません。
+///
+/// 注意: 入力を変更せずO(1)。先頭2座標をldへ変換して計算し、極端に細い三角形や巨大座標では誤差に注意します。
+///
+/// 呼び分け: make_circumcircle(a,b,c) / (x1,y1,x2,y2,x3,y3)。頂点の時計/反時計方向を問いません。
 template <class A, class B, class C>
 auto make_circumcircle(const A& a_value, const B& b_value, const C& c_value) {
     using namespace ac_detail::geometry;
@@ -3858,14 +5461,31 @@ auto make_circumcircle(const A& a_value, const B& b_value, const C& c_value) {
     return make_circle(center, euclidean_distance(center, a));
 }
 
+/// 一直線上でない3点を通る外接円を構築する。
+///
+/// 引数 `a_value / b_value / c_value`: 有限の2Dの3点。外積から求めた分母の絶対値がtolerance(1+|b-a|*|c-a|)より大きいこと。
+///
+/// 戻り値: `Circle<Point2<ld>,ld>`。中心は3点から等距離、半径は中心からaへの距離。一直線/ほぼ一直線はassertで拒否し、optionalや空の円は返しません。
+///
+/// 注意: 入力を変更せずO(1)。先頭2座標をldへ変換して計算し、極端に細い三角形や巨大座標では誤差に注意します。
+///
+/// 呼び分け: make_circumcircle(a,b,c) / (x1,y1,x2,y2,x3,y3)。頂点の時計/反時計方向を問いません。
 template <class A, class B, class C, class D, class E, class F>
 auto make_circumcircle(A x1, B y1, C x2, D y2, E x3, F y3) {
     return make_circumcircle(pair{x1, y1}, pair{x2, y2}, pair{x3, y3});
 }
 
 // @acf fn make_incircle — (a,b,c) / (x1,y1,x2,y2,x3,y3) -> Circle<Point2<ld>,ld> — 三角形の内接円を作る
-/// @acf-doc @brief 一直線上でない3点から三角形の内接円を返す。6引数の生座標版あり
-/// @acf-doc [function] make_incircle
+
+/// 非退化な三角形の3辺に接する内接円を構築する。
+///
+/// 引数 `a_value / b_value / c_value`: 有限の2Dの3点。周長>0かつ外積の絶対値>tolerance(周長²)。
+///
+/// 戻り値: `Circle<Point2<ld>,ld>`。中心は対辺の長さによる頂点の加重平均、半径は面積の2倍/周長。重複/一直線/ほぼ一直線はassertで拒否し、失敗フラグは返しません。
+///
+/// 注意: 入力を変更せずO(1)。先頭2座標をldへ変換して辺長と外積を計算します。
+///
+/// 呼び分け: make_incircle(a,b,c) / (x1,y1,x2,y2,x3,y3)。頂点の周回方向を問いません。
 template <class A, class B, class C>
 auto make_incircle(const A& a_value, const B& b_value, const C& c_value) {
     using namespace ac_detail::geometry;
@@ -3882,12 +5502,23 @@ auto make_incircle(const A& a_value, const B& b_value, const C& c_value) {
     return make_circle(center, twice_area / perimeter);
 }
 
+/// 非退化な三角形の3辺に接する内接円を構築する。
+///
+/// 引数 `a_value / b_value / c_value`: 有限の2Dの3点。周長>0かつ外積の絶対値>tolerance(周長²)。
+///
+/// 戻り値: `Circle<Point2<ld>,ld>`。中心は対辺の長さによる頂点の加重平均、半径は面積の2倍/周長。重複/一直線/ほぼ一直線はassertで拒否し、失敗フラグは返しません。
+///
+/// 注意: 入力を変更せずO(1)。先頭2座標をldへ変換して辺長と外積を計算します。
+///
+/// 呼び分け: make_incircle(a,b,c) / (x1,y1,x2,y2,x3,y3)。頂点の周回方向を問いません。
 template <class A, class B, class C, class D, class E, class F>
 auto make_incircle(A x1, B y1, C x2, D y2, E x3, F y3) {
     return make_incircle(pair{x1, y1}, pair{x2, y2}, pair{x3, y3});
 }
 
+/// 2次元の平行移動・回転・拡大縮小などを3×3の同次座標行列で表す値です。複数の変換を合成して点や図形へ適用するときに使います。
 struct Affine2D {
+    /// matrix[row][col] が同次座標変換の係数。行・列は0-indexed。
     array<array<long double, 3>, 3> matrix{};
 };
 
@@ -3896,8 +5527,14 @@ inline ostream& operator<<(ostream& os, const Affine2D& transform) {
 }
 
 // @acf fn identity_transform — () -> Affine2D — 何も変えない2Dアフィン変換
-/// @acf-doc @brief 単位変換を返す。変換の合成を始める初期値にも使える
-/// @acf-doc [function] identity_transform
+
+/// 点を動かさない2D変換と合成の初期値を作る。
+///
+/// 戻り値: Affine2Dの3x3単位行列。Affine2D{}は零行列なので、このAPIで単位変換を作ります。
+///
+/// 注意: 共有状態を変更せずO(1)。
+///
+/// 呼び分け: identity_transform()。
 constexpr Affine2D identity_transform() {
     Affine2D result{};
     result.matrix[0] = {1, 0, 0};
@@ -3920,8 +5557,16 @@ constexpr Affine2D& operator*=(Affine2D& left, const Affine2D& right) {
 }
 
 // @acf fn translation_transform — (dx,dy) / (delta) -> Affine2D — 平行移動行列を作る
-/// @acf-doc @brief x方向dx、y方向dyだけ動かす変換を返す
-/// @acf-doc [function] translation_transform
+
+/// 指定の差ベクトルだけ平行移動する2D行列を作る。
+///
+/// 引数 `dx / dy またはdelta`: 有限の移動量。点版は先頭2座標。
+///
+/// 戻り値: Affine2D。x′=x+dx、y′=y+dy。移動量0は単位変換。
+///
+/// 注意: 入力を変更せずO(1)。変換は保存するだけで、apply_transformで適用します。
+///
+/// 呼び分け: translation_transform(dx,dy) / (delta)。
 template <class X, class Y>
 constexpr Affine2D translation_transform(X dx, Y dy) {
     auto result = identity_transform();
@@ -3930,6 +5575,15 @@ constexpr Affine2D translation_transform(X dx, Y dy) {
     return result;
 }
 
+/// 指定の差ベクトルだけ平行移動する2D行列を作る。
+///
+/// 引数 `dx / dy またはdelta`: 有限の移動量。点版は先頭2座標。
+///
+/// 戻り値: Affine2D。x′=x+dx、y′=y+dy。移動量0は単位変換。
+///
+/// 注意: 入力を変更せずO(1)。変換は保存するだけで、apply_transformで適用します。
+///
+/// 呼び分け: translation_transform(dx,dy) / (delta)。
 template <class P>
 constexpr Affine2D translation_transform(const P& delta) {
     return translation_transform(ac_detail::geometry::x_ld(delta),
@@ -3939,74 +5593,164 @@ constexpr Affine2D translation_transform(const P& delta) {
 // --- trigonometry (geometry extension): rad は sinl/cosl、度は *_deg ---
 
 // @acf fn to_rad — (deg) -> ld — 度数法をラジアンへ変換
-/// @acf-doc @brief `deg * PI / 180`。幾何・`rotation_transform` はラジアン前提
-/// @acf-doc @code (T deg) -> ld
-/// @acf-doc [function] to_rad
+
+/// 度数の角度をラジアンへ換算する。
+///
+/// 引数 `deg`: 有限でldへ変換できる度数の角度。
+///
+/// 戻り値: ld。周期で正規化せず、deg*PI/180。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: to_radは上の引数順で呼び出します。
+///
+/// 例: `print_fixed(6,to_rad(180));`
 template <class T>
 constexpr ld to_rad(T deg) {
     return static_cast<ld>(deg) * PI / 180.0L;
 }
 
 // @acf fn to_deg — (rad) -> ld — ラジアンを度数法へ変換
-/// @acf-doc @brief `rad * 180 / PI`
-/// @acf-doc @code (T rad) -> ld
-/// @acf-doc [function] to_deg
+
+/// ラジアンの角度を度数へ換算する。
+///
+/// 引数 `rad`: 有限でldへ変換できるラジアンの角度。
+///
+/// 戻り値: ld。周期で正規化せず、rad*180/PI。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: to_degは上の引数順で呼び出します。
+///
+/// 例: `print_fixed(6,to_deg(PI));`
 template <class T>
 constexpr ld to_deg(T rad) {
     return static_cast<ld>(rad) * 180.0L / PI;
 }
 
 // @acf fn sin_deg — (deg) -> ld — 正弦（引数は度数）
-/// @acf-doc @brief `sinl(to_rad(deg))`
-/// @acf-doc [function] sin_deg
+
+/// 度数の角度の正弦を求める。
+///
+/// 引数 `deg`: 有限の度数角。
+///
+/// 戻り値: ld。sinl(to_rad(deg))で[-1,1]。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: sin_degは上の引数順で呼び出します。
+///
+/// 例: `print_fixed(6,sin_deg(30));`
 template <class T>
 ld sin_deg(T deg) {
     return sinl(to_rad(deg));
 }
 
 // @acf fn cos_deg — (deg) -> ld — 余弦（引数は度数）
-/// @acf-doc @brief `cosl(to_rad(deg))`
-/// @acf-doc [function] cos_deg
+
+/// 度数の角度の余弦を求める。
+///
+/// 引数 `deg`: 有限の度数角。
+///
+/// 戻り値: ld。cosl(to_rad(deg))で[-1,1]。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: cos_degは上の引数順で呼び出します。
+///
+/// 例: `print_fixed(6,cos_deg(60));`
 template <class T>
 ld cos_deg(T deg) {
     return cosl(to_rad(deg));
 }
 
 // @acf fn tan_deg — (deg) -> ld — 正接（引数は度数）
-/// @acf-doc @brief `tanl(to_rad(deg))`
-/// @acf-doc [function] tan_deg
+
+/// 度数の角度の正接を求める。
+///
+/// 引数 `deg`: 有限の度数角。正接の極付近では有限で安定した結果を期待しません。
+///
+/// 戻り値: ld。tanl(to_rad(deg))。ゼロ除算や極への独自の例外検査はありません。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: tan_degは上の引数順で呼び出します。
+///
+/// 例: `print_fixed(6,tan_deg(45));`
 template <class T>
 ld tan_deg(T deg) {
     return tanl(to_rad(deg));
 }
 
 // @acf fn asin_deg — (x) -> ld — 逆正弦（戻り値は度数）
-/// @acf-doc @brief `to_deg(asinl(x))`。定義域 `[-1,1]`、値域約 `[-90,90]`
-/// @acf-doc [function] asin_deg
+
+/// 逆三角関数の主値を度数で返す。
+///
+/// 引数 `x`: 正弦の値x。実数結果には-1..1。
+///
+/// 戻り値: ld。[-90,90]の度数の主値。定義域超過はclampせず標準数学関数に従い、独自の例外は投げません。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: asin_degは上の引数順で呼び出します。
+///
+/// 例: `print_fixed(6,asin_deg(0.5L));`
 template <class T>
 ld asin_deg(T x) {
     return to_deg(asinl(static_cast<ld>(x)));
 }
 
 // @acf fn acos_deg — (x) -> ld — 逆余弦（戻り値は度数）
-/// @acf-doc @brief `to_deg(acosl(x))`。定義域 `[-1,1]`、値域約 `[0,180]`
-/// @acf-doc [function] acos_deg
+
+/// 逆三角関数の主値を度数で返す。
+///
+/// 引数 `x`: 余弦の値x。実数結果には-1..1。
+///
+/// 戻り値: ld。[0,180]の度数の主値。定義域超過はclampせず標準数学関数に従い、独自の例外は投げません。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: acos_degは上の引数順で呼び出します。
+///
+/// 例: `print_fixed(6,acos_deg(0.5L));`
 template <class T>
 ld acos_deg(T x) {
     return to_deg(acosl(static_cast<ld>(x)));
 }
 
 // @acf fn atan_deg — (x) -> ld — 逆正接（戻り値は度数）
-/// @acf-doc @brief `to_deg(atanl(x))`。値域約 `(-90,90)`
-/// @acf-doc [function] atan_deg
+
+/// 逆三角関数の主値を度数で返す。
+///
+/// 引数 `x`: 正接の値x。有限でldに変換できること。
+///
+/// 戻り値: ld。(-90,90)の度数の主値。定義域超過はclampせず標準数学関数に従い、独自の例外は投げません。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: atan_degは上の引数順で呼び出します。
+///
+/// 例: `print_fixed(6,atan_deg(1));`
 template <class T>
 ld atan_deg(T x) {
     return to_deg(atanl(static_cast<ld>(x)));
 }
 
 // @acf fn atan2_deg — (y,x) -> ld — 2引数逆正接（戻り値は度数）
-/// @acf-doc @brief `to_deg(atan2l(y,x))`。値域約 `(-180,180]`
-/// @acf-doc [function] atan2_deg
+
+/// x,y座標から象限を保った偏角を度数で返す。
+///
+/// 引数 `y`: 有限のy座標。
+///
+/// 引数 `x`: 有限のx座標。
+///
+/// 戻り値: ld。atan2l(y,x)を度数へ換算、範囲[-180,180]。軸上の符号付き0で端の符号が変わり得ます。原点の方向は幾何学的には未定義。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 引数順はy,x。argumentのx,y形式とは逆です。
+///
+/// 例: `print_fixed(6,atan2_deg(1,1));`
 template <class Y, class X>
 ld atan2_deg(Y y, X x) {
     return to_deg(atan2l(static_cast<ld>(y), static_cast<ld>(x)));
@@ -4023,8 +5767,18 @@ constexpr i128 polar_coordinate(T value) {
 }  // namespace ac_detail::geometry
 
 // @acf fn polar_less — (a,b) -> bool — 整数座標の偏角順を厳密に比較
-/// @acf-doc @brief 原点が先頭。その後は正のx軸から反時計回り、同方向は近い順。符号付き64bit以下の座標を受け取り、外積はi128、二乗距離はu128で比較
-/// @acf-doc [function] polar_less
+
+/// 整数座標の2方向を偏角順で厳密に比較する。
+///
+/// 引数 `a, b`: Point・pair・tuple・array・vectorの先頭2座標。各座標は符号付き64bit以下の整数。動的vectorは2要素以上。浮動小数点・符号なし整数・i128座標はコンパイルエラー。
+///
+/// 戻り値: bool。aがbより前ならtrue。原点が先頭。その後は正のx軸から反時計回り。同方向は原点から近い順、反対方向は別の角度。先頭2座標が同じなら同順位。
+///
+/// 注意: 入力を変更せずO(1)。外積はi128、二乗距離はu128で計算し、符号付き64bit座標の全範囲を扱います。座標差は取りません。
+///
+/// 呼び分け: polar_less(a,b)。基準点が原点以外なら事前に差ベクトルを作り、差も符号付き64bitへ収めます。
+///
+/// 例: `print(polar_less(pll{1,0},pll{0,1}), polar_less(pll{0,0},pll{1,0}));`
 template <class A, class B>
 constexpr bool polar_less(const A& a, const B& b) {
     using namespace ac_detail::geometry;
@@ -4045,8 +5799,16 @@ constexpr bool polar_less(const A& a, const B& b) {
 }
 
 // @acf fn polar_sort — (vector<P>& points) -> void — 点列を整数の偏角順に並べ替える
-/// @acf-doc @brief polar_lessで入力vectorを書き換える。O(N log N)。同じ先頭2座標を持つ要素の順序は保証しない
-/// @acf-doc [function] polar_sort
+
+/// 整数座標の点列を偏角順に並べた結果で書き換える。
+///
+/// 引数 `points`: Point・pair・tuple・array・vectorの先頭2座標。各座標は符号付き64bit以下の整数。動的vectorは2要素以上。浮動小数点・符号なし整数・i128座標はコンパイルエラー。
+///
+/// 戻り値: void。空なら変更なし。原点が先頭。その後は正のx軸から反時計回り。同方向は原点から近い順、反対方向は別の角度。先頭2座標が同じなら同順位。
+///
+/// 注意: 入力vectorを変更します。O(N log N)、ソートのスタックO(log N)。比較はpolar_less。同順位の要素の元の順序は保証しません。
+///
+/// 呼び分け: polar_sort(points)。開始方向は正のx軸に固定。比較器だけが必要ならpolar_less(a,b)を使います。
 template <class P>
 void polar_sort(vector<P>& points) {
     std::sort(points.begin(), points.end(), [](const P& a, const P& b) {
@@ -4055,8 +5817,16 @@ void polar_sort(vector<P>& points) {
 }
 
 // @acf fn polar_sorted — (vector<P> points) -> vector<P> — 整数の偏角順に並べたコピーを返す
-/// @acf-doc @brief polar_sortと同じ順序。lvalue入力は変更せず、空なら空を返す。O(N log N)、追加記憶O(N)
-/// @acf-doc [function] polar_sorted
+
+/// 整数座標の点列を偏角順に並べたコピーを返す。
+///
+/// 引数 `points`: Point・pair・tuple・array・vectorの先頭2座標。各座標は符号付き64bit以下の整数。動的vectorは2要素以上。浮動小数点・符号なし整数・i128座標はコンパイルエラー。
+///
+/// 戻り値: vector<P>。空なら空。原点が先頭。その後は正のx軸から反時計回り。同方向は原点から近い順、反対方向は別の角度。先頭2座標が同じなら同順位。
+///
+/// 注意: lvalue入力は変更せずコピーを並べ替えます。O(N log N)、追加記憶O(N)。比較はpolar_less。同順位の要素の元の順序は保証しません。
+///
+/// 呼び分け: polar_sorted(points)。開始方向は正のx軸に固定。比較器だけが必要ならpolar_less(a,b)を使います。
 template <class P>
 vector<P> polar_sorted(vector<P> points) {
     polar_sort(points);
@@ -4064,34 +5834,88 @@ vector<P> polar_sorted(vector<P> points) {
 }
 
 // @acf fn argument — (p) / (x,y) -> ld — 偏角（ラジアン、atan2）
-/// @acf-doc @brief 点またはベクトルの偏角。`atan2(y,x)`、値域 `(-PI,PI]`
-/// @acf-doc [function] argument
+
+/// 点またはベクトルの偏角をラジアンで返す。
+///
+/// 引数 `p / x,y`: 2次元Point・pairなどの点、またはx,y座標。有限でldに変換できること。
+///
+/// 戻り値: ld。atan2(y,x)の[-PI,PI]のラジアン。原点は方向を持たず、返る数を意味のある偏角として使いません。符号付き0は端の符号に影響します。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: argument(p) / argument(x,y)。
+///
+/// 例: `print_fixed(6,argument(0,1));`
 template <class P>
 ld argument(const P& p) {
     return atan2l(ac_detail::geometry::y_ld(p), ac_detail::geometry::x_ld(p));
 }
 
+/// 点またはベクトルの偏角をラジアンで返す。
+///
+/// 引数 `p / x,y`: 2次元Point・pairなどの点、またはx,y座標。有限でldに変換できること。
+///
+/// 戻り値: ld。atan2(y,x)の[-PI,PI]のラジアン。原点は方向を持たず、返る数を意味のある偏角として使いません。符号付き0は端の符号に影響します。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: argument(p) / argument(x,y)。
+///
+/// 例: `print_fixed(6,argument(0,1));`
 template <class X, class Y>
 ld argument(X x, Y y) {
     return atan2l(static_cast<ld>(y), static_cast<ld>(x));
 }
 
 // @acf fn argument_deg — (p) / (x,y) -> ld — 偏角（度数）
-/// @acf-doc @brief `to_deg(argument(...))`
-/// @acf-doc [function] argument_deg
+
+/// 点またはベクトルの偏角を度数で返す。
+///
+/// 引数 `p / x,y`: 2次元Point・pairなどの点、またはx,y座標。有限でldに変換できること。
+///
+/// 戻り値: ld。atan2(y,x)の[-180,180]の度数。原点は方向を持たず、返る数を意味のある偏角として使いません。符号付き0は端の符号に影響します。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: argument_deg(p) / argument_deg(x,y)。
+///
+/// 例: `print_fixed(6,argument_deg(0,1));`
 template <class P>
 ld argument_deg(const P& p) {
     return to_deg(argument(p));
 }
 
+/// 点またはベクトルの偏角を度数で返す。
+///
+/// 引数 `p / x,y`: 2次元Point・pairなどの点、またはx,y座標。有限でldに変換できること。
+///
+/// 戻り値: ld。atan2(y,x)の[-180,180]の度数。原点は方向を持たず、返る数を意味のある偏角として使いません。符号付き0は端の符号に影響します。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: argument_deg(p) / argument_deg(x,y)。
+///
+/// 例: `print_fixed(6,argument_deg(0,1));`
 template <class X, class Y>
 ld argument_deg(X x, Y y) {
     return to_deg(argument(x, y));
 }
 
 // @acf fn oriented_angle — (u,v) / (ux,uy,vx,vy) -> ld — u から v への向き付き角（ラジアン）
-/// @acf-doc @brief `atan2(cross,dot)`。値域 `(-PI,PI]`。反時計が正。4引数の生座標版あり
-/// @acf-doc [function] oriented_angle
+
+/// 2ベクトルの第1から第2への向き付き角を返す。
+///
+/// 引数 `u / v`: 2次元の非零ベクトル。内積と外積の中間/戻り型で計算できる座標。
+///
+/// 引数 `ux,uy,vx,vy（座標版）`: 2ベクトルを表す有限の座標。
+///
+/// 戻り値: ldのラジアン。範囲は[-PI,PI]、反時計が正。ゼロベクトルを独自に拒否しませんが、有効な方向として使わないこと。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: oriented_angle(u,v) / oriented_angle(ux,uy,vx,vy)。内積/外積を先に計算してからldへ変換します。
+///
+/// 例: `print_fixed(6,oriented_angle(1,0,0,1));`
 template <class U, class V>
 ld oriented_angle(const U& u, const V& v) {
     const ld cross = static_cast<ld>(cross_product2d(u, v));
@@ -4099,53 +5923,153 @@ ld oriented_angle(const U& u, const V& v) {
     return atan2l(cross, dot);
 }
 
+/// 2ベクトルの第1から第2への向き付き角を返す。
+///
+/// 引数 `u / v`: 2次元の非零ベクトル。内積と外積の中間/戻り型で計算できる座標。
+///
+/// 引数 `ux,uy,vx,vy（座標版）`: 2ベクトルを表す有限の座標。
+///
+/// 戻り値: ldの度数。範囲は[-180,180]、反時計が正。ゼロベクトルを独自に拒否しませんが、有効な方向として使わないこと。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: oriented_angle_deg(u,v) / oriented_angle_deg(ux,uy,vx,vy)。内積/外積を先に計算してからldへ変換します。
+///
+/// 例: `print_fixed(6,oriented_angle_deg(1,0,0,1));`
 template <class A, class B, class C, class D>
 ld oriented_angle(A ux, B uy, C vx, D vy) {
     return oriented_angle(pair{ux, uy}, pair{vx, vy});
 }
 
 // @acf fn oriented_angle_deg — (u,v) / (ux,uy,vx,vy) -> ld — u から v への向き付き角（度数）
-/// @acf-doc @brief `to_deg(oriented_angle(...))`
-/// @acf-doc [function] oriented_angle_deg
+
+/// 2ベクトルの第1から第2への向き付き角を返す。
+///
+/// 引数 `u / v`: 2次元の非零ベクトル。内積と外積の中間/戻り型で計算できる座標。
+///
+/// 引数 `ux,uy,vx,vy（座標版）`: 2ベクトルを表す有限の座標。
+///
+/// 戻り値: ldの度数。範囲は[-180,180]、反時計が正。ゼロベクトルを独自に拒否しませんが、有効な方向として使わないこと。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: oriented_angle_deg(u,v) / oriented_angle_deg(ux,uy,vx,vy)。内積/外積を先に計算してからldへ変換します。
+///
+/// 例: `print_fixed(6,oriented_angle_deg(1,0,0,1));`
 template <class U, class V>
 ld oriented_angle_deg(const U& u, const V& v) {
     return to_deg(oriented_angle(u, v));
 }
 
+/// 2ベクトルの第1から第2への向き付き角を返す。
+///
+/// 引数 `u / v`: 2次元の非零ベクトル。内積と外積の中間/戻り型で計算できる座標。
+///
+/// 引数 `ux,uy,vx,vy（座標版）`: 2ベクトルを表す有限の座標。
+///
+/// 戻り値: ldの度数。範囲は[-180,180]、反時計が正。ゼロベクトルを独自に拒否しませんが、有効な方向として使わないこと。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: oriented_angle_deg(u,v) / oriented_angle_deg(ux,uy,vx,vy)。内積/外積を先に計算してからldへ変換します。
+///
+/// 例: `print_fixed(6,oriented_angle_deg(1,0,0,1));`
 template <class A, class B, class C, class D>
 ld oriented_angle_deg(A ux, B uy, C vx, D vy) {
     return to_deg(oriented_angle(ux, uy, vx, vy));
 }
 
 // @acf fn angle_between — (u,v) / (ux,uy,vx,vy) -> ld — 2ベクトルの夾角（ラジアン、[0,PI]）
-/// @acf-doc @brief `abs(oriented_angle(...))`。4引数の生座標版あり
-/// @acf-doc [function] angle_between
+
+/// 2ベクトルの非負の夾角を返す。
+///
+/// 引数 `u / v`: 2次元の非零ベクトル。内積と外積の中間/戻り型で計算できる座標。
+///
+/// 引数 `ux,uy,vx,vy（座標版）`: 2ベクトルを表す有限の座標。
+///
+/// 戻り値: ldのラジアン。範囲は[0,PI]。ゼロベクトルを独自に拒否しませんが、有効な方向として使わないこと。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: angle_between(u,v) / angle_between(ux,uy,vx,vy)。内積/外積を先に計算してからldへ変換します。
+///
+/// 例: `print_fixed(6,angle_between(1,0,0,1));`
 template <class U, class V>
 ld angle_between(const U& u, const V& v) {
     return fabsl(oriented_angle(u, v));
 }
 
+/// 2ベクトルの非負の夾角を返す。
+///
+/// 引数 `u / v`: 2次元の非零ベクトル。内積と外積の中間/戻り型で計算できる座標。
+///
+/// 引数 `ux,uy,vx,vy（座標版）`: 2ベクトルを表す有限の座標。
+///
+/// 戻り値: ldの度数。範囲は[0,180]。ゼロベクトルを独自に拒否しませんが、有効な方向として使わないこと。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: angle_between_deg(u,v) / angle_between_deg(ux,uy,vx,vy)。内積/外積を先に計算してからldへ変換します。
+///
+/// 例: `print_fixed(6,angle_between_deg(1,0,0,1));`
 template <class A, class B, class C, class D>
 ld angle_between(A ux, B uy, C vx, D vy) {
     return fabsl(oriented_angle(ux, uy, vx, vy));
 }
 
 // @acf fn angle_between_deg — (u,v) / (ux,uy,vx,vy) -> ld — 2ベクトルの夾角（度数、[0,180]）
-/// @acf-doc @brief `to_deg(angle_between(...))`
-/// @acf-doc [function] angle_between_deg
+
+/// 2ベクトルの非負の夾角を返す。
+///
+/// 引数 `u / v`: 2次元の非零ベクトル。内積と外積の中間/戻り型で計算できる座標。
+///
+/// 引数 `ux,uy,vx,vy（座標版）`: 2ベクトルを表す有限の座標。
+///
+/// 戻り値: ldの度数。範囲は[0,180]。ゼロベクトルを独自に拒否しませんが、有効な方向として使わないこと。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: angle_between_deg(u,v) / angle_between_deg(ux,uy,vx,vy)。内積/外積を先に計算してからldへ変換します。
+///
+/// 例: `print_fixed(6,angle_between_deg(1,0,0,1));`
 template <class U, class V>
 ld angle_between_deg(const U& u, const V& v) {
     return to_deg(angle_between(u, v));
 }
 
+/// 2ベクトルの非負の夾角を返す。
+///
+/// 引数 `u / v`: 2次元の非零ベクトル。内積と外積の中間/戻り型で計算できる座標。
+///
+/// 引数 `ux,uy,vx,vy（座標版）`: 2ベクトルを表す有限の座標。
+///
+/// 戻り値: ldの度数。範囲は[0,180]。ゼロベクトルを独自に拒否しませんが、有効な方向として使わないこと。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: angle_between_deg(u,v) / angle_between_deg(ux,uy,vx,vy)。内積/外積を先に計算してからldへ変換します。
+///
+/// 例: `print_fixed(6,angle_between_deg(1,0,0,1));`
 template <class A, class B, class C, class D>
 ld angle_between_deg(A ux, B uy, C vx, D vy) {
     return to_deg(angle_between(ux, uy, vx, vy));
 }
 
 // @acf fn polar_point — (r,theta) -> Point2<ld> — 極座標（ラジアン）から点を作る
-/// @acf-doc @brief `(r cos θ, r sin θ)`。θ はラジアン
-/// @acf-doc [function] polar_point
+
+/// 極座標から2次元の直交座標を作る。
+///
+/// 引数 `r`: 有限の半径。極座標の通常の用途は非負。負を自動拒否しません。
+///
+/// 引数 `theta`: 有限のラジアン角。
+///
+/// 戻り値: `Point2<ld>`の(r*cos(angle),r*sin(angle))。r=0は原点。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: polar_pointは上の引数順で呼び出します。
+///
+/// 例: `print_fixed(6,polar_point(2,0)[0]);`
 template <class R, class Theta>
 Point2<ld> polar_point(R r, Theta theta) {
     const ld radius = static_cast<ld>(r);
@@ -4154,16 +6078,38 @@ Point2<ld> polar_point(R r, Theta theta) {
 }
 
 // @acf fn polar_point_deg — (r,deg) -> Point2<ld> — 極座標（度数）から点を作る
-/// @acf-doc @brief `polar_point(r, to_rad(deg))`
-/// @acf-doc [function] polar_point_deg
+
+/// 極座標から2次元の直交座標を作る。
+///
+/// 引数 `r`: 有限の半径。極座標の通常の用途は非負。負を自動拒否しません。
+///
+/// 引数 `deg`: 有限の度数角。
+///
+/// 戻り値: `Point2<ld>`の(r*cos(angle),r*sin(angle))。r=0は原点。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: polar_point_degは上の引数順で呼び出します。
+///
+/// 例: `print_fixed(6,polar_point_deg(2,0)[0]);`
 template <class R, class Deg>
 Point2<ld> polar_point_deg(R r, Deg deg) {
     return polar_point(r, to_rad(deg));
 }
 
 // @acf fn to_polar — (p) / (x,y) -> pair<ld,ld> — 直交→極（r, θラジアン）
-/// @acf-doc @brief `{vector_norm, argument}`。原点は `{0,0}`
-/// @acf-doc [function] to_polar
+
+/// 2次元直交座標を半径と偏角へ変換する。
+///
+/// 引数 `p / x,y`: 2次元Point・pairなどの点、またはx,y座標。有限でldに変換できること。
+///
+/// 戻り値: `pair<ld,ld>`の(非負半径,角度)。半径はhypotl(x,y)、角度は[-PI,PI]のラジアン。通常の原点(0,0)は(0,0)。符号付き0の角はatan2に従います。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: to_polar(p) / to_polar(x,y)。
+///
+/// 例: `print_fixed(6,to_polar(0,2).second);`
 template <class P>
 pair<ld, ld> to_polar(const P& p) {
     const ld x = ac_detail::geometry::x_ld(p);
@@ -4171,6 +6117,17 @@ pair<ld, ld> to_polar(const P& p) {
     return {hypotl(x, y), atan2l(y, x)};
 }
 
+/// 2次元直交座標を半径と偏角へ変換する。
+///
+/// 引数 `p / x,y`: 2次元Point・pairなどの点、またはx,y座標。有限でldに変換できること。
+///
+/// 戻り値: `pair<ld,ld>`の(非負半径,角度)。半径はhypotl(x,y)、角度は[-180,180]の度数。通常の原点(0,0)は(0,0)。符号付き0の角はatan2に従います。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: to_polar_deg(p) / to_polar_deg(x,y)。
+///
+/// 例: `print_fixed(6,to_polar_deg(0,2).second);`
 template <class X, class Y>
 pair<ld, ld> to_polar(X x, Y y) {
     const ld xx = static_cast<ld>(x);
@@ -4179,14 +6136,35 @@ pair<ld, ld> to_polar(X x, Y y) {
 }
 
 // @acf fn to_polar_deg — (p) / (x,y) -> pair<ld,ld> — 直交→極（r, θ度数）
-/// @acf-doc @brief `{r, to_deg(θ)}`
-/// @acf-doc [function] to_polar_deg
+
+/// 2次元直交座標を半径と偏角へ変換する。
+///
+/// 引数 `p / x,y`: 2次元Point・pairなどの点、またはx,y座標。有限でldに変換できること。
+///
+/// 戻り値: `pair<ld,ld>`の(非負半径,角度)。半径はhypotl(x,y)、角度は[-180,180]の度数。通常の原点(0,0)は(0,0)。符号付き0の角はatan2に従います。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: to_polar_deg(p) / to_polar_deg(x,y)。
+///
+/// 例: `print_fixed(6,to_polar_deg(0,2).second);`
 template <class P>
 pair<ld, ld> to_polar_deg(const P& p) {
     auto [r, theta] = to_polar(p);
     return {r, to_deg(theta)};
 }
 
+/// 2次元直交座標を半径と偏角へ変換する。
+///
+/// 引数 `p / x,y`: 2次元Point・pairなどの点、またはx,y座標。有限でldに変換できること。
+///
+/// 戻り値: `pair<ld,ld>`の(非負半径,角度)。半径はhypotl(x,y)、角度は[-180,180]の度数。通常の原点(0,0)は(0,0)。符号付き0の角はatan2に従います。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: to_polar_deg(p) / to_polar_deg(x,y)。
+///
+/// 例: `print_fixed(6,to_polar_deg(0,2).second);`
 template <class X, class Y>
 pair<ld, ld> to_polar_deg(X x, Y y) {
     auto [r, theta] = to_polar(x, y);
@@ -4194,8 +6172,20 @@ pair<ld, ld> to_polar_deg(X x, Y y) {
 }
 
 // @acf fn law_of_cosines_side — (a,b,C) -> ld — 余弦定理で対辺 c（Cはラジアン）
-/// @acf-doc @brief `c² = a²+b²-2ab cos C`
-/// @acf-doc [function] law_of_cosines_side
+
+/// 2辺とその間の角から、余弦定理で対辺の長さを求める。
+///
+/// 引数 `a / b`: 有限の非負の辺長。
+///
+/// 引数 `C_rad`: 間の角のラジアン。三角形の用途では0..PI。
+///
+/// 戻り値: ldのsqrt(a²+b²-2ab*cos(C))。成立性を検査しません。式の負値をclampせず、丸め等で負になるとNaNになり得ます。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: law_of_cosines_sideは上の引数順で呼び出します。
+///
+/// 例: `print_fixed(6,law_of_cosines_side(3,4,PI/2));`
 template <class A, class B, class C>
 ld law_of_cosines_side(A a, B b, C C_rad) {
     const ld aa = static_cast<ld>(a);
@@ -4205,16 +6195,38 @@ ld law_of_cosines_side(A a, B b, C C_rad) {
 }
 
 // @acf fn law_of_cosines_side_deg — (a,b,C_deg) -> ld — 余弦定理で対辺 c（Cは度数）
-/// @acf-doc @brief `law_of_cosines_side(a,b,to_rad(C_deg))`
-/// @acf-doc [function] law_of_cosines_side_deg
+
+/// 2辺とその間の角から、余弦定理で対辺の長さを求める。
+///
+/// 引数 `a / b`: 有限の非負の辺長。
+///
+/// 引数 `C_deg`: 間の角の度数。三角形の用途では0..180。
+///
+/// 戻り値: ldのsqrt(a²+b²-2ab*cos(C))。成立性を検査しません。式の負値をclampせず、丸め等で負になるとNaNになり得ます。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: law_of_cosines_side_degは上の引数順で呼び出します。
+///
+/// 例: `print_fixed(6,law_of_cosines_side_deg(3,4,90));`
 template <class A, class B, class C>
 ld law_of_cosines_side_deg(A a, B b, C C_deg) {
     return law_of_cosines_side(a, b, to_rad(C_deg));
 }
 
 // @acf fn law_of_cosines_angle — (a,b,c) -> ld — 余弦定理で角 C（ラジアン）
-/// @acf-doc @brief `cos C = (a²+b²-c²)/(2ab)`。戻り値は `[0,PI]`
-/// @acf-doc [function] law_of_cosines_angle
+
+/// 3辺から余弦定理で辺cの対角を求める。
+///
+/// 引数 `a / b / c`: 有限の辺長。通常は正のa,bと成立する三角形のc。2ab!=0が必要。
+///
+/// 戻り値: ldのラジアン主値。範囲[0,PI]。余弦値を[-1,1]へclampし、三角形不成立を別の失敗値にはしません。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 2ab=0はassert。clampは入力の三角形成立検査の代わりにはなりません。
+///
+/// 例: `print_fixed(6,law_of_cosines_angle(3,4,5));`
 template <class A, class B, class C>
 ld law_of_cosines_angle(A a, B b, C c) {
     const ld aa = static_cast<ld>(a);
@@ -4229,16 +6241,38 @@ ld law_of_cosines_angle(A a, B b, C c) {
 }
 
 // @acf fn law_of_cosines_angle_deg — (a,b,c) -> ld — 余弦定理で角 C（度数）
-/// @acf-doc @brief `to_deg(law_of_cosines_angle(a,b,c))`
-/// @acf-doc [function] law_of_cosines_angle_deg
+
+/// 3辺から余弦定理で辺cの対角を求める。
+///
+/// 引数 `a / b / c`: 有限の辺長。通常は正のa,bと成立する三角形のc。2ab!=0が必要。
+///
+/// 戻り値: ldの度数主値。範囲[0,180]。余弦値を[-1,1]へclampし、三角形不成立を別の失敗値にはしません。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 2ab=0はassert。clampは入力の三角形成立検査の代わりにはなりません。
+///
+/// 例: `print_fixed(6,law_of_cosines_angle_deg(3,4,5));`
 template <class A, class B, class C>
 ld law_of_cosines_angle_deg(A a, B b, C c) {
     return to_deg(law_of_cosines_angle(a, b, c));
 }
 
 // @acf fn law_of_sines_side — (a,A,B) -> ld — 正弦定理で辺 b（角はラジアン）
-/// @acf-doc @brief `b = a * sin(B) / sin(A)`。`sin(A)≠0` を前提
-/// @acf-doc [function] law_of_sines_side
+
+/// 1辺と対応角・別の角から正弦定理で別の辺を求める。
+///
+/// 引数 `a`: 有限の辺長。
+///
+/// 引数 `A_rad / B_rad`: aの対角A、求めるbの対角B。単位はラジアン、|sin(A)|>EPS。
+///
+/// 戻り値: ldのa*sin(B)/sin(A)。三角形の成立性は検査しません。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: |sin(A)|<=EPSはassert。角はaに対応するAを先に渡します。
+///
+/// 例: `print_fixed(6,law_of_sines_side(2,PI/6,PI/2));`
 template <class Side, class AngA, class AngB>
 ld law_of_sines_side(Side a, AngA A_rad, AngB B_rad) {
     const ld sin_a = sinl(static_cast<ld>(A_rad));
@@ -4247,16 +6281,40 @@ ld law_of_sines_side(Side a, AngA A_rad, AngB B_rad) {
 }
 
 // @acf fn law_of_sines_side_deg — (a,A_deg,B_deg) -> ld — 正弦定理で辺 b（角は度数）
-/// @acf-doc @brief `law_of_sines_side(a,to_rad(A),to_rad(B))`
-/// @acf-doc [function] law_of_sines_side_deg
+
+/// 1辺と対応角・別の角から正弦定理で別の辺を求める。
+///
+/// 引数 `a`: 有限の辺長。
+///
+/// 引数 `A_deg / B_deg`: aの対角A、求めるbの対角B。単位は度数、|sin(A)|>EPS。
+///
+/// 戻り値: ldのa*sin(B)/sin(A)。三角形の成立性は検査しません。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: |sin(A)|<=EPSはassert。角はaに対応するAを先に渡します。
+///
+/// 例: `print_fixed(6,law_of_sines_side_deg(2,30,90));`
 template <class Side, class AngA, class AngB>
 ld law_of_sines_side_deg(Side a, AngA A_deg, AngB B_deg) {
     return law_of_sines_side(a, to_rad(A_deg), to_rad(B_deg));
 }
 
 // @acf fn law_of_sines_angle — (a,b,A) -> ld — 正弦定理で角 B（ラジアン、鋭角側）
-/// @acf-doc @brief `B = asin(b sin A / a)`。主値（鋭角側）。鈍角は `PI-B` を別途検討
-/// @acf-doc [function] law_of_sines_angle
+
+/// 正弦定理で辺bの対角の主値を求める。
+///
+/// 引数 `a / b`: 有限の辺長。|a|>EPS。
+///
+/// 引数 `A_rad`: 辺aの対角。ラジアン。
+///
+/// 戻り値: ldのラジアン主値、範囲[-PI/2,PI/2]。sin(B)を[-1,1]へclamp。三角形では鋭角側で、鈍角候補PI-Bの成立性は利用者が検討します。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: aの絶対値がEPS以下はassert。2つの候補を列挙する形式ではありません。
+///
+/// 例: `print_fixed(6,law_of_sines_angle(2,2,PI/6));`
 template <class SideA, class SideB, class AngA>
 ld law_of_sines_angle(SideA a, SideB b, AngA A_rad) {
     const ld aa = static_cast<ld>(a);
@@ -4268,16 +6326,38 @@ ld law_of_sines_angle(SideA a, SideB b, AngA A_rad) {
 }
 
 // @acf fn law_of_sines_angle_deg — (a,b,A_deg) -> ld — 正弦定理で角 B（度数、鋭角側）
-/// @acf-doc @brief `to_deg(law_of_sines_angle(a,b,to_rad(A_deg)))`
-/// @acf-doc [function] law_of_sines_angle_deg
+
+/// 正弦定理で辺bの対角の主値を求める。
+///
+/// 引数 `a / b`: 有限の辺長。|a|>EPS。
+///
+/// 引数 `A_deg`: 辺aの対角。度数。
+///
+/// 戻り値: ldの度数主値、範囲[-90,90]。sin(B)を[-1,1]へclamp。三角形では鋭角側で、鈍角候補180-Bの成立性は利用者が検討します。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: aの絶対値がEPS以下はassert。2つの候補を列挙する形式ではありません。
+///
+/// 例: `print_fixed(6,law_of_sines_angle_deg(2,2,30));`
 template <class SideA, class SideB, class AngA>
 ld law_of_sines_angle_deg(SideA a, SideB b, AngA A_deg) {
     return to_deg(law_of_sines_angle(a, b, to_rad(A_deg)));
 }
 
 // @acf fn sin_sum — (a,b) -> ld — 加法定理 sin(a+b)（ラジアン、公式評価）
-/// @acf-doc @brief `sin a cos b + cos a sin b`。`sinl(a+b)` と誤差経路は異なる場合あり
-/// @acf-doc [function] sin_sum
+
+/// 角の和の正弦を加法・減法公式で評価する。
+///
+/// 引数 `a / b`: 有限の角2つ。ラジアン。
+///
+/// 戻り値: ld。式はsin(a)cos(b)+cos(a)sin(b)。直接sin/cos(a±b)を呼ぶ計算経路とは丸め誤差が異なります。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版は角をラジアンへ変換して同じ公式を使います。
+///
+/// 例: `print_fixed(6,sin_sum(PI/6,PI/6));`
 template <class A, class B>
 ld sin_sum(A a, B b) {
     const ld aa = static_cast<ld>(a), bb = static_cast<ld>(b);
@@ -4285,16 +6365,36 @@ ld sin_sum(A a, B b) {
 }
 
 // @acf fn sin_sum_deg — (a,b) -> ld — 加法定理 sin(a+b)（度数入力）
-/// @acf-doc @brief `sin_sum(to_rad(a),to_rad(b))`
-/// @acf-doc [function] sin_sum_deg
+
+/// 角の和の正弦を加法・減法公式で評価する。
+///
+/// 引数 `a / b`: 有限の角2つ。度数。
+///
+/// 戻り値: ld。式はsin(a)cos(b)+cos(a)sin(b)。直接sin/cos(a±b)を呼ぶ計算経路とは丸め誤差が異なります。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版は角をラジアンへ変換して同じ公式を使います。
+///
+/// 例: `print_fixed(6,sin_sum_deg(30,30));`
 template <class A, class B>
 ld sin_sum_deg(A a, B b) {
     return sin_sum(to_rad(a), to_rad(b));
 }
 
 // @acf fn sin_diff — (a,b) -> ld — 減法定理 sin(a-b)（ラジアン、公式評価）
-/// @acf-doc @brief `sin a cos b - cos a sin b`
-/// @acf-doc [function] sin_diff
+
+/// 角の差の正弦を加法・減法公式で評価する。
+///
+/// 引数 `a / b`: 有限の角2つ。ラジアン。
+///
+/// 戻り値: ld。式はsin(a)cos(b)-cos(a)sin(b)。直接sin/cos(a±b)を呼ぶ計算経路とは丸め誤差が異なります。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版は角をラジアンへ変換して同じ公式を使います。
+///
+/// 例: `print_fixed(6,sin_diff(PI/3,PI/6));`
 template <class A, class B>
 ld sin_diff(A a, B b) {
     const ld aa = static_cast<ld>(a), bb = static_cast<ld>(b);
@@ -4302,16 +6402,36 @@ ld sin_diff(A a, B b) {
 }
 
 // @acf fn sin_diff_deg — (a,b) -> ld — 減法定理 sin(a-b)（度数入力）
-/// @acf-doc @brief `sin_diff(to_rad(a),to_rad(b))`
-/// @acf-doc [function] sin_diff_deg
+
+/// 角の差の正弦を加法・減法公式で評価する。
+///
+/// 引数 `a / b`: 有限の角2つ。度数。
+///
+/// 戻り値: ld。式はsin(a)cos(b)-cos(a)sin(b)。直接sin/cos(a±b)を呼ぶ計算経路とは丸め誤差が異なります。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版は角をラジアンへ変換して同じ公式を使います。
+///
+/// 例: `print_fixed(6,sin_diff_deg(60,30));`
 template <class A, class B>
 ld sin_diff_deg(A a, B b) {
     return sin_diff(to_rad(a), to_rad(b));
 }
 
 // @acf fn cos_sum — (a,b) -> ld — 加法定理 cos(a+b)（ラジアン、公式評価）
-/// @acf-doc @brief `cos a cos b - sin a sin b`
-/// @acf-doc [function] cos_sum
+
+/// 角の和の余弦を加法・減法公式で評価する。
+///
+/// 引数 `a / b`: 有限の角2つ。ラジアン。
+///
+/// 戻り値: ld。式はcos(a)cos(b)-sin(a)sin(b)。直接sin/cos(a±b)を呼ぶ計算経路とは丸め誤差が異なります。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版は角をラジアンへ変換して同じ公式を使います。
+///
+/// 例: `print_fixed(6,cos_sum(PI/6,PI/6));`
 template <class A, class B>
 ld cos_sum(A a, B b) {
     const ld aa = static_cast<ld>(a), bb = static_cast<ld>(b);
@@ -4319,16 +6439,36 @@ ld cos_sum(A a, B b) {
 }
 
 // @acf fn cos_sum_deg — (a,b) -> ld — 加法定理 cos(a+b)（度数入力）
-/// @acf-doc @brief `cos_sum(to_rad(a),to_rad(b))`
-/// @acf-doc [function] cos_sum_deg
+
+/// 角の和の余弦を加法・減法公式で評価する。
+///
+/// 引数 `a / b`: 有限の角2つ。度数。
+///
+/// 戻り値: ld。式はcos(a)cos(b)-sin(a)sin(b)。直接sin/cos(a±b)を呼ぶ計算経路とは丸め誤差が異なります。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版は角をラジアンへ変換して同じ公式を使います。
+///
+/// 例: `print_fixed(6,cos_sum_deg(30,30));`
 template <class A, class B>
 ld cos_sum_deg(A a, B b) {
     return cos_sum(to_rad(a), to_rad(b));
 }
 
 // @acf fn cos_diff — (a,b) -> ld — 減法定理 cos(a-b)（ラジアン、公式評価）
-/// @acf-doc @brief `cos a cos b + sin a sin b`
-/// @acf-doc [function] cos_diff
+
+/// 角の差の余弦を加法・減法公式で評価する。
+///
+/// 引数 `a / b`: 有限の角2つ。ラジアン。
+///
+/// 戻り値: ld。式はcos(a)cos(b)+sin(a)sin(b)。直接sin/cos(a±b)を呼ぶ計算経路とは丸め誤差が異なります。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版は角をラジアンへ変換して同じ公式を使います。
+///
+/// 例: `print_fixed(6,cos_diff(PI/3,PI/6));`
 template <class A, class B>
 ld cos_diff(A a, B b) {
     const ld aa = static_cast<ld>(a), bb = static_cast<ld>(b);
@@ -4336,16 +6476,36 @@ ld cos_diff(A a, B b) {
 }
 
 // @acf fn cos_diff_deg — (a,b) -> ld — 減法定理 cos(a-b)（度数入力）
-/// @acf-doc @brief `cos_diff(to_rad(a),to_rad(b))`
-/// @acf-doc [function] cos_diff_deg
+
+/// 角の差の余弦を加法・減法公式で評価する。
+///
+/// 引数 `a / b`: 有限の角2つ。度数。
+///
+/// 戻り値: ld。式はcos(a)cos(b)+sin(a)sin(b)。直接sin/cos(a±b)を呼ぶ計算経路とは丸め誤差が異なります。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版は角をラジアンへ変換して同じ公式を使います。
+///
+/// 例: `print_fixed(6,cos_diff_deg(60,30));`
 template <class A, class B>
 ld cos_diff_deg(A a, B b) {
     return cos_diff(to_rad(a), to_rad(b));
 }
 
 // @acf fn tan_sum — (a,b) -> ld — 加法定理 tan(a+b)（ラジアン、公式評価）
-/// @acf-doc @brief `(tan a + tan b)/(1 - tan a tan b)`
-/// @acf-doc [function] tan_sum
+
+/// 角の和の正接を加法・減法公式で評価する。
+///
+/// 引数 `a / b`: 有限の角2つ。ラジアン。各tanと分母が有限で安定した領域を使います。
+///
+/// 戻り値: ld。式は(tan(a)+tan(b))/(1-tan(a)tan(b))。分母0や極を検査せず、非有限値が返り得ます。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版は角をラジアンへ変換して同じ公式を使います。
+///
+/// 例: `print_fixed(6,tan_sum(PI/12,PI/12));`
 template <class A, class B>
 ld tan_sum(A a, B b) {
     const ld ta = tanl(static_cast<ld>(a));
@@ -4354,16 +6514,36 @@ ld tan_sum(A a, B b) {
 }
 
 // @acf fn tan_sum_deg — (a,b) -> ld — 加法定理 tan(a+b)（度数入力）
-/// @acf-doc @brief `tan_sum(to_rad(a),to_rad(b))`
-/// @acf-doc [function] tan_sum_deg
+
+/// 角の和の正接を加法・減法公式で評価する。
+///
+/// 引数 `a / b`: 有限の角2つ。度数。各tanと分母が有限で安定した領域を使います。
+///
+/// 戻り値: ld。式は(tan(a)+tan(b))/(1-tan(a)tan(b))。分母0や極を検査せず、非有限値が返り得ます。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版は角をラジアンへ変換して同じ公式を使います。
+///
+/// 例: `print_fixed(6,tan_sum_deg(15,15));`
 template <class A, class B>
 ld tan_sum_deg(A a, B b) {
     return tan_sum(to_rad(a), to_rad(b));
 }
 
 // @acf fn tan_diff — (a,b) -> ld — 減法定理 tan(a-b)（ラジアン、公式評価）
-/// @acf-doc @brief `(tan a - tan b)/(1 + tan a tan b)`
-/// @acf-doc [function] tan_diff
+
+/// 角の差の正接を加法・減法公式で評価する。
+///
+/// 引数 `a / b`: 有限の角2つ。ラジアン。各tanと分母が有限で安定した領域を使います。
+///
+/// 戻り値: ld。式は(tan(a)-tan(b))/(1+tan(a)tan(b))。分母0や極を検査せず、非有限値が返り得ます。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版は角をラジアンへ変換して同じ公式を使います。
+///
+/// 例: `print_fixed(6,tan_diff(PI/3,PI/6));`
 template <class A, class B>
 ld tan_diff(A a, B b) {
     const ld ta = tanl(static_cast<ld>(a));
@@ -4372,16 +6552,36 @@ ld tan_diff(A a, B b) {
 }
 
 // @acf fn tan_diff_deg — (a,b) -> ld — 減法定理 tan(a-b)（度数入力）
-/// @acf-doc @brief `tan_diff(to_rad(a),to_rad(b))`
-/// @acf-doc [function] tan_diff_deg
+
+/// 角の差の正接を加法・減法公式で評価する。
+///
+/// 引数 `a / b`: 有限の角2つ。度数。各tanと分母が有限で安定した領域を使います。
+///
+/// 戻り値: ld。式は(tan(a)-tan(b))/(1+tan(a)tan(b))。分母0や極を検査せず、非有限値が返り得ます。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版は角をラジアンへ変換して同じ公式を使います。
+///
+/// 例: `print_fixed(6,tan_diff_deg(60,30));`
 template <class A, class B>
 ld tan_diff_deg(A a, B b) {
     return tan_diff(to_rad(a), to_rad(b));
 }
 
 // @acf fn sin_double — (a) -> ld — 倍角 sin(2a)（ラジアン、公式評価）
-/// @acf-doc @brief `2 sin a cos a`
-/// @acf-doc [function] sin_double
+
+/// 倍角の正弦を公式で評価する。
+///
+/// 引数 `a`: 有限のラジアン角。
+///
+/// 戻り値: ld。式は2sin(a)cos(a)。数学関数の丸め誤差があります。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版はto_radを経由して倍角公式を使います。
+///
+/// 例: `print_fixed(6,sin_double(PI/12));`
 template <class A>
 ld sin_double(A a) {
     const ld aa = static_cast<ld>(a);
@@ -4389,16 +6589,36 @@ ld sin_double(A a) {
 }
 
 // @acf fn sin_double_deg — (a) -> ld — 倍角 sin(2a)（度数入力）
-/// @acf-doc @brief `sin_double(to_rad(a))`
-/// @acf-doc [function] sin_double_deg
+
+/// 倍角の正弦を公式で評価する。
+///
+/// 引数 `a`: 有限の度数角。
+///
+/// 戻り値: ld。式は2sin(a)cos(a)。数学関数の丸め誤差があります。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版はto_radを経由して倍角公式を使います。
+///
+/// 例: `print_fixed(6,sin_double_deg(15));`
 template <class A>
 ld sin_double_deg(A a) {
     return sin_double(to_rad(a));
 }
 
 // @acf fn cos_double — (a) -> ld — 倍角 cos(2a)（ラジアン、公式評価）
-/// @acf-doc @brief `cos²a - sin²a`
-/// @acf-doc [function] cos_double
+
+/// 倍角の余弦を公式で評価する。
+///
+/// 引数 `a`: 有限のラジアン角。
+///
+/// 戻り値: ld。式はcos(a)^2-sin(a)^2。数学関数の丸め誤差があります。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版はto_radを経由して倍角公式を使います。
+///
+/// 例: `print_fixed(6,cos_double(PI/6));`
 template <class A>
 ld cos_double(A a) {
     const ld aa = static_cast<ld>(a);
@@ -4407,16 +6627,36 @@ ld cos_double(A a) {
 }
 
 // @acf fn cos_double_deg — (a) -> ld — 倍角 cos(2a)（度数入力）
-/// @acf-doc @brief `cos_double(to_rad(a))`
-/// @acf-doc [function] cos_double_deg
+
+/// 倍角の余弦を公式で評価する。
+///
+/// 引数 `a`: 有限の度数角。
+///
+/// 戻り値: ld。式はcos(a)^2-sin(a)^2。数学関数の丸め誤差があります。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版はto_radを経由して倍角公式を使います。
+///
+/// 例: `print_fixed(6,cos_double_deg(30));`
 template <class A>
 ld cos_double_deg(A a) {
     return cos_double(to_rad(a));
 }
 
 // @acf fn tan_double — (a) -> ld — 倍角 tan(2a)（ラジアン、公式評価）
-/// @acf-doc @brief `2 tan a / (1 - tan²a)`
-/// @acf-doc [function] tan_double
+
+/// 倍角の正接を公式で評価する。
+///
+/// 引数 `a`: 有限のラジアン角。正接の極付近を避けます。
+///
+/// 戻り値: ld。式は2tan(a)/(1-tan(a)^2)。分母0を例外として拒否しません。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版はto_radを経由して倍角公式を使います。
+///
+/// 例: `print_fixed(6,tan_double(PI/12));`
 template <class A>
 ld tan_double(A a) {
     const ld t = tanl(static_cast<ld>(a));
@@ -4424,48 +6664,108 @@ ld tan_double(A a) {
 }
 
 // @acf fn tan_double_deg — (a) -> ld — 倍角 tan(2a)（度数入力）
-/// @acf-doc @brief `tan_double(to_rad(a))`
-/// @acf-doc [function] tan_double_deg
+
+/// 倍角の正接を公式で評価する。
+///
+/// 引数 `a`: 有限の度数角。正接の極付近を避けます。
+///
+/// 戻り値: ld。式は2tan(a)/(1-tan(a)^2)。分母0を例外として拒否しません。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 度数版はto_radを経由して倍角公式を使います。
+///
+/// 例: `print_fixed(6,tan_double_deg(15));`
 template <class A>
 ld tan_double_deg(A a) {
     return tan_double(to_rad(a));
 }
 
 // @acf fn sin_half — (a) -> ld — 半角 |sin(a/2)|（ラジアン、非負）
-/// @acf-doc @brief `sqrt((1-cos a)/2)`。非負の主値
-/// @acf-doc [function] sin_half
+
+/// 半角の正弦の絶対値を求める。
+///
+/// 引数 `a`: 有限のラジアン角。
+///
+/// 戻り値: ld。式はsqrt((1-cos(a))/2)。非負の主値で、負の半角の符号を復元しません。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 半角のsin/cosは平方根の非負側です。tan_halfはEPSで分母を判定して別式へ切り替えます。
+///
+/// 例: `print_fixed(6,sin_half(PI/3));`
 template <class A>
 ld sin_half(A a) {
     return sqrtl((1.0L - cosl(static_cast<ld>(a))) / 2.0L);
 }
 
 // @acf fn sin_half_deg — (a) -> ld — 半角 |sin(a/2)|（度数入力、非負）
-/// @acf-doc @brief `sin_half(to_rad(a))`
-/// @acf-doc [function] sin_half_deg
+
+/// 半角の正弦の絶対値を求める。
+///
+/// 引数 `a`: 有限の度数角。
+///
+/// 戻り値: ld。式はsqrt((1-cos(a))/2)。非負の主値で、負の半角の符号を復元しません。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 半角のsin/cosは平方根の非負側です。tan_halfはEPSで分母を判定して別式へ切り替えます。
+///
+/// 例: `print_fixed(6,sin_half_deg(60));`
 template <class A>
 ld sin_half_deg(A a) {
     return sin_half(to_rad(a));
 }
 
 // @acf fn cos_half — (a) -> ld — 半角 |cos(a/2)|（ラジアン、非負）
-/// @acf-doc @brief `sqrt((1+cos a)/2)`。非負の主値
-/// @acf-doc [function] cos_half
+
+/// 半角の余弦の絶対値を求める。
+///
+/// 引数 `a`: 有限のラジアン角。
+///
+/// 戻り値: ld。式はsqrt((1+cos(a))/2)。非負の主値で、負の半角の符号を復元しません。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 半角のsin/cosは平方根の非負側です。tan_halfはEPSで分母を判定して別式へ切り替えます。
+///
+/// 例: `print_fixed(6,cos_half(2*PI/3));`
 template <class A>
 ld cos_half(A a) {
     return sqrtl((1.0L + cosl(static_cast<ld>(a))) / 2.0L);
 }
 
 // @acf fn cos_half_deg — (a) -> ld — 半角 |cos(a/2)|（度数入力、非負）
-/// @acf-doc @brief `cos_half(to_rad(a))`
-/// @acf-doc [function] cos_half_deg
+
+/// 半角の余弦の絶対値を求める。
+///
+/// 引数 `a`: 有限の度数角。
+///
+/// 戻り値: ld。式はsqrt((1+cos(a))/2)。非負の主値で、負の半角の符号を復元しません。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 半角のsin/cosは平方根の非負側です。tan_halfはEPSで分母を判定して別式へ切り替えます。
+///
+/// 例: `print_fixed(6,cos_half_deg(120));`
 template <class A>
 ld cos_half_deg(A a) {
     return cos_half(to_rad(a));
 }
 
 // @acf fn tan_half — (a) -> ld — 半角 tan(a/2)（ラジアン、公式評価）
-/// @acf-doc @brief `sin a / (1 + cos a)`（安定形）。`1+cos a≈0` のときは別式を検討
-/// @acf-doc [function] tan_half
+
+/// 半角の正接を公式で評価する。
+///
+/// 引数 `a`: 有限のラジアン角。正接の極付近を避けます。
+///
+/// 戻り値: ld。式はsin(a)/(1+cos(a))、分母がEPS以下なら(1-cos(a))/sin(a)。分母0を例外として拒否しません。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 半角のsin/cosは平方根の非負側です。tan_halfはEPSで分母を判定して別式へ切り替えます。
+///
+/// 例: `print_fixed(6,tan_half(PI/2));`
 template <class A>
 ld tan_half(A a) {
     const ld aa = static_cast<ld>(a);
@@ -4476,16 +6776,36 @@ ld tan_half(A a) {
 }
 
 // @acf fn tan_half_deg — (a) -> ld — 半角 tan(a/2)（度数入力）
-/// @acf-doc @brief `tan_half(to_rad(a))`
-/// @acf-doc [function] tan_half_deg
+
+/// 半角の正接を公式で評価する。
+///
+/// 引数 `a`: 有限の度数角。正接の極付近を避けます。
+///
+/// 戻り値: ld。式はsin(a)/(1+cos(a))、分母がEPS以下なら(1-cos(a))/sin(a)。分母0を例外として拒否しません。
+///
+/// 注意: 入力を変更しません。固定個数の数学演算で計算し、ldの丸め誤差があります。NaNや無限大を自動拒否する形式ではありません。
+///
+/// 呼び分け: 半角のsin/cosは平方根の非負側です。tan_halfはEPSで分母を判定して別式へ切り替えます。
+///
+/// 例: `print_fixed(6,tan_half_deg(90));`
 template <class A>
 ld tan_half_deg(A a) {
     return tan_half(to_rad(a));
 }
 
 // @acf fn rotation_transform — (radians[,origin]) -> Affine2D — 回転行列を作る
-/// @acf-doc @brief 反時計回りの回転。角度はラジアン。origin省略時は原点中心。度数は `rotation_transform_deg` か `to_rad`
-/// @acf-doc [function] rotation_transform
+
+/// 原点または指定中心の周りで反時計回りに回転する行列を作る。
+///
+/// 引数 `radians`: 有限のラジアン角。正は反時計回り。
+///
+/// 引数 `origin（指定中心版）`: 有限の2D回転中心。中心なしは原点。
+///
+/// 戻り値: Affine2D。原点中心はcos,-sin;sin,cosの回転、中心指定は中心へ戻す平行移動*回転*中心を原点へ動かす平行移動。
+///
+/// 注意: 入力を変更せずO(1)。ldの三角関数による丸め誤差があります。
+///
+/// 呼び分け: rotation_transform(angle) / (angle,origin)。角を度数で渡すにはrotation_transform_deg。
 inline Affine2D rotation_transform(long double radians) {
     const long double cosine = cosl(radians);
     const long double sine = sinl(radians);
@@ -4496,6 +6816,17 @@ inline Affine2D rotation_transform(long double radians) {
     return result;
 }
 
+/// 原点または指定中心の周りで反時計回りに回転する行列を作る。
+///
+/// 引数 `deg`: 有限の度数角。正は反時計回り。
+///
+/// 引数 `origin（指定中心版）`: 有限の2D回転中心。中心なしは原点。
+///
+/// 戻り値: Affine2D。原点中心はcos,-sin;sin,cosの回転、中心指定は中心へ戻す平行移動*回転*中心を原点へ動かす平行移動。
+///
+/// 注意: 入力を変更せずO(1)。ldの三角関数による丸め誤差があります。
+///
+/// 呼び分け: rotation_transform_deg(angle) / (angle,origin)。to_radを経由します。
 template <class P>
 Affine2D rotation_transform(long double radians, const P& origin) {
     using namespace ac_detail::geometry;
@@ -4505,21 +6836,52 @@ Affine2D rotation_transform(long double radians, const P& origin) {
 }
 
 // @acf fn rotation_transform_deg — (deg[,origin]) -> Affine2D — 度数で回転行列を作る
-/// @acf-doc @brief `rotation_transform(to_rad(deg)[,origin])`
-/// @acf-doc [function] rotation_transform_deg
+
+/// 原点または指定中心の周りで反時計回りに回転する行列を作る。
+///
+/// 引数 `deg`: 有限の度数角。正は反時計回り。
+///
+/// 引数 `origin（指定中心版）`: 有限の2D回転中心。中心なしは原点。
+///
+/// 戻り値: Affine2D。原点中心はcos,-sin;sin,cosの回転、中心指定は中心へ戻す平行移動*回転*中心を原点へ動かす平行移動。
+///
+/// 注意: 入力を変更せずO(1)。ldの三角関数による丸め誤差があります。
+///
+/// 呼び分け: rotation_transform_deg(angle) / (angle,origin)。to_radを経由します。
 template <class Deg>
 Affine2D rotation_transform_deg(Deg deg) {
     return rotation_transform(to_rad(deg));
 }
 
+/// 原点または指定中心の周りで反時計回りに回転する行列を作る。
+///
+/// 引数 `deg`: 有限の度数角。正は反時計回り。
+///
+/// 引数 `origin（指定中心版）`: 有限の2D回転中心。中心なしは原点。
+///
+/// 戻り値: Affine2D。原点中心はcos,-sin;sin,cosの回転、中心指定は中心へ戻す平行移動*回転*中心を原点へ動かす平行移動。
+///
+/// 注意: 入力を変更せずO(1)。ldの三角関数による丸め誤差があります。
+///
+/// 呼び分け: rotation_transform_deg(angle) / (angle,origin)。to_radを経由します。
 template <class Deg, class P>
 Affine2D rotation_transform_deg(Deg deg, const P& origin) {
     return rotation_transform(to_rad(deg), origin);
 }
 
 // @acf fn scaling_transform — (sx,sy[,origin]) -> Affine2D — 拡大縮小行列を作る
-/// @acf-doc @brief x方向sx、y方向syに拡大縮小する。origin省略時は原点中心
-/// @acf-doc [function] scaling_transform
+
+/// 2軸の拡大縮小を原点または指定中心に対して作る。
+///
+/// 引数 `sx / sy`: 有限の軸別倍率。負は反転、0はその軸を潰す変換として受理。
+///
+/// 引数 `origin（中心指定版）`: 有限の2D中心。中心なしは原点。
+///
+/// 戻り値: Affine2D。中心からの差をx軸sx倍、y軸sy倍。倍率0では逆変換を作れません。
+///
+/// 注意: 入力を変更せずO(1)。倍率をldで保存し、適用はapply_transform。
+///
+/// 呼び分け: scaling_transform(sx,sy) / (sx,sy,origin)。
 template <class X, class Y>
 constexpr Affine2D scaling_transform(X sx, Y sy) {
     Affine2D result{};
@@ -4529,6 +6891,17 @@ constexpr Affine2D scaling_transform(X sx, Y sy) {
     return result;
 }
 
+/// 2軸の拡大縮小を原点または指定中心に対して作る。
+///
+/// 引数 `sx / sy`: 有限の軸別倍率。負は反転、0はその軸を潰す変換として受理。
+///
+/// 引数 `origin（中心指定版）`: 有限の2D中心。中心なしは原点。
+///
+/// 戻り値: Affine2D。中心からの差をx軸sx倍、y軸sy倍。倍率0では逆変換を作れません。
+///
+/// 注意: 入力を変更せずO(1)。倍率をldで保存し、適用はapply_transform。
+///
+/// 呼び分け: scaling_transform(sx,sy) / (sx,sy,origin)。
 template <class X, class Y, class P>
 Affine2D scaling_transform(X sx, Y sy, const P& origin) {
     using namespace ac_detail::geometry;
@@ -4538,8 +6911,16 @@ Affine2D scaling_transform(X sx, Y sy, const P& origin) {
 }
 
 // @acf fn shear_transform — (shx,shy) -> Affine2D — せん断行列を作る
-/// @acf-doc @brief `(x,y)` を `(x+shx*y, shy*x+y)` へ写す
-/// @acf-doc [function] shear_transform
+
+/// x,yの互いの座標に比例したずれを加えるせん断行列を作る。
+///
+/// 引数 `shx / shy`: 有限の係数。x′=x+shx*y、y′=shy*x+y。
+///
+/// 戻り値: Affine2D。係数0,0は単位変換。1-shx*shy=0でも構築でき、その場合は逆変換不能。
+///
+/// 注意: 入力を変更せずO(1)。係数をldで保存します。
+///
+/// 呼び分け: shear_transform(shx,shy)。
 template <class X, class Y>
 constexpr Affine2D shear_transform(X shx, Y shy) {
     Affine2D result{};
@@ -4550,8 +6931,18 @@ constexpr Affine2D shear_transform(X shx, Y shy) {
 }
 
 // @acf fn apply_transform — (transform,point/shape) -> transformed value — アフィン変換を適用する
-/// @acf-doc @brief 点、直線、線分、三角形、多角形へ2Dアフィン変換を適用する
-/// @acf-doc [function] apply_transform
+
+/// 変換行列を2Dの点・対応する図形へ適用する。
+///
+/// 引数 `transform`: 有限の3x3行列。通常は最終行0,0,1のアフィン行列。点の同次座標wが非零であることをassert。
+///
+/// 引数 `point / shape`: 有限の2D点またはLine・Segment・Triangle・Polygon・Rectangle・Square。
+///
+/// 戻り値: 点は`Point2<ld>`。Line/Segment/Triangle/Polygonは各点を変換した同種の図形、Rectangle/Squareは4頂点Polygon。空Polygonは空。点を行列で掛けwで割ります。
+///
+/// 注意: 入力を変更しません。点/固定頂点図形はO(1)、PolygonはO(N)で新しい頂点列を作ります。
+///
+/// 呼び分け: apply_transform(transform,value)。合成left*rightはrightを先に適用。Circleや3D図形への形式はありません。
 template <class P>
 auto apply_transform(const Affine2D& transform, const P& point) {
     using namespace ac_detail::geometry;
@@ -4569,18 +6960,51 @@ auto apply_transform(const Affine2D& transform, const P& point) {
     return Point2<long double>{tx / tw, ty / tw};
 }
 
+/// 変換行列を2Dの点・対応する図形へ適用する。
+///
+/// 引数 `transform`: 有限の3x3行列。通常は最終行0,0,1のアフィン行列。点の同次座標wが非零であることをassert。
+///
+/// 引数 `point / shape`: 有限の2D点またはLine・Segment・Triangle・Polygon・Rectangle・Square。
+///
+/// 戻り値: 点は`Point2<ld>`。Line/Segment/Triangle/Polygonは各点を変換した同種の図形、Rectangle/Squareは4頂点Polygon。空Polygonは空。点を行列で掛けwで割ります。
+///
+/// 注意: 入力を変更しません。点/固定頂点図形はO(1)、PolygonはO(N)で新しい頂点列を作ります。
+///
+/// 呼び分け: apply_transform(transform,value)。合成left*rightはrightを先に適用。Circleや3D図形への形式はありません。
 template <class A, class B>
 auto apply_transform(const Affine2D& transform, const Line<A, B>& shape) {
     return make_line(apply_transform(transform, shape.a),
                      apply_transform(transform, shape.b));
 }
 
+/// 変換行列を2Dの点・対応する図形へ適用する。
+///
+/// 引数 `transform`: 有限の3x3行列。通常は最終行0,0,1のアフィン行列。点の同次座標wが非零であることをassert。
+///
+/// 引数 `point / shape`: 有限の2D点またはLine・Segment・Triangle・Polygon・Rectangle・Square。
+///
+/// 戻り値: 点は`Point2<ld>`。Line/Segment/Triangle/Polygonは各点を変換した同種の図形、Rectangle/Squareは4頂点Polygon。空Polygonは空。点を行列で掛けwで割ります。
+///
+/// 注意: 入力を変更しません。点/固定頂点図形はO(1)、PolygonはO(N)で新しい頂点列を作ります。
+///
+/// 呼び分け: apply_transform(transform,value)。合成left*rightはrightを先に適用。Circleや3D図形への形式はありません。
 template <class A, class B>
 auto apply_transform(const Affine2D& transform, const Segment<A, B>& shape) {
     return make_segment(apply_transform(transform, shape.a),
                         apply_transform(transform, shape.b));
 }
 
+/// 変換行列を2Dの点・対応する図形へ適用する。
+///
+/// 引数 `transform`: 有限の3x3行列。通常は最終行0,0,1のアフィン行列。点の同次座標wが非零であることをassert。
+///
+/// 引数 `point / shape`: 有限の2D点またはLine・Segment・Triangle・Polygon・Rectangle・Square。
+///
+/// 戻り値: 点は`Point2<ld>`。Line/Segment/Triangle/Polygonは各点を変換した同種の図形、Rectangle/Squareは4頂点Polygon。空Polygonは空。点を行列で掛けwで割ります。
+///
+/// 注意: 入力を変更しません。点/固定頂点図形はO(1)、PolygonはO(N)で新しい頂点列を作ります。
+///
+/// 呼び分け: apply_transform(transform,value)。合成left*rightはrightを先に適用。Circleや3D図形への形式はありません。
 template <class A, class B, class C>
 auto apply_transform(const Affine2D& transform, const Triangle<A, B, C>& shape) {
     return make_triangle(apply_transform(transform, shape.a),
@@ -4588,6 +7012,17 @@ auto apply_transform(const Affine2D& transform, const Triangle<A, B, C>& shape) 
                          apply_transform(transform, shape.c));
 }
 
+/// 変換行列を2Dの点・対応する図形へ適用する。
+///
+/// 引数 `transform`: 有限の3x3行列。通常は最終行0,0,1のアフィン行列。点の同次座標wが非零であることをassert。
+///
+/// 引数 `point / shape`: 有限の2D点またはLine・Segment・Triangle・Polygon・Rectangle・Square。
+///
+/// 戻り値: 点は`Point2<ld>`。Line/Segment/Triangle/Polygonは各点を変換した同種の図形、Rectangle/Squareは4頂点Polygon。空Polygonは空。点を行列で掛けwで割ります。
+///
+/// 注意: 入力を変更しません。点/固定頂点図形はO(1)、PolygonはO(N)で新しい頂点列を作ります。
+///
+/// 呼び分け: apply_transform(transform,value)。合成left*rightはrightを先に適用。Circleや3D図形への形式はありません。
 template <class P>
 auto apply_transform(const Affine2D& transform, const Polygon<P>& shape) {
     vector<Point2<long double>> points;
@@ -4597,6 +7032,17 @@ auto apply_transform(const Affine2D& transform, const Polygon<P>& shape) {
     return make_polygon(std::move(points));
 }
 
+/// 変換行列を2Dの点・対応する図形へ適用する。
+///
+/// 引数 `transform`: 有限の3x3行列。通常は最終行0,0,1のアフィン行列。点の同次座標wが非零であることをassert。
+///
+/// 引数 `point / shape`: 有限の2D点またはLine・Segment・Triangle・Polygon・Rectangle・Square。
+///
+/// 戻り値: 点は`Point2<ld>`。Line/Segment/Triangle/Polygonは各点を変換した同種の図形、Rectangle/Squareは4頂点Polygon。空Polygonは空。点を行列で掛けwで割ります。
+///
+/// 注意: 入力を変更しません。点/固定頂点図形はO(1)、PolygonはO(N)で新しい頂点列を作ります。
+///
+/// 呼び分け: apply_transform(transform,value)。合成left*rightはrightを先に適用。Circleや3D図形への形式はありません。
 template <class A, class B>
 auto apply_transform(const Affine2D& transform, const Rectangle<A, B>& shape) {
     using namespace ac_detail::geometry;
@@ -4605,6 +7051,17 @@ auto apply_transform(const Affine2D& transform, const Rectangle<A, B>& shape) {
     return apply_transform(transform, make_polygon(vector{a, b, c, d}));
 }
 
+/// 変換行列を2Dの点・対応する図形へ適用する。
+///
+/// 引数 `transform`: 有限の3x3行列。通常は最終行0,0,1のアフィン行列。点の同次座標wが非零であることをassert。
+///
+/// 引数 `point / shape`: 有限の2D点またはLine・Segment・Triangle・Polygon・Rectangle・Square。
+///
+/// 戻り値: 点は`Point2<ld>`。Line/Segment/Triangle/Polygonは各点を変換した同種の図形、Rectangle/Squareは4頂点Polygon。空Polygonは空。点を行列で掛けwで割ります。
+///
+/// 注意: 入力を変更しません。点/固定頂点図形はO(1)、PolygonはO(N)で新しい頂点列を作ります。
+///
+/// 呼び分け: apply_transform(transform,value)。合成left*rightはrightを先に適用。Circleや3D図形への形式はありません。
 template <class P, class S>
 auto apply_transform(const Affine2D& transform, const Square<P, S>& shape) {
     using namespace ac_detail::geometry;
@@ -4617,8 +7074,16 @@ auto apply_transform(const Affine2D& transform, const Square<P, S>& shape) {
 }
 
 // @acf fn inverse_transform — (Affine2D) -> Affine2D — アフィン変換の逆変換を返す
-/// @acf-doc @brief 逆行列を返す。行列式0の変換には使えない
-/// @acf-doc [function] inverse_transform
+
+/// 可逆な2D変換を元へ戻す逆行列を求める。
+///
+/// 引数 `transform`: 有限の3x3行列。行列式の絶対値が1e-18より大きいことをassert。
+///
+/// 戻り値: Affine2D。3x3の余因子による逆行列。特異/ほぼ特異の行列はassertで拒否し、optionalや失敗フラグを返す形式ではありません。
+///
+/// 注意: 入力を変更せずO(1)。固定の3x3行列を計算します。
+///
+/// 呼び分け: inverse_transform(transform)。丸め誤差があるため往復を厳密な==で判定しないこと。
 inline Affine2D inverse_transform(const Affine2D& transform) {
     const auto& m = transform.matrix;
     const long double determinant =
@@ -4643,24 +7108,67 @@ inline Affine2D inverse_transform(const Affine2D& transform) {
 }
 
 // @acf fn area — (shape) -> long double — 2D図形の面積（直線・線分は0）
-/// @acf-doc @brief `area(shape)` は基本2D図形の面積を返す。直線・線分は0。多角形は凸・凹と頂点の周回方向を問わない
-/// @acf-doc [function] area
+
+/// 2D図形の面積を非負の実数で求める。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Line・Segment・Circle・Rectangle・Square・Triangle・Polygon。
+///
+/// 戻り値: ld。直線/線分は0、円はPI*r²、長方形は軸別の絶対差の積、正方形はside²、三角形は外積の絶対値/2、多角形は靴紐公式の絶対値/2。0..2頂点のPolygonは0。自己交差する多角形は面積の契約外。
+///
+/// 注意: 入力を変更せず、先頭2座標をldで計算します。PolygonはO(N)、固定形状はO(1)。
+///
+/// 呼び分け: area(shape)。凸・凹と時計/反時計周回を問いません。3Dにはsurface_area / volumeを使います。
+///
+/// 例: `print(area(make_polygon(vector<p2i>{{0,0},{0,3},{4,0}})));`
 template <class A, class B>
 long double area(const Line<A, B>&) {
     return 0;
 }
 
+/// 2D図形の面積を非負の実数で求める。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Line・Segment・Circle・Rectangle・Square・Triangle・Polygon。
+///
+/// 戻り値: ld。直線/線分は0、円はPI*r²、長方形は軸別の絶対差の積、正方形はside²、三角形は外積の絶対値/2、多角形は靴紐公式の絶対値/2。0..2頂点のPolygonは0。自己交差する多角形は面積の契約外。
+///
+/// 注意: 入力を変更せず、先頭2座標をldで計算します。PolygonはO(N)、固定形状はO(1)。
+///
+/// 呼び分け: area(shape)。凸・凹と時計/反時計周回を問いません。3Dにはsurface_area / volumeを使います。
+///
+/// 例: `print(area(make_polygon(vector<p2i>{{0,0},{0,3},{4,0}})));`
 template <class A, class B>
 long double area(const Segment<A, B>&) {
     return 0;
 }
 
+/// 2D図形の面積を非負の実数で求める。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Line・Segment・Circle・Rectangle・Square・Triangle・Polygon。
+///
+/// 戻り値: ld。直線/線分は0、円はPI*r²、長方形は軸別の絶対差の積、正方形はside²、三角形は外積の絶対値/2、多角形は靴紐公式の絶対値/2。0..2頂点のPolygonは0。自己交差する多角形は面積の契約外。
+///
+/// 注意: 入力を変更せず、先頭2座標をldで計算します。PolygonはO(N)、固定形状はO(1)。
+///
+/// 呼び分け: area(shape)。凸・凹と時計/反時計周回を問いません。3Dにはsurface_area / volumeを使います。
+///
+/// 例: `print(area(make_polygon(vector<p2i>{{0,0},{0,3},{4,0}})));`
 template <class P, class R>
 long double area(const Circle<P, R>& shape) {
     const long double r = static_cast<long double>(shape.radius);
     return acosl(-1.0L) * r * r;
 }
 
+/// 2D図形の面積を非負の実数で求める。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Line・Segment・Circle・Rectangle・Square・Triangle・Polygon。
+///
+/// 戻り値: ld。直線/線分は0、円はPI*r²、長方形は軸別の絶対差の積、正方形はside²、三角形は外積の絶対値/2、多角形は靴紐公式の絶対値/2。0..2頂点のPolygonは0。自己交差する多角形は面積の契約外。
+///
+/// 注意: 入力を変更せず、先頭2座標をldで計算します。PolygonはO(N)、固定形状はO(1)。
+///
+/// 呼び分け: area(shape)。凸・凹と時計/反時計周回を問いません。3Dにはsurface_area / volumeを使います。
+///
+/// 例: `print(area(make_polygon(vector<p2i>{{0,0},{0,3},{4,0}})));`
 template <class A, class B>
 long double area(const Rectangle<A, B>& shape) {
     using namespace ac_detail::geometry;
@@ -4668,12 +7176,34 @@ long double area(const Rectangle<A, B>& shape) {
          * fabsl(y_ld(shape.corner1) - y_ld(shape.corner2));
 }
 
+/// 2D図形の面積を非負の実数で求める。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Line・Segment・Circle・Rectangle・Square・Triangle・Polygon。
+///
+/// 戻り値: ld。直線/線分は0、円はPI*r²、長方形は軸別の絶対差の積、正方形はside²、三角形は外積の絶対値/2、多角形は靴紐公式の絶対値/2。0..2頂点のPolygonは0。自己交差する多角形は面積の契約外。
+///
+/// 注意: 入力を変更せず、先頭2座標をldで計算します。PolygonはO(N)、固定形状はO(1)。
+///
+/// 呼び分け: area(shape)。凸・凹と時計/反時計周回を問いません。3Dにはsurface_area / volumeを使います。
+///
+/// 例: `print(area(make_polygon(vector<p2i>{{0,0},{0,3},{4,0}})));`
 template <class P, class S>
 long double area(const Square<P, S>& shape) {
     const long double side = static_cast<long double>(shape.side);
     return side * side;
 }
 
+/// 2D図形の面積を非負の実数で求める。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Line・Segment・Circle・Rectangle・Square・Triangle・Polygon。
+///
+/// 戻り値: ld。直線/線分は0、円はPI*r²、長方形は軸別の絶対差の積、正方形はside²、三角形は外積の絶対値/2、多角形は靴紐公式の絶対値/2。0..2頂点のPolygonは0。自己交差する多角形は面積の契約外。
+///
+/// 注意: 入力を変更せず、先頭2座標をldで計算します。PolygonはO(N)、固定形状はO(1)。
+///
+/// 呼び分け: area(shape)。凸・凹と時計/反時計周回を問いません。3Dにはsurface_area / volumeを使います。
+///
+/// 例: `print(area(make_polygon(vector<p2i>{{0,0},{0,3},{4,0}})));`
 template <class A, class B, class C>
 long double area(const Triangle<A, B, C>& shape) {
     using namespace ac_detail::geometry;
@@ -4681,6 +7211,17 @@ long double area(const Triangle<A, B, C>& shape) {
                - (y_ld(shape.b) - y_ld(shape.a)) * (x_ld(shape.c) - x_ld(shape.a))) / 2;
 }
 
+/// 2D図形の面積を非負の実数で求める。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Line・Segment・Circle・Rectangle・Square・Triangle・Polygon。
+///
+/// 戻り値: ld。直線/線分は0、円はPI*r²、長方形は軸別の絶対差の積、正方形はside²、三角形は外積の絶対値/2、多角形は靴紐公式の絶対値/2。0..2頂点のPolygonは0。自己交差する多角形は面積の契約外。
+///
+/// 注意: 入力を変更せず、先頭2座標をldで計算します。PolygonはO(N)、固定形状はO(1)。
+///
+/// 呼び分け: area(shape)。凸・凹と時計/反時計周回を問いません。3Dにはsurface_area / volumeを使います。
+///
+/// 例: `print(area(make_polygon(vector<p2i>{{0,0},{0,3},{4,0}})));`
 template <class P>
 long double area(const Polygon<P>& shape) {
     using namespace ac_detail::geometry;
@@ -4696,18 +7237,50 @@ long double area(const Polygon<P>& shape) {
 }
 
 // @acf fn perimeter — (shape) -> long double — 2D図形の周長（線分は長さ）
-/// @acf-doc @brief `perimeter(shape)` は基本2D図形の周長を返す。線分は端点間距離
-/// @acf-doc [function] perimeter
+
+/// 2D図形の周長、または線分そのものの長さを求める。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Segment・Circle・Rectangle・Square・Triangle・Polygon。
+///
+/// 戻り値: ld。線分は端点間距離、円は2*PI*r、長方形は2*(幅+高さ)、正方形は4*side、三角形は3辺長和、多角形は最後→最初も含めた辺長和。Polygonが0/1点なら0、2点なら往復分で端点距離の2倍。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定形状はO(1)（動的次元のSegmentはその次元数に比例）。
+///
+/// 呼び分け: perimeter(shape)。無限Lineの形式はありません。Segmentは全次元の端点間距離、Polygon/Triangle/Rectangleは先頭2座標を使います。
+///
+/// 例: `print(perimeter(make_rectangle(0,0,3,4)));`
 template <class A, class B>
 long double perimeter(const Segment<A, B>& shape) {
     return segment_length(shape);
 }
 
+/// 2D図形の周長、または線分そのものの長さを求める。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Segment・Circle・Rectangle・Square・Triangle・Polygon。
+///
+/// 戻り値: ld。線分は端点間距離、円は2*PI*r、長方形は2*(幅+高さ)、正方形は4*side、三角形は3辺長和、多角形は最後→最初も含めた辺長和。Polygonが0/1点なら0、2点なら往復分で端点距離の2倍。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定形状はO(1)（動的次元のSegmentはその次元数に比例）。
+///
+/// 呼び分け: perimeter(shape)。無限Lineの形式はありません。Segmentは全次元の端点間距離、Polygon/Triangle/Rectangleは先頭2座標を使います。
+///
+/// 例: `print(perimeter(make_rectangle(0,0,3,4)));`
 template <class P, class R>
 long double perimeter(const Circle<P, R>& shape) {
     return 2 * acosl(-1.0L) * static_cast<long double>(shape.radius);
 }
 
+/// 2D図形の周長、または線分そのものの長さを求める。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Segment・Circle・Rectangle・Square・Triangle・Polygon。
+///
+/// 戻り値: ld。線分は端点間距離、円は2*PI*r、長方形は2*(幅+高さ)、正方形は4*side、三角形は3辺長和、多角形は最後→最初も含めた辺長和。Polygonが0/1点なら0、2点なら往復分で端点距離の2倍。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定形状はO(1)（動的次元のSegmentはその次元数に比例）。
+///
+/// 呼び分け: perimeter(shape)。無限Lineの形式はありません。Segmentは全次元の端点間距離、Polygon/Triangle/Rectangleは先頭2座標を使います。
+///
+/// 例: `print(perimeter(make_rectangle(0,0,3,4)));`
 template <class A, class B>
 long double perimeter(const Rectangle<A, B>& shape) {
     using namespace ac_detail::geometry;
@@ -4715,11 +7288,33 @@ long double perimeter(const Rectangle<A, B>& shape) {
               + fabsl(y_ld(shape.corner1) - y_ld(shape.corner2)));
 }
 
+/// 2D図形の周長、または線分そのものの長さを求める。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Segment・Circle・Rectangle・Square・Triangle・Polygon。
+///
+/// 戻り値: ld。線分は端点間距離、円は2*PI*r、長方形は2*(幅+高さ)、正方形は4*side、三角形は3辺長和、多角形は最後→最初も含めた辺長和。Polygonが0/1点なら0、2点なら往復分で端点距離の2倍。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定形状はO(1)（動的次元のSegmentはその次元数に比例）。
+///
+/// 呼び分け: perimeter(shape)。無限Lineの形式はありません。Segmentは全次元の端点間距離、Polygon/Triangle/Rectangleは先頭2座標を使います。
+///
+/// 例: `print(perimeter(make_rectangle(0,0,3,4)));`
 template <class P, class S>
 long double perimeter(const Square<P, S>& shape) {
     return 4 * static_cast<long double>(shape.side);
 }
 
+/// 2D図形の周長、または線分そのものの長さを求める。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Segment・Circle・Rectangle・Square・Triangle・Polygon。
+///
+/// 戻り値: ld。線分は端点間距離、円は2*PI*r、長方形は2*(幅+高さ)、正方形は4*side、三角形は3辺長和、多角形は最後→最初も含めた辺長和。Polygonが0/1点なら0、2点なら往復分で端点距離の2倍。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定形状はO(1)（動的次元のSegmentはその次元数に比例）。
+///
+/// 呼び分け: perimeter(shape)。無限Lineの形式はありません。Segmentは全次元の端点間距離、Polygon/Triangle/Rectangleは先頭2座標を使います。
+///
+/// 例: `print(perimeter(make_rectangle(0,0,3,4)));`
 template <class A, class B, class C>
 long double perimeter(const Triangle<A, B, C>& shape) {
     using namespace ac_detail::geometry;
@@ -4727,6 +7322,17 @@ long double perimeter(const Triangle<A, B, C>& shape) {
          + distance2d(shape.c, shape.a);
 }
 
+/// 2D図形の周長、または線分そのものの長さを求める。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Segment・Circle・Rectangle・Square・Triangle・Polygon。
+///
+/// 戻り値: ld。線分は端点間距離、円は2*PI*r、長方形は2*(幅+高さ)、正方形は4*side、三角形は3辺長和、多角形は最後→最初も含めた辺長和。Polygonが0/1点なら0、2点なら往復分で端点距離の2倍。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定形状はO(1)（動的次元のSegmentはその次元数に比例）。
+///
+/// 呼び分け: perimeter(shape)。無限Lineの形式はありません。Segmentは全次元の端点間距離、Polygon/Triangle/Rectangleは先頭2座標を使います。
+///
+/// 例: `print(perimeter(make_rectangle(0,0,3,4)));`
 template <class P>
 long double perimeter(const Polygon<P>& shape) {
     using namespace ac_detail::geometry;
@@ -4739,14 +7345,35 @@ long double perimeter(const Polygon<P>& shape) {
 }
 
 // @acf fn surface_area — (Sphere/Cuboid) -> long double — 3次元図形の表面積
-/// @acf-doc @brief 球または座標軸に平行な直方体の表面積を返す
-/// @acf-doc [function] surface_area
+
+/// 球または軸平行直方体の表面積を求める。
+///
+/// 引数 `shape`: 球は非負で有限の半径。直方体は有限の3D対角点で順序自由。
+///
+/// 戻り値: ld。球は4*PI*r²、直方体は2*(dx*dy+dy*dz+dz*dx)。dx,dy,dzは対角点間の各軸の絶対差。半径0は0。厚さ0の直方体でも残る面の両面分が計算されます。
+///
+/// 注意: 入力を変更せずO(1)。半径/3座標をldへ変換して計算します。
+///
+/// 呼び分け: surface_area(sphere) / surface_area(cuboid)。2Dの面積はarea。
+///
+/// 例: `print(surface_area(make_cuboid(0,0,0,2,3,4)));`
 template <class P, class R>
 long double surface_area(const Sphere<P, R>& shape) {
     const long double radius = static_cast<long double>(shape.radius);
     return 4 * acosl(-1.0L) * radius * radius;
 }
 
+/// 球または軸平行直方体の表面積を求める。
+///
+/// 引数 `shape`: 球は非負で有限の半径。直方体は有限の3D対角点で順序自由。
+///
+/// 戻り値: ld。球は4*PI*r²、直方体は2*(dx*dy+dy*dz+dz*dx)。dx,dy,dzは対角点間の各軸の絶対差。半径0は0。厚さ0の直方体でも残る面の両面分が計算されます。
+///
+/// 注意: 入力を変更せずO(1)。半径/3座標をldへ変換して計算します。
+///
+/// 呼び分け: surface_area(sphere) / surface_area(cuboid)。2Dの面積はarea。
+///
+/// 例: `print(surface_area(make_cuboid(0,0,0,2,3,4)));`
 template <class A, class B>
 long double surface_area(const Cuboid<A, B>& shape) {
     using namespace ac_detail::geometry;
@@ -4757,14 +7384,35 @@ long double surface_area(const Cuboid<A, B>& shape) {
 }
 
 // @acf fn volume — (Sphere/Cuboid) -> long double — 3次元図形の体積
-/// @acf-doc @brief 球または座標軸に平行な直方体の体積を返す
-/// @acf-doc [function] volume
+
+/// 球または軸平行直方体の体積を求める。
+///
+/// 引数 `shape`: 球は非負で有限の半径。直方体は有限の3D対角点で順序自由。
+///
+/// 戻り値: ld。球は4*PI*r³/3、直方体は3軸の絶対差の積。半径0、いずれかの辺長0なら体積0。
+///
+/// 注意: 入力を変更せずO(1)。半径/3座標をldへ変換して計算します。
+///
+/// 呼び分け: volume(sphere) / volume(cuboid)。2D図形の体積の形式はありません。
+///
+/// 例: `print(volume(make_cuboid(2,3,4,0,0,0)));`
 template <class P, class R>
 long double volume(const Sphere<P, R>& shape) {
     const long double radius = static_cast<long double>(shape.radius);
     return 4 * acosl(-1.0L) * radius * radius * radius / 3;
 }
 
+/// 球または軸平行直方体の体積を求める。
+///
+/// 引数 `shape`: 球は非負で有限の半径。直方体は有限の3D対角点で順序自由。
+///
+/// 戻り値: ld。球は4*PI*r³/3、直方体は3軸の絶対差の積。半径0、いずれかの辺長0なら体積0。
+///
+/// 注意: 入力を変更せずO(1)。半径/3座標をldへ変換して計算します。
+///
+/// 呼び分け: volume(sphere) / volume(cuboid)。2D図形の体積の形式はありません。
+///
+/// 例: `print(volume(make_cuboid(2,3,4,0,0,0)));`
 template <class A, class B>
 long double volume(const Cuboid<A, B>& shape) {
     using namespace ac_detail::geometry;
@@ -4774,8 +7422,18 @@ long double volume(const Cuboid<A, B>& shape) {
 }
 
 // @acf fn contains_point — (shape,p) -> bool — 2D・3D図形の境界を含む点包含判定
-/// @acf-doc @brief `contains_point(shape,p)` は点が図形の内部または境界上ならtrue。整数座標の線分・直線・多角形・三角形・長方形・円（整数半径）は厳密判定
-/// @acf-doc [function] contains_point
+
+/// 点が図形の内部または境界上にあるか判定する。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Circle・Rectangle・Square・Line・Segment・Polygon・Triangle（2D）、Sphere・Cuboid（3D）。通常のTriangleは非退化。
+///
+/// 引数 `p`: 図形に対応する有限座標の点。2D図形は先頭2座標（x,y）、Sphere・Cuboidは先頭3座標（x,y,z）を使います。整数の差・積・和は中間型へ収まること。
+///
+/// 戻り値: bool。境界を含めてtrue。空Polygonはfalse、1点Polygonは同一点、2点Polygonはその線分への判定。同一点のLine/Segmentはその点への判定。半径0の円/球は中心への判定。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定形状はO(1)。整数の2D線/線分/多角形/三角形/長方形・整数半径の円・整数Cuboid等は厳密分岐。ただし差と広い積/和、Squareの角+辺長は型へ収まること。実数/球等はldとスケール付きtoleranceで境界近傍もtrueになり得ます。
+///
+/// 呼び分け: contains_point(shape,p)。LineEquationはto_line経由。退化した整数Triangleの現在の分岐は3辺の向きだけを調べるため、一直線の延長上の点もtrueになり、3頂点同一では任意の点がtrueになり得ます。実数Triangleの辺上判定とは異なるため、退化時はSegment等を明示して使います。
 template <class P, class R, class Q>
 bool contains_point(const Circle<P, R>& shape, const Q& p) {
     using namespace ac_detail::geometry;
@@ -4789,11 +7447,33 @@ bool contains_point(const Circle<P, R>& shape, const Q& p) {
     }
 }
 
+/// 点が図形の内部または境界上にあるか判定する。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Circle・Rectangle・Square・Line・Segment・Polygon・Triangle（2D）、Sphere・Cuboid（3D）。通常のTriangleは非退化。
+///
+/// 引数 `p`: 図形に対応する有限座標の点。2D図形は先頭2座標（x,y）、Sphere・Cuboidは先頭3座標（x,y,z）を使います。整数の差・積・和は中間型へ収まること。
+///
+/// 戻り値: bool。境界を含めてtrue。空Polygonはfalse、1点Polygonは同一点、2点Polygonはその線分への判定。同一点のLine/Segmentはその点への判定。半径0の円/球は中心への判定。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定形状はO(1)。整数の2D線/線分/多角形/三角形/長方形・整数半径の円・整数Cuboid等は厳密分岐。ただし差と広い積/和、Squareの角+辺長は型へ収まること。実数/球等はldとスケール付きtoleranceで境界近傍もtrueになり得ます。
+///
+/// 呼び分け: contains_point(shape,p)。LineEquationはto_line経由。退化した整数Triangleの現在の分岐は3辺の向きだけを調べるため、一直線の延長上の点もtrueになり、3頂点同一では任意の点がtrueになり得ます。実数Triangleの辺上判定とは異なるため、退化時はSegment等を明示して使います。
 template <class A, class B, class P>
 bool contains_point(const Rectangle<A, B>& shape, const P& p) {
     return ac_detail::geometry::in_rectangle(p, shape.corner1, shape.corner2);
 }
 
+/// 点が図形の内部または境界上にあるか判定する。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Circle・Rectangle・Square・Line・Segment・Polygon・Triangle（2D）、Sphere・Cuboid（3D）。通常のTriangleは非退化。
+///
+/// 引数 `p`: 図形に対応する有限座標の点。2D図形は先頭2座標（x,y）、Sphere・Cuboidは先頭3座標（x,y,z）を使います。整数の差・積・和は中間型へ収まること。
+///
+/// 戻り値: bool。境界を含めてtrue。空Polygonはfalse、1点Polygonは同一点、2点Polygonはその線分への判定。同一点のLine/Segmentはその点への判定。半径0の円/球は中心への判定。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定形状はO(1)。整数の2D線/線分/多角形/三角形/長方形・整数半径の円・整数Cuboid等は厳密分岐。ただし差と広い積/和、Squareの角+辺長は型へ収まること。実数/球等はldとスケール付きtoleranceで境界近傍もtrueになり得ます。
+///
+/// 呼び分け: contains_point(shape,p)。LineEquationはto_line経由。退化した整数Triangleの現在の分岐は3辺の向きだけを調べるため、一直線の延長上の点もtrueになり、3頂点同一では任意の点がtrueになり得ます。実数Triangleの辺上判定とは異なるため、退化時はSegment等を明示して使います。
 template <class Q, class S, class P>
 bool contains_point(const Square<Q, S>& shape, const P& p) {
     using namespace ac_detail::geometry;
@@ -4814,6 +7494,17 @@ bool contains_point(const Square<Q, S>& shape, const P& p) {
     }
 }
 
+/// 点が図形の内部または境界上にあるか判定する。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Circle・Rectangle・Square・Line・Segment・Polygon・Triangle（2D）、Sphere・Cuboid（3D）。通常のTriangleは非退化。
+///
+/// 引数 `p`: 図形に対応する有限座標の点。2D図形は先頭2座標（x,y）、Sphere・Cuboidは先頭3座標（x,y,z）を使います。整数の差・積・和は中間型へ収まること。
+///
+/// 戻り値: bool。境界を含めてtrue。空Polygonはfalse、1点Polygonは同一点、2点Polygonはその線分への判定。同一点のLine/Segmentはその点への判定。半径0の円/球は中心への判定。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定形状はO(1)。整数の2D線/線分/多角形/三角形/長方形・整数半径の円・整数Cuboid等は厳密分岐。ただし差と広い積/和、Squareの角+辺長は型へ収まること。実数/球等はldとスケール付きtoleranceで境界近傍もtrueになり得ます。
+///
+/// 呼び分け: contains_point(shape,p)。LineEquationはto_line経由。退化した整数Triangleの現在の分岐は3辺の向きだけを調べるため、一直線の延長上の点もtrueになり、3頂点同一では任意の点がtrueになり得ます。実数Triangleの辺上判定とは異なるため、退化時はSegment等を明示して使います。
 template <class A, class B, class P>
 bool contains_point(const Segment<A, B>& shape, const P& p) {
     using namespace ac_detail::geometry;
@@ -4823,6 +7514,17 @@ bool contains_point(const Segment<A, B>& shape, const P& p) {
         return on_segment2d(p, shape.a, shape.b);
 }
 
+/// 点が図形の内部または境界上にあるか判定する。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Circle・Rectangle・Square・Line・Segment・Polygon・Triangle（2D）、Sphere・Cuboid（3D）。通常のTriangleは非退化。
+///
+/// 引数 `p`: 図形に対応する有限座標の点。2D図形は先頭2座標（x,y）、Sphere・Cuboidは先頭3座標（x,y,z）を使います。整数の差・積・和は中間型へ収まること。
+///
+/// 戻り値: bool。境界を含めてtrue。空Polygonはfalse、1点Polygonは同一点、2点Polygonはその線分への判定。同一点のLine/Segmentはその点への判定。半径0の円/球は中心への判定。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定形状はO(1)。整数の2D線/線分/多角形/三角形/長方形・整数半径の円・整数Cuboid等は厳密分岐。ただし差と広い積/和、Squareの角+辺長は型へ収まること。実数/球等はldとスケール付きtoleranceで境界近傍もtrueになり得ます。
+///
+/// 呼び分け: contains_point(shape,p)。LineEquationはto_line経由。退化した整数Triangleの現在の分岐は3辺の向きだけを調べるため、一直線の延長上の点もtrueになり、3頂点同一では任意の点がtrueになり得ます。実数Triangleの辺上判定とは異なるため、退化時はSegment等を明示して使います。
 template <class A, class B, class P>
 bool contains_point(const Line<A, B>& shape, const P& p) {
     using namespace ac_detail::geometry;
@@ -4835,6 +7537,17 @@ bool contains_point(const Line<A, B>& shape, const P& p) {
     }
 }
 
+/// 点が図形の内部または境界上にあるか判定する。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Circle・Rectangle・Square・Line・Segment・Polygon・Triangle（2D）、Sphere・Cuboid（3D）。通常のTriangleは非退化。
+///
+/// 引数 `p`: 図形に対応する有限座標の点。2D図形は先頭2座標（x,y）、Sphere・Cuboidは先頭3座標（x,y,z）を使います。整数の差・積・和は中間型へ収まること。
+///
+/// 戻り値: bool。境界を含めてtrue。空Polygonはfalse、1点Polygonは同一点、2点Polygonはその線分への判定。同一点のLine/Segmentはその点への判定。半径0の円/球は中心への判定。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定形状はO(1)。整数の2D線/線分/多角形/三角形/長方形・整数半径の円・整数Cuboid等は厳密分岐。ただし差と広い積/和、Squareの角+辺長は型へ収まること。実数/球等はldとスケール付きtoleranceで境界近傍もtrueになり得ます。
+///
+/// 呼び分け: contains_point(shape,p)。LineEquationはto_line経由。退化した整数Triangleの現在の分岐は3辺の向きだけを調べるため、一直線の延長上の点もtrueになり、3頂点同一では任意の点がtrueになり得ます。実数Triangleの辺上判定とは異なるため、退化時はSegment等を明示して使います。
 template <class P, class Q>
 bool contains_point(const Polygon<P>& shape, const Q& p) {
     using namespace ac_detail::geometry;
@@ -4861,6 +7574,17 @@ bool contains_point(const Polygon<P>& shape, const Q& p) {
     }
 }
 
+/// 点が図形の内部または境界上にあるか判定する。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Circle・Rectangle・Square・Line・Segment・Polygon・Triangle（2D）、Sphere・Cuboid（3D）。通常のTriangleは非退化。
+///
+/// 引数 `p`: 図形に対応する有限座標の点。2D図形は先頭2座標（x,y）、Sphere・Cuboidは先頭3座標（x,y,z）を使います。整数の差・積・和は中間型へ収まること。
+///
+/// 戻り値: bool。境界を含めてtrue。空Polygonはfalse、1点Polygonは同一点、2点Polygonはその線分への判定。同一点のLine/Segmentはその点への判定。半径0の円/球は中心への判定。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定形状はO(1)。整数の2D線/線分/多角形/三角形/長方形・整数半径の円・整数Cuboid等は厳密分岐。ただし差と広い積/和、Squareの角+辺長は型へ収まること。実数/球等はldとスケール付きtoleranceで境界近傍もtrueになり得ます。
+///
+/// 呼び分け: contains_point(shape,p)。LineEquationはto_line経由。退化した整数Triangleの現在の分岐は3辺の向きだけを調べるため、一直線の延長上の点もtrueになり、3頂点同一では任意の点がtrueになり得ます。実数Triangleの辺上判定とは異なるため、退化時はSegment等を明示して使います。
 template <class A, class B, class C, class P>
 bool contains_point(const Triangle<A, B, C>& shape, const P& p) {
     using namespace ac_detail::geometry;
@@ -4877,6 +7601,17 @@ bool contains_point(const Triangle<A, B, C>& shape, const P& p) {
     }
 }
 
+/// 点が図形の内部または境界上にあるか判定する。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Circle・Rectangle・Square・Line・Segment・Polygon・Triangle（2D）、Sphere・Cuboid（3D）。通常のTriangleは非退化。
+///
+/// 引数 `p`: 図形に対応する有限座標の点。2D図形は先頭2座標（x,y）、Sphere・Cuboidは先頭3座標（x,y,z）を使います。整数の差・積・和は中間型へ収まること。
+///
+/// 戻り値: bool。境界を含めてtrue。空Polygonはfalse、1点Polygonは同一点、2点Polygonはその線分への判定。同一点のLine/Segmentはその点への判定。半径0の円/球は中心への判定。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定形状はO(1)。整数の2D線/線分/多角形/三角形/長方形・整数半径の円・整数Cuboid等は厳密分岐。ただし差と広い積/和、Squareの角+辺長は型へ収まること。実数/球等はldとスケール付きtoleranceで境界近傍もtrueになり得ます。
+///
+/// 呼び分け: contains_point(shape,p)。LineEquationはto_line経由。退化した整数Triangleの現在の分岐は3辺の向きだけを調べるため、一直線の延長上の点もtrueになり、3頂点同一では任意の点がtrueになり得ます。実数Triangleの辺上判定とは異なるため、退化時はSegment等を明示して使います。
 template <class C, class R, class P>
 bool contains_point(const Sphere<C, R>& shape, const P& point) {
     const long double radius = static_cast<long double>(shape.radius);
@@ -4885,6 +7620,17 @@ bool contains_point(const Sphere<C, R>& shape, const P& point) {
         <= radius + ac_detail::geometry::tolerance(radius);
 }
 
+/// 点が図形の内部または境界上にあるか判定する。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。Circle・Rectangle・Square・Line・Segment・Polygon・Triangle（2D）、Sphere・Cuboid（3D）。通常のTriangleは非退化。
+///
+/// 引数 `p`: 図形に対応する有限座標の点。2D図形は先頭2座標（x,y）、Sphere・Cuboidは先頭3座標（x,y,z）を使います。整数の差・積・和は中間型へ収まること。
+///
+/// 戻り値: bool。境界を含めてtrue。空Polygonはfalse、1点Polygonは同一点、2点Polygonはその線分への判定。同一点のLine/Segmentはその点への判定。半径0の円/球は中心への判定。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)、固定形状はO(1)。整数の2D線/線分/多角形/三角形/長方形・整数半径の円・整数Cuboid等は厳密分岐。ただし差と広い積/和、Squareの角+辺長は型へ収まること。実数/球等はldとスケール付きtoleranceで境界近傍もtrueになり得ます。
+///
+/// 呼び分け: contains_point(shape,p)。LineEquationはto_line経由。退化した整数Triangleの現在の分岐は3辺の向きだけを調べるため、一直線の延長上の点もtrueになり、3頂点同一では任意の点がtrueになり得ます。実数Triangleの辺上判定とは異なるため、退化時はSegment等を明示して使います。
 template <class A, class B, class P>
 bool contains_point(const Cuboid<A, B>& shape, const P& point) {
     using namespace ac_detail::geometry;
@@ -4906,8 +7652,20 @@ bool contains_point(const Cuboid<A, B>& shape, const P& point) {
 }
 
 // @acf fn point_shape_distance — (p,shape) -> long double — 点と2D・3D図形の最短距離
-/// @acf-doc @brief `point_shape_distance(p,shape)` は点と図形の最短距離。面・体積を持つ図形では内部・境界なら0
-/// @acf-doc [function] point_shape_distance
+
+/// 点から2D・3Dの図形への最短距離を求める。
+///
+/// 引数 `p`: 有限の点。図形と同じ次元で、2Dは先頭2座標、3Dは先頭3座標。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。2DのLine・Segment・Circle・Rectangle・Square・Triangle・Polygon、3DのSphere・Cuboid。通常のTriangleは非退化。
+///
+/// 戻り値: ldの非負距離。面/体積の内部・境界なら0。Circle/Sphereはmax(0,中心距離-radius)、Rectangle/Cuboidは各軸の外側への差のノルム。空Polygonは+infinity、1頂点はその点までの距離。退化Line/Segmentは点への距離。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)で内部判定と辺走査、固定形状はO(1)。距離はld計算の丸め誤差があります。
+///
+/// 呼び分け: point_shape_distance(p,shape)。円周だけ/球面だけへの距離ではありません。Polygon/Triangleはcontains_pointを先に呼ぶため、そのtoleranceと退化整数Triangleの制約も引き継ぎます。円/長方形等の直接計算では包含判定のtoleranceへ強制的に揃えません。
+///
+/// 例: `print_fixed(6,point_shape_distance(p2i{5,2},make_rectangle(0,0,3,4)));`
 template <class P, class A, class B>
 long double point_shape_distance(const P& p, const Line<A, B>& shape) {
     using namespace ac_detail::geometry;
@@ -4915,17 +7673,56 @@ long double point_shape_distance(const P& p, const Line<A, B>& shape) {
                                x_ld(shape.b), y_ld(shape.b));
 }
 
+/// 点から2D・3Dの図形への最短距離を求める。
+///
+/// 引数 `p`: 有限の点。図形と同じ次元で、2Dは先頭2座標、3Dは先頭3座標。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。2DのLine・Segment・Circle・Rectangle・Square・Triangle・Polygon、3DのSphere・Cuboid。通常のTriangleは非退化。
+///
+/// 戻り値: ldの非負距離。面/体積の内部・境界なら0。Circle/Sphereはmax(0,中心距離-radius)、Rectangle/Cuboidは各軸の外側への差のノルム。空Polygonは+infinity、1頂点はその点までの距離。退化Line/Segmentは点への距離。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)で内部判定と辺走査、固定形状はO(1)。距離はld計算の丸め誤差があります。
+///
+/// 呼び分け: point_shape_distance(p,shape)。円周だけ/球面だけへの距離ではありません。Polygon/Triangleはcontains_pointを先に呼ぶため、そのtoleranceと退化整数Triangleの制約も引き継ぎます。円/長方形等の直接計算では包含判定のtoleranceへ強制的に揃えません。
+///
+/// 例: `print_fixed(6,point_shape_distance(p2i{5,2},make_rectangle(0,0,3,4)));`
 template <class P, class A, class B>
 long double point_shape_distance(const P& p, const Segment<A, B>& shape) {
     return ac_detail::geometry::segment_distance2d(p, shape.a, shape.b);
 }
 
+/// 点から2D・3Dの図形への最短距離を求める。
+///
+/// 引数 `p`: 有限の点。図形と同じ次元で、2Dは先頭2座標、3Dは先頭3座標。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。2DのLine・Segment・Circle・Rectangle・Square・Triangle・Polygon、3DのSphere・Cuboid。通常のTriangleは非退化。
+///
+/// 戻り値: ldの非負距離。面/体積の内部・境界なら0。Circle/Sphereはmax(0,中心距離-radius)、Rectangle/Cuboidは各軸の外側への差のノルム。空Polygonは+infinity、1頂点はその点までの距離。退化Line/Segmentは点への距離。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)で内部判定と辺走査、固定形状はO(1)。距離はld計算の丸め誤差があります。
+///
+/// 呼び分け: point_shape_distance(p,shape)。円周だけ/球面だけへの距離ではありません。Polygon/Triangleはcontains_pointを先に呼ぶため、そのtoleranceと退化整数Triangleの制約も引き継ぎます。円/長方形等の直接計算では包含判定のtoleranceへ強制的に揃えません。
+///
+/// 例: `print_fixed(6,point_shape_distance(p2i{5,2},make_rectangle(0,0,3,4)));`
 template <class P, class C, class R>
 long double point_shape_distance(const P& p, const Circle<C, R>& shape) {
     return max(0.0L, ac_detail::geometry::distance2d(p, shape.center)
                      - static_cast<long double>(shape.radius));
 }
 
+/// 点から2D・3Dの図形への最短距離を求める。
+///
+/// 引数 `p`: 有限の点。図形と同じ次元で、2Dは先頭2座標、3Dは先頭3座標。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。2DのLine・Segment・Circle・Rectangle・Square・Triangle・Polygon、3DのSphere・Cuboid。通常のTriangleは非退化。
+///
+/// 戻り値: ldの非負距離。面/体積の内部・境界なら0。Circle/Sphereはmax(0,中心距離-radius)、Rectangle/Cuboidは各軸の外側への差のノルム。空Polygonは+infinity、1頂点はその点までの距離。退化Line/Segmentは点への距離。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)で内部判定と辺走査、固定形状はO(1)。距離はld計算の丸め誤差があります。
+///
+/// 呼び分け: point_shape_distance(p,shape)。円周だけ/球面だけへの距離ではありません。Polygon/Triangleはcontains_pointを先に呼ぶため、そのtoleranceと退化整数Triangleの制約も引き継ぎます。円/長方形等の直接計算では包含判定のtoleranceへ強制的に揃えません。
+///
+/// 例: `print_fixed(6,point_shape_distance(p2i{5,2},make_rectangle(0,0,3,4)));`
 template <class P, class A, class B>
 long double point_shape_distance(const P& p, const Rectangle<A, B>& shape) {
     using namespace ac_detail::geometry;
@@ -4939,6 +7736,19 @@ long double point_shape_distance(const P& p, const Rectangle<A, B>& shape) {
     return hypot(dx, dy);
 }
 
+/// 点から2D・3Dの図形への最短距離を求める。
+///
+/// 引数 `p`: 有限の点。図形と同じ次元で、2Dは先頭2座標、3Dは先頭3座標。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。2DのLine・Segment・Circle・Rectangle・Square・Triangle・Polygon、3DのSphere・Cuboid。通常のTriangleは非退化。
+///
+/// 戻り値: ldの非負距離。面/体積の内部・境界なら0。Circle/Sphereはmax(0,中心距離-radius)、Rectangle/Cuboidは各軸の外側への差のノルム。空Polygonは+infinity、1頂点はその点までの距離。退化Line/Segmentは点への距離。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)で内部判定と辺走査、固定形状はO(1)。距離はld計算の丸め誤差があります。
+///
+/// 呼び分け: point_shape_distance(p,shape)。円周だけ/球面だけへの距離ではありません。Polygon/Triangleはcontains_pointを先に呼ぶため、そのtoleranceと退化整数Triangleの制約も引き継ぎます。円/長方形等の直接計算では包含判定のtoleranceへ強制的に揃えません。
+///
+/// 例: `print_fixed(6,point_shape_distance(p2i{5,2},make_rectangle(0,0,3,4)));`
 template <class P, class Q, class S>
 long double point_shape_distance(const P& p, const Square<Q, S>& shape) {
     using namespace ac_detail::geometry;
@@ -4949,6 +7759,19 @@ long double point_shape_distance(const P& p, const Square<Q, S>& shape) {
         p, Rectangle<Q, pair<long double, long double>>{shape.corner, opposite});
 }
 
+/// 点から2D・3Dの図形への最短距離を求める。
+///
+/// 引数 `p`: 有限の点。図形と同じ次元で、2Dは先頭2座標、3Dは先頭3座標。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。2DのLine・Segment・Circle・Rectangle・Square・Triangle・Polygon、3DのSphere・Cuboid。通常のTriangleは非退化。
+///
+/// 戻り値: ldの非負距離。面/体積の内部・境界なら0。Circle/Sphereはmax(0,中心距離-radius)、Rectangle/Cuboidは各軸の外側への差のノルム。空Polygonは+infinity、1頂点はその点までの距離。退化Line/Segmentは点への距離。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)で内部判定と辺走査、固定形状はO(1)。距離はld計算の丸め誤差があります。
+///
+/// 呼び分け: point_shape_distance(p,shape)。円周だけ/球面だけへの距離ではありません。Polygon/Triangleはcontains_pointを先に呼ぶため、そのtoleranceと退化整数Triangleの制約も引き継ぎます。円/長方形等の直接計算では包含判定のtoleranceへ強制的に揃えません。
+///
+/// 例: `print_fixed(6,point_shape_distance(p2i{5,2},make_rectangle(0,0,3,4)));`
 template <class P, class Q>
 long double point_shape_distance(const P& p, const Polygon<Q>& shape) {
     using namespace ac_detail::geometry;
@@ -4961,6 +7784,19 @@ long double point_shape_distance(const P& p, const Polygon<Q>& shape) {
     return result;
 }
 
+/// 点から2D・3Dの図形への最短距離を求める。
+///
+/// 引数 `p`: 有限の点。図形と同じ次元で、2Dは先頭2座標、3Dは先頭3座標。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。2DのLine・Segment・Circle・Rectangle・Square・Triangle・Polygon、3DのSphere・Cuboid。通常のTriangleは非退化。
+///
+/// 戻り値: ldの非負距離。面/体積の内部・境界なら0。Circle/Sphereはmax(0,中心距離-radius)、Rectangle/Cuboidは各軸の外側への差のノルム。空Polygonは+infinity、1頂点はその点までの距離。退化Line/Segmentは点への距離。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)で内部判定と辺走査、固定形状はO(1)。距離はld計算の丸め誤差があります。
+///
+/// 呼び分け: point_shape_distance(p,shape)。円周だけ/球面だけへの距離ではありません。Polygon/Triangleはcontains_pointを先に呼ぶため、そのtoleranceと退化整数Triangleの制約も引き継ぎます。円/長方形等の直接計算では包含判定のtoleranceへ強制的に揃えません。
+///
+/// 例: `print_fixed(6,point_shape_distance(p2i{5,2},make_rectangle(0,0,3,4)));`
 template <class P, class A, class B, class C>
 long double point_shape_distance(const P& p, const Triangle<A, B, C>& shape) {
     if (contains_point(shape, p)) return 0;
@@ -4971,6 +7807,19 @@ long double point_shape_distance(const P& p, const Triangle<A, B, C>& shape) {
     });
 }
 
+/// 点から2D・3Dの図形への最短距離を求める。
+///
+/// 引数 `p`: 有限の点。図形と同じ次元で、2Dは先頭2座標、3Dは先頭3座標。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。2DのLine・Segment・Circle・Rectangle・Square・Triangle・Polygon、3DのSphere・Cuboid。通常のTriangleは非退化。
+///
+/// 戻り値: ldの非負距離。面/体積の内部・境界なら0。Circle/Sphereはmax(0,中心距離-radius)、Rectangle/Cuboidは各軸の外側への差のノルム。空Polygonは+infinity、1頂点はその点までの距離。退化Line/Segmentは点への距離。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)で内部判定と辺走査、固定形状はO(1)。距離はld計算の丸め誤差があります。
+///
+/// 呼び分け: point_shape_distance(p,shape)。円周だけ/球面だけへの距離ではありません。Polygon/Triangleはcontains_pointを先に呼ぶため、そのtoleranceと退化整数Triangleの制約も引き継ぎます。円/長方形等の直接計算では包含判定のtoleranceへ強制的に揃えません。
+///
+/// 例: `print_fixed(6,point_shape_distance(p2i{5,2},make_rectangle(0,0,3,4)));`
 template <class P, class C, class R>
 long double point_shape_distance(const P& point, const Sphere<C, R>& shape) {
     return max(0.0L,
@@ -4979,6 +7828,19 @@ long double point_shape_distance(const P& point, const Sphere<C, R>& shape) {
         - static_cast<long double>(shape.radius));
 }
 
+/// 点から2D・3Dの図形への最短距離を求める。
+///
+/// 引数 `p`: 有限の点。図形と同じ次元で、2Dは先頭2座標、3Dは先頭3座標。
+///
+/// 引数 `shape`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。2DのLine・Segment・Circle・Rectangle・Square・Triangle・Polygon、3DのSphere・Cuboid。通常のTriangleは非退化。
+///
+/// 戻り値: ldの非負距離。面/体積の内部・境界なら0。Circle/Sphereはmax(0,中心距離-radius)、Rectangle/Cuboidは各軸の外側への差のノルム。空Polygonは+infinity、1頂点はその点までの距離。退化Line/Segmentは点への距離。
+///
+/// 注意: 入力を変更しません。PolygonはO(N)で内部判定と辺走査、固定形状はO(1)。距離はld計算の丸め誤差があります。
+///
+/// 呼び分け: point_shape_distance(p,shape)。円周だけ/球面だけへの距離ではありません。Polygon/Triangleはcontains_pointを先に呼ぶため、そのtoleranceと退化整数Triangleの制約も引き継ぎます。円/長方形等の直接計算では包含判定のtoleranceへ強制的に揃えません。
+///
+/// 例: `print_fixed(6,point_shape_distance(p2i{5,2},make_rectangle(0,0,3,4)));`
 template <class P, class A, class B>
 long double point_shape_distance(const P& point, const Cuboid<A, B>& shape) {
     using namespace ac_detail::geometry;
@@ -4995,6 +7857,17 @@ long double point_shape_distance(const P& point, const Cuboid<A, B>& shape) {
     return hypot(hypot(dx, dy), dz);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class C, class D>
 bool intersects(const Rectangle<A, B>& first, const Rectangle<C, D>& second) {
     using namespace ac_detail::geometry;
@@ -5018,21 +7891,65 @@ bool intersects(const Rectangle<A, B>& first, const Rectangle<C, D>& second) {
     }
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class P, class S, class A, class B>
 bool intersects(const Square<P, S>& square, const Rectangle<A, B>& rectangle) {
     return intersects(to_rectangle(square), rectangle);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class P, class S>
 bool intersects(const Rectangle<A, B>& rectangle, const Square<P, S>& square) {
     return intersects(square, rectangle);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class P1, class S1, class P2, class S2>
 bool intersects(const Square<P1, S1>& first, const Square<P2, S2>& second) {
     return intersects(to_rectangle(first), to_rectangle(second));
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class P, class A, class B>
 bool intersects(const Polygon<P>& polygon, const Segment<A, B>& segment) {
     if (contains_point(polygon, segment.a) || contains_point(polygon, segment.b))
@@ -5040,21 +7957,65 @@ bool intersects(const Polygon<P>& polygon, const Segment<A, B>& segment) {
     return !intersection_points(polygon, segment).empty();
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class P>
 bool intersects(const Segment<A, B>& segment, const Polygon<P>& polygon) {
     return intersects(polygon, segment);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class P, class A, class B>
 bool intersects(const Polygon<P>& polygon, const Line<A, B>& line) {
     return !intersection_points(polygon, line).empty();
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class P>
 bool intersects(const Line<A, B>& line, const Polygon<P>& polygon) {
     return intersects(polygon, line);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class P, class C, class R>
 bool intersects(const Circle<C, R>& circle, const Polygon<P>& polygon) {
     const long double radius = static_cast<long double>(circle.radius);
@@ -5062,11 +8023,33 @@ bool intersects(const Circle<C, R>& circle, const Polygon<P>& polygon) {
         <= radius + ac_detail::geometry::tolerance(1 + radius);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class P, class C, class R>
 bool intersects(const Polygon<P>& polygon, const Circle<C, R>& circle) {
     return intersects(circle, polygon);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class P1, class P2>
 bool intersects(const Polygon<P1>& first, const Polygon<P2>& second) {
     for (const auto& vertex : first.vertices)
@@ -5086,26 +8069,81 @@ bool intersects(const Polygon<P1>& first, const Polygon<P2>& second) {
     return false;
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class C, class D>
 bool intersects(const Rectangle<A, B>& rectangle, const Segment<C, D>& segment) {
     return intersects(to_polygon(rectangle), segment);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class C, class D, class A, class B>
 bool intersects(const Segment<C, D>& segment, const Rectangle<A, B>& rectangle) {
     return intersects(rectangle, segment);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class C, class D>
 bool intersects(const Rectangle<A, B>& rectangle, const Line<C, D>& line) {
     return intersects(to_polygon(rectangle), line);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class C, class D, class A, class B>
 bool intersects(const Line<C, D>& line, const Rectangle<A, B>& rectangle) {
     return intersects(rectangle, line);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class C, class R, class A, class B>
 bool intersects(const Circle<C, R>& circle, const Rectangle<A, B>& rectangle) {
     const long double radius = static_cast<long double>(circle.radius);
@@ -5113,120 +8151,372 @@ bool intersects(const Circle<C, R>& circle, const Rectangle<A, B>& rectangle) {
         <= radius + ac_detail::geometry::tolerance(1 + radius);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class C, class R>
 bool intersects(const Rectangle<A, B>& rectangle, const Circle<C, R>& circle) {
     return intersects(circle, rectangle);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class P, class S, class A, class B>
 bool intersects(const Square<P, S>& square, const Segment<A, B>& segment) {
     return intersects(to_polygon(square), segment);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class P, class S>
 bool intersects(const Segment<A, B>& segment, const Square<P, S>& square) {
     return intersects(square, segment);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class P, class S, class A, class B>
 bool intersects(const Square<P, S>& square, const Line<A, B>& line) {
     return intersects(to_polygon(square), line);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class P, class S>
 bool intersects(const Line<A, B>& line, const Square<P, S>& square) {
     return intersects(square, line);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class C, class R, class P, class S>
 bool intersects(const Circle<C, R>& circle, const Square<P, S>& square) {
     return intersects(circle, to_rectangle(square));
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class P, class S, class C, class R>
 bool intersects(const Square<P, S>& square, const Circle<C, R>& circle) {
     return intersects(circle, square);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class C, class D, class E>
 bool intersects(const Triangle<A, B, C>& triangle, const Segment<D, E>& segment) {
     return intersects(to_polygon(triangle), segment);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class D, class E, class A, class B, class C>
 bool intersects(const Segment<D, E>& segment, const Triangle<A, B, C>& triangle) {
     return intersects(triangle, segment);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class C, class D, class E>
 bool intersects(const Triangle<A, B, C>& triangle, const Line<D, E>& line) {
     return intersects(to_polygon(triangle), line);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class D, class E, class A, class B, class C>
 bool intersects(const Line<D, E>& line, const Triangle<A, B, C>& triangle) {
     return intersects(triangle, line);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class Cent, class R, class A, class B, class C>
 bool intersects(const Circle<Cent, R>& circle, const Triangle<A, B, C>& triangle) {
     return intersects(circle, to_polygon(triangle));
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class C, class Cent, class R>
 bool intersects(const Triangle<A, B, C>& triangle, const Circle<Cent, R>& circle) {
     return intersects(circle, triangle);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class C, class P>
 bool intersects(const Triangle<A, B, C>& triangle, const Polygon<P>& polygon) {
     return intersects(to_polygon(triangle), polygon);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class P, class A, class B, class C>
 bool intersects(const Polygon<P>& polygon, const Triangle<A, B, C>& triangle) {
     return intersects(triangle, polygon);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A1, class B1, class C1, class A2, class B2, class C2>
 bool intersects(const Triangle<A1, B1, C1>& first,
                 const Triangle<A2, B2, C2>& second) {
     return intersects(to_polygon(first), to_polygon(second));
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class C, class D, class E>
 bool intersects(const Triangle<A, B, C>& triangle, const Rectangle<D, E>& rectangle) {
     return intersects(to_polygon(triangle), to_polygon(rectangle));
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class D, class E, class A, class B, class C>
 bool intersects(const Rectangle<D, E>& rectangle, const Triangle<A, B, C>& triangle) {
     return intersects(triangle, rectangle);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class P>
 bool intersects(const Rectangle<A, B>& rectangle, const Polygon<P>& polygon) {
     return intersects(to_polygon(rectangle), polygon);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class P, class A, class B>
 bool intersects(const Polygon<P>& polygon, const Rectangle<A, B>& rectangle) {
     return intersects(rectangle, polygon);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class P, class S, class Q>
 bool intersects(const Square<P, S>& square, const Polygon<Q>& polygon) {
     return intersects(to_polygon(square), polygon);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class Q, class P, class S>
 bool intersects(const Polygon<Q>& polygon, const Square<P, S>& square) {
     return intersects(square, polygon);
 }
 
 // @acf fn shape_distance — (shape1,shape2) -> long double — 2図形の最短距離
-/// @acf-doc @brief 2つの2D図形の最短距離。共有点があれば0。面を持つ図形は塗りつぶしとして扱う
-/// @acf-doc [function] shape_distance
+
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A, class B, class C, class D>
 long double shape_distance(const Segment<A, B>& first, const Segment<C, D>& second) {
     if (intersects(first, second)) return 0;
@@ -5238,6 +8528,17 @@ long double shape_distance(const Segment<A, B>& first, const Segment<C, D>& seco
     });
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A, class B, class C, class D>
 long double shape_distance(const Line<A, B>& line, const Segment<C, D>& segment) {
     if (intersects(line, segment)) return 0;
@@ -5245,17 +8546,50 @@ long double shape_distance(const Line<A, B>& line, const Segment<C, D>& segment)
                point_line_distance(segment.b, line.a, line.b));
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A, class B, class C, class D>
 long double shape_distance(const Segment<A, B>& segment, const Line<C, D>& line) {
     return shape_distance(line, segment);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A, class B, class C, class D>
 long double shape_distance(const Line<A, B>& first, const Line<C, D>& second) {
     if (intersects(first, second)) return 0;
     return point_line_distance(first.a, second.a, second.b);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class C1, class R1, class C2, class R2>
 long double shape_distance(const Circle<C1, R1>& first, const Circle<C2, R2>& second) {
     const long double d = ac_detail::geometry::distance2d(first.center, second.center);
@@ -5264,71 +8598,214 @@ long double shape_distance(const Circle<C1, R1>& first, const Circle<C2, R2>& se
     return max(0.0L, d - r1 - r2);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class C, class R, class A, class B>
 long double shape_distance(const Circle<C, R>& circle, const Line<A, B>& line) {
     return max(0.0L, point_line_distance(circle.center, line.a, line.b)
                      - static_cast<long double>(circle.radius));
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A, class B, class C, class R>
 long double shape_distance(const Line<A, B>& line, const Circle<C, R>& circle) {
     return shape_distance(circle, line);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class C, class R, class A, class B>
 long double shape_distance(const Circle<C, R>& circle, const Segment<A, B>& segment) {
     return max(0.0L, point_segment_distance(circle.center, segment.a, segment.b)
                      - static_cast<long double>(circle.radius));
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A, class B, class C, class R>
 long double shape_distance(const Segment<A, B>& segment, const Circle<C, R>& circle) {
     return shape_distance(circle, segment);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class C, class R, class P>
 long double shape_distance(const Circle<C, R>& circle, const Polygon<P>& polygon) {
     return max(0.0L, point_shape_distance(circle.center, polygon)
                      - static_cast<long double>(circle.radius));
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class P, class C, class R>
 long double shape_distance(const Polygon<P>& polygon, const Circle<C, R>& circle) {
     return shape_distance(circle, polygon);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class C, class R, class A, class B>
 long double shape_distance(const Circle<C, R>& circle, const Rectangle<A, B>& rectangle) {
     return max(0.0L, point_shape_distance(circle.center, rectangle)
                      - static_cast<long double>(circle.radius));
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A, class B, class C, class R>
 long double shape_distance(const Rectangle<A, B>& rectangle, const Circle<C, R>& circle) {
     return shape_distance(circle, rectangle);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class C, class R, class A, class B, class D>
 long double shape_distance(const Circle<C, R>& circle, const Triangle<A, B, D>& triangle) {
     return max(0.0L, point_shape_distance(circle.center, triangle)
                      - static_cast<long double>(circle.radius));
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A, class B, class D, class C, class R>
 long double shape_distance(const Triangle<A, B, D>& triangle, const Circle<C, R>& circle) {
     return shape_distance(circle, triangle);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class C, class R, class P, class S>
 long double shape_distance(const Circle<C, R>& circle, const Square<P, S>& square) {
     return shape_distance(circle, to_rectangle(square));
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class P, class S, class C, class R>
 long double shape_distance(const Square<P, S>& square, const Circle<C, R>& circle) {
     return shape_distance(circle, square);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A, class B, class C, class D>
 long double shape_distance(const Rectangle<A, B>& first, const Rectangle<C, D>& second) {
     if (intersects(first, second)) return 0;
@@ -5346,41 +8823,129 @@ long double shape_distance(const Rectangle<A, B>& first, const Rectangle<C, D>& 
     return hypot(dx, dy);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class P1, class S1, class P2, class S2>
 long double shape_distance(const Square<P1, S1>& first, const Square<P2, S2>& second) {
     return shape_distance(to_rectangle(first), to_rectangle(second));
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class P, class S, class A, class B>
 long double shape_distance(const Square<P, S>& square, const Rectangle<A, B>& rectangle) {
     return shape_distance(to_rectangle(square), rectangle);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A, class B, class P, class S>
 long double shape_distance(const Rectangle<A, B>& rectangle, const Square<P, S>& square) {
     return shape_distance(square, rectangle);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class P, class S, class Q>
 long double shape_distance(const Square<P, S>& square, const Polygon<Q>& polygon) {
     return shape_distance(to_polygon(square), polygon);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class Q, class P, class S>
 long double shape_distance(const Polygon<Q>& polygon, const Square<P, S>& square) {
     return shape_distance(square, polygon);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class P, class S, class A, class B>
 long double shape_distance(const Square<P, S>& square, const Segment<A, B>& segment) {
     return shape_distance(segment, to_polygon(square));
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A, class B, class P, class S>
 long double shape_distance(const Segment<A, B>& segment, const Square<P, S>& square) {
     return shape_distance(square, segment);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class P1, class P2>
 long double shape_distance(const Polygon<P1>& first, const Polygon<P2>& second) {
     if (intersects(first, second)) return 0;
@@ -5399,6 +8964,17 @@ long double shape_distance(const Polygon<P1>& first, const Polygon<P2>& second) 
     return result;
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A, class B, class P>
 long double shape_distance(const Segment<A, B>& segment, const Polygon<P>& polygon) {
     if (intersects(segment, polygon)) return 0;
@@ -5412,67 +8988,210 @@ long double shape_distance(const Segment<A, B>& segment, const Polygon<P>& polyg
     return result;
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class P, class A, class B>
 long double shape_distance(const Polygon<P>& polygon, const Segment<A, B>& segment) {
     return shape_distance(segment, polygon);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A, class B, class C, class D>
 long double shape_distance(const Segment<A, B>& segment, const Rectangle<C, D>& rectangle) {
     return shape_distance(segment, to_polygon(rectangle));
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class C, class D, class A, class B>
 long double shape_distance(const Rectangle<C, D>& rectangle, const Segment<A, B>& segment) {
     return shape_distance(segment, rectangle);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A, class B, class C, class D, class E>
 long double shape_distance(const Segment<A, B>& segment, const Triangle<C, D, E>& triangle) {
     return shape_distance(segment, to_polygon(triangle));
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class C, class D, class E, class A, class B>
 long double shape_distance(const Triangle<C, D, E>& triangle, const Segment<A, B>& segment) {
     return shape_distance(segment, triangle);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A, class B, class P>
 long double shape_distance(const Rectangle<A, B>& rectangle, const Polygon<P>& polygon) {
     return shape_distance(to_polygon(rectangle), polygon);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class P, class A, class B>
 long double shape_distance(const Polygon<P>& polygon, const Rectangle<A, B>& rectangle) {
     return shape_distance(rectangle, polygon);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A, class B, class C, class D, class E>
 long double shape_distance(const Triangle<A, B, C>& triangle, const Rectangle<D, E>& rectangle) {
     return shape_distance(to_polygon(triangle), to_polygon(rectangle));
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class D, class E, class A, class B, class C>
 long double shape_distance(const Rectangle<D, E>& rectangle, const Triangle<A, B, C>& triangle) {
     return shape_distance(triangle, rectangle);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A1, class B1, class C1, class A2, class B2, class C2>
 long double shape_distance(const Triangle<A1, B1, C1>& first,
                            const Triangle<A2, B2, C2>& second) {
     return shape_distance(to_polygon(first), to_polygon(second));
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class A, class B, class C, class P>
 long double shape_distance(const Triangle<A, B, C>& triangle, const Polygon<P>& polygon) {
     return shape_distance(to_polygon(triangle), polygon);
 }
 
+/// 対応する2つの2D図形の最短距離を求める。
+///
+/// 引数 `first / second`: 2Dの対応する図形。有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面を持つTriangle/Polygonは非退化。
+///
+/// 戻り値: ldの非負距離。面を持つ図形は塗りつぶしとして扱い、交差/内包なら0。空Polygonを含む対応形式は+infinity。交差をintersectsのtoleranceで判定する形式では、厳密に離れていても境界近傍を0とみなす場合があります。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、PolygonとCircle/固定頂点の面図形はO(N)。PolygonとSegmentは境界交点の列挙を経由するため最悪O(N²)。Polygon同士はO(NM)で辺対を走査。空/1点の多角形の処理も既存の包含・線分距離を使用します。
+///
+/// 呼び分け: Line同士/LineとSegment・Circle、Segment同士と対応する面図形、Circle同士とPolygon・Rectangle・Square・Triangle、面図形同士の宣言済み組合せ。引数反転の形式あり。LineとPolygon/Rectangle/Square/Triangle、Sphere/Cuboidの図形間距離、任意の3D形式はありません。
+///
+/// 例: `print_fixed(6,shape_distance(make_circle(0,0,1),make_circle(5,0,1)));`
 template <class P, class A, class B, class C>
 long double shape_distance(const Polygon<P>& polygon, const Triangle<A, B, C>& triangle) {
     return shape_distance(triangle, polygon);
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class C1, class R1, class C2, class R2>
 bool intersects(const Sphere<C1, R1>& first,
                 const Sphere<C2, R2>& second) {
@@ -5485,6 +9204,17 @@ bool intersects(const Sphere<C1, R1>& first,
     return distance <= r1 + r2 + eps;
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class C, class D>
 bool intersects(const Cuboid<A, B>& first, const Cuboid<C, D>& second) {
     using namespace ac_detail::geometry;
@@ -5509,6 +9239,17 @@ bool intersects(const Cuboid<A, B>& first, const Cuboid<C, D>& second) {
                    max(z_ld(second.corner1), z_ld(second.corner2))) + eps;
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class C, class R, class A, class B>
 bool intersects(const Sphere<C, R>& sphere, const Cuboid<A, B>& cuboid) {
     return point_shape_distance(sphere.center, cuboid)
@@ -5516,6 +9257,17 @@ bool intersects(const Sphere<C, R>& sphere, const Cuboid<A, B>& cuboid) {
          + ac_detail::geometry::tolerance(static_cast<long double>(sphere.radius));
 }
 
+/// 対応する2D・3D図形に共有部分があるか判定する。
+///
+/// 引数 `first / second`: 有限座標、円/球の半径・正方形の辺長は非負。多角形は境界の周回順の単純多角形。通常の面として扱う多角形/三角形は非退化。
+///
+/// 戻り値: bool。境界での接触・面/体積の内包もtrue。一致直線や同心の重なる円もtrueで、intersection_pointsの空判定とは異なります。空Polygonはfalse。
+///
+/// 注意: 入力を変更しません。固定形状はO(1)、多角形同士は頂点数N,MでO(NM)。多角形と直線/線分は境界交点の列挙を経由し最悪O(N²)。整数の直線/線分・長方形等には厳密分岐がありますが、円や球の交差等はldとtoleranceで判定します。
+///
+/// 呼び分け: Line/Segment/Circleと、Polygon・Rectangle・Square・Triangleの宣言済み組合せ。3DはSphere/Sphere、Cuboid/Cuboid、Sphere/Cuboid（反転可）。LineEquationはto_lineで変換して使います。型の名前だけで任意の組合せが呼べるわけではありません。
+///
+/// 例: `print(intersects(make_circle(0,0,3),make_segment(-1,0,1,0)));`
 template <class A, class B, class C, class R>
 bool intersects(const Cuboid<A, B>& cuboid, const Sphere<C, R>& sphere) {
     return intersects(sphere, cuboid);

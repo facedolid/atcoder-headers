@@ -10,7 +10,7 @@ namespace ac_detail::algorithm {
 
 template <class T>
 struct min_op {
-    /// @brief 2値の小さい方を返す。
+    /// 2値の小さい方を返す。
     constexpr T operator()(const T& a, const T& b) const {
         return std::min(a, b);
     }
@@ -110,12 +110,18 @@ Set set_from_counts(const Set& source, const set_count_map_t<Set>& counts) {
 }  // namespace ac_detail::algorithm
 
 // @acf fn set_union_of — (same set pair) -> Set / (range pair) -> set<T> / (bitset<N> pair) -> bitset<N> / (bitset<N>, integral range) -> set<T> — 集合の和集合
-/// @acf-doc @brief 同じ型のset系は同型・同じ多重度規則で返す。一般rangeは重複を除いたset、bitsetは同じ幅どうしで演算でき、rangeとの混在時は立ちbit位置を要素として扱う
-/// @acf-doc @code (same set container, same set container) -> Set
-/// @acf-doc @code (input_range, input_range) -> set<common_type_t<range_value_t<A>, range_value_t<B>>>
-/// @acf-doc @code (bitset<N>, bitset<N>) -> bitset<N>
-/// @acf-doc @code (bitset<N>, integral input_range) / (integral input_range, bitset<N>) -> set<common_type_t<...>>
-/// @acf-doc [function] set_union_of
+
+/// 集合の和集合を求める。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はmax(a個数,b個数)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_union_of(vi{1,2,2},vi{2,3}));`
 template <class Set>
 requires ac_detail::algorithm::is_set_container_v<Set>
 Set set_union_of(const Set& a, const Set& b) {
@@ -136,12 +142,18 @@ Set set_union_of(const Set& a, const Set& b) {
 }
 
 // @acf fn set_intersection_of — (same set pair) -> Set / (range pair) -> set<T> / (bitset<N> pair) -> bitset<N> / (bitset<N>, integral range) -> set<T> — 集合の積集合
-/// @acf-doc @brief 同じ型のset系は同型・同じ多重度規則で返す。一般rangeは重複を除いたset、bitsetは同じ幅どうしで演算でき、rangeとの混在時は立ちbit位置を要素として扱う
-/// @acf-doc @code (same set container, same set container) -> Set
-/// @acf-doc @code (input_range, input_range) -> set<common_type_t<range_value_t<A>, range_value_t<B>>>
-/// @acf-doc @code (bitset<N>, bitset<N>) -> bitset<N>
-/// @acf-doc @code (bitset<N>, integral input_range) / (integral input_range, bitset<N>) -> set<common_type_t<...>>
-/// @acf-doc [function] set_intersection_of
+
+/// 集合の積集合を求める。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はmin(a個数,b個数)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_intersection_of(vi{1,2,2},vi{2,3}));`
 template <class Set>
 requires ac_detail::algorithm::is_set_container_v<Set>
 Set set_intersection_of(const Set& a, const Set& b) {
@@ -167,12 +179,18 @@ Set set_intersection_of(const Set& a, const Set& b) {
 }
 
 // @acf fn set_difference_of — (same set pair) -> Set / (range pair) -> set<T> / (bitset<N> pair) -> bitset<N> / (bitset<N>, integral range) -> set<T> — 集合の差集合
-/// @acf-doc @brief `a \ b` を返す。同型set系は入力型を保ち、一般rangeは重複を除いた `set<common_type_t<...>>`、bitsetは同じ幅で返す
-/// @acf-doc @code (same set container, same set container) -> Set
-/// @acf-doc @code (input_range, input_range) -> set<common_type_t<range_value_t<A>, range_value_t<B>>>
-/// @acf-doc @code (bitset<N>, bitset<N>) -> bitset<N>
-/// @acf-doc @code (bitset<N>, integral input_range) / (integral input_range, bitset<N>) -> set<common_type_t<...>>
-/// @acf-doc [function] set_difference_of
+
+/// 第1集合から第2集合の要素を除く。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はmax(a個数-b個数,0)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_difference_of(vi{1,2,2},vi{2,3}));`
 template <class Set>
 requires ac_detail::algorithm::is_set_container_v<Set>
 Set set_difference_of(const Set& a, const Set& b) {
@@ -195,12 +213,18 @@ Set set_difference_of(const Set& a, const Set& b) {
 }
 
 // @acf fn set_symmetric_difference_of — (same set pair) -> Set / (range pair) -> set<T> / (bitset<N> pair) -> bitset<N> / (bitset<N>, integral range) -> set<T> — 集合の対称差
-/// @acf-doc @brief 一方だけにある要素を返す。同型set系は入力型を保ち、一般rangeは重複を除いた `set<common_type_t<...>>`、bitsetは同じ幅で返す
-/// @acf-doc @code (same set container, same set container) -> Set
-/// @acf-doc @code (input_range, input_range) -> set<common_type_t<range_value_t<A>, range_value_t<B>>>
-/// @acf-doc @code (bitset<N>, bitset<N>) -> bitset<N>
-/// @acf-doc @code (bitset<N>, integral input_range) / (integral input_range, bitset<N>) -> set<common_type_t<...>>
-/// @acf-doc [function] set_symmetric_difference_of
+
+/// 片方だけに含まれる要素の集合を求める。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はabs(a個数-b個数)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_symmetric_difference_of(vi{1,2,2},vi{2,3}));`
 template <class Set>
 requires ac_detail::algorithm::is_set_container_v<Set>
 Set set_symmetric_difference_of(const Set& a, const Set& b) {
@@ -223,12 +247,18 @@ Set set_symmetric_difference_of(const Set& a, const Set& b) {
 }
 
 // @acf fn set_is_subset — (set pair) / (range pair) / (bitset<N> pair) / (bitset<N>, integral range) -> bool — 集合の包含判定
-/// @acf-doc @brief `subset` が `superset` に含まれるか判定する。同型multiset系は多重度も比較し、一般rangeは重複を無視する
-/// @acf-doc @code (set container, set container) -> bool
-/// @acf-doc @code (input_range, input_range) -> bool
-/// @acf-doc @code (bitset<N>, bitset<N>) -> bool
-/// @acf-doc @code (bitset<N>, integral input_range) / (integral input_range, bitset<N>) -> bool
-/// @acf-doc [function] set_is_subset
+
+/// 第1集合が第2集合に含まれるか判定する。
+///
+/// 引数 `subset / superset`: 部分集合、全体集合の順。同型set、range、bitset、bitsetと整数rangeの混在。
+///
+/// 戻り値: bool。同じ多重集合型は個数も比較、一般rangeは重複を無視。空のsubsetはtrue。bitsetは立ちbitの位置を要素として扱います。
+///
+/// 注意: 入力を変更しません。同型setの比較/等価関係は双方で一致が必要。異種rangeは共通型の集合にして比較するため変換が値を保つこと。
+///
+/// 呼び分け: set_is_subsetは上の引数順で呼び出します。
+///
+/// 例: `print(set_is_subset(vi{1,1},vi{1,2}));`
 template <class Set>
 requires ac_detail::algorithm::is_set_container_v<Set>
 bool set_is_subset(const Set& subset, const Set& superset) {
@@ -247,6 +277,17 @@ bool set_is_subset(const Set& subset, const Set& superset) {
 }
 
 // General ranges use mathematical set semantics and return an ordered set.
+/// 集合の和集合を求める。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はmax(a個数,b個数)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_union_of(vi{1,2,2},vi{2,3}));`
 template <ranges::input_range A, ranges::input_range B>
 requires ranges::input_range<const A> && ranges::input_range<const B> &&
          (!ac_detail::algorithm::is_same_set_container_pair_v<A, B>)
@@ -257,6 +298,17 @@ auto set_union_of(const A& a, const B& b) {
     return result;
 }
 
+/// 集合の積集合を求める。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はmin(a個数,b個数)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_intersection_of(vi{1,2,2},vi{2,3}));`
 template <ranges::input_range A, ranges::input_range B>
 requires ranges::input_range<const A> && ranges::input_range<const B> &&
          (!ac_detail::algorithm::is_same_set_container_pair_v<A, B>)
@@ -270,6 +322,17 @@ auto set_intersection_of(const A& a, const B& b) {
     return result;
 }
 
+/// 第1集合から第2集合の要素を除く。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はmax(a個数-b個数,0)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_difference_of(vi{1,2,2},vi{2,3}));`
 template <ranges::input_range A, ranges::input_range B>
 requires ranges::input_range<const A> && ranges::input_range<const B> &&
          (!ac_detail::algorithm::is_same_set_container_pair_v<A, B>)
@@ -281,6 +344,17 @@ auto set_difference_of(const A& a, const B& b) {
     return result;
 }
 
+/// 片方だけに含まれる要素の集合を求める。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はabs(a個数-b個数)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_symmetric_difference_of(vi{1,2,2},vi{2,3}));`
 template <ranges::input_range A, ranges::input_range B>
 requires ranges::input_range<const A> && ranges::input_range<const B> &&
          (!ac_detail::algorithm::is_same_set_container_pair_v<A, B>)
@@ -296,6 +370,17 @@ auto set_symmetric_difference_of(const A& a, const B& b) {
     return result;
 }
 
+/// 第1集合が第2集合に含まれるか判定する。
+///
+/// 引数 `subset / superset`: 部分集合、全体集合の順。同型set、range、bitset、bitsetと整数rangeの混在。
+///
+/// 戻り値: bool。同じ多重集合型は個数も比較、一般rangeは重複を無視。空のsubsetはtrue。bitsetは立ちbitの位置を要素として扱います。
+///
+/// 注意: 入力を変更しません。同型setの比較/等価関係は双方で一致が必要。異種rangeは共通型の集合にして比較するため変換が値を保つこと。
+///
+/// 呼び分け: set_is_subsetは上の引数順で呼び出します。
+///
+/// 例: `print(set_is_subset(vi{1,1},vi{1,2}));`
 template <ranges::input_range A, ranges::input_range B>
 requires ranges::input_range<const A> && ranges::input_range<const B> &&
          (!ac_detail::algorithm::is_same_set_container_pair_v<A, B>)
@@ -310,20 +395,57 @@ bool set_is_subset(const A& subset, const B& superset) {
 
 // A finite complement needs its universe; bitset<N> uses all N positions by default.
 // @acf fn set_complement_of — (universe, subset) -> set<T> / same set container / (bitset<N>) -> bitset<N> / (bitset<N>, integral range) -> set<T> — 補集合
-/// @acf-doc @brief 同型set系は入力型を保ち、一般rangeはuniverseからsubsetを重複なしで除く。bitsetはN bit全体または明示したuniverse内で補集合を取り、整数rangeとも混在できる
-/// @acf-doc @code (universe range, subset range) -> set<common_type_t<...>> / same set container -> same set container / (bitset<N>) -> bitset<N> / (bitset<N>, integral range) / (integral range, bitset<N>) -> set<...>
-/// @acf-doc [function] set_complement_of
+
+/// 指定した全体集合に対する補集合を求める。
+///
+/// 引数 `universe / subset`: 全体集合、除く集合の順。
+///
+/// 引数 `values（1引数版）`: N個のbit位置を全体集合として反転する。
+///
+/// 戻り値: 2引数版はset_difference_of(universe,subset)と同じ型・多重度。1引数bitset版だけN bit全体を反転。subsetの全体集合外の値は影響しません。
+///
+/// 注意: 入力を変更せず結果を確保。一般range/同型setは差集合の制約と費用に従います。
+///
+/// 呼び分け: 有限の補集合にはuniverseを明示。bitsetと整数rangeを混ぜる場合は立ちbit位置が値になります。
+///
+/// 例: `print(set_complement_of(vi{0,1,2},vi{1,9}));`
 template <ranges::input_range Universe, ranges::input_range Subset>
 requires ranges::input_range<const Universe> && ranges::input_range<const Subset>
 auto set_complement_of(const Universe& universe, const Subset& subset) {
     return set_difference_of(universe, subset);
 }
 
+/// 指定した全体集合に対する補集合を求める。
+///
+/// 引数 `universe / subset`: 全体集合、除く集合の順。
+///
+/// 引数 `values（1引数版）`: N個のbit位置を全体集合として反転する。
+///
+/// 戻り値: 2引数版はset_difference_of(universe,subset)と同じ型・多重度。1引数bitset版だけN bit全体を反転。subsetの全体集合外の値は影響しません。
+///
+/// 注意: 入力を変更せず結果を確保。一般range/同型setは差集合の制約と費用に従います。
+///
+/// 呼び分け: 有限の補集合にはuniverseを明示。bitsetと整数rangeを混ぜる場合は立ちbit位置が値になります。
+///
+/// 例: `print(set_complement_of(vi{0,1,2},vi{1,9}));`
 template <size_t N>
 bitset<N> set_complement_of(const bitset<N>& values) {
     return ~values;
 }
 
+/// 指定した全体集合に対する補集合を求める。
+///
+/// 引数 `universe / subset`: 全体集合、除く集合の順。
+///
+/// 引数 `values（1引数版）`: N個のbit位置を全体集合として反転する。
+///
+/// 戻り値: 2引数版はset_difference_of(universe,subset)と同じ型・多重度。1引数bitset版だけN bit全体を反転。subsetの全体集合外の値は影響しません。
+///
+/// 注意: 入力を変更せず結果を確保。一般range/同型setは差集合の制約と費用に従います。
+///
+/// 呼び分け: 有限の補集合にはuniverseを明示。bitsetと整数rangeを混ぜる場合は立ちbit位置が値になります。
+///
+/// 例: `print(set_complement_of(vi{0,1,2},vi{1,9}));`
 template <size_t N>
 bitset<N> set_complement_of(const bitset<N>& universe,
                             const bitset<N>& subset) {
@@ -331,9 +453,16 @@ bitset<N> set_complement_of(const bitset<N>& universe,
 }
 
 // @acf fn set_cartesian_product_of — (range, range) / (bitset, range) / (range, bitset) -> set<pair<T,U>> — 直積集合
-/// @acf-doc @brief 2つのrangeから重複のない直積集合を作り、pairの辞書順で返す。bitsetは立っているbit位置の組としてrangeと混在できる
-/// @acf-doc @code (range, range) -> set<pair<range_value_t<A>, range_value_t<B>>> / (bitset<N>, range) -> set<pair<ll, range_value_t<R>>> / (range, bitset<N>) -> set<pair<range_value_t<R>, ll>>
-/// @acf-doc [function] set_cartesian_product_of
+
+/// 2集合の直積を重複のないpair集合として作る。
+///
+/// 引数 `a / b`: constで走査できるrangeまたはbitset。pairが辞書順で比較可能なこと。
+///
+/// 戻り値: `set<pair<X,Y>>`。一般rangeは要素の型を保持、bitsetとの混在では位置の型はll、bitset同士はsize_t。片方が空なら空。重複pairは1個。
+///
+/// 注意: 入力を変更せず組を挿入。重複を含む入力の組数分走査しsetへの挿入費用が掛かります。結果メモリは異なるpair数に比例。
+///
+/// 呼び分け: 順序付きpairで、第1入力と第2入力の順を保持します。
 template <ranges::input_range A, ranges::input_range B>
 requires ranges::input_range<const A> && ranges::input_range<const B>
 auto set_cartesian_product_of(const A& a, const B& b) {
@@ -345,6 +474,15 @@ auto set_cartesian_product_of(const A& a, const B& b) {
     return result;
 }
 
+/// 2集合の直積を重複のないpair集合として作る。
+///
+/// 引数 `a / b`: constで走査できるrangeまたはbitset。pairが辞書順で比較可能なこと。
+///
+/// 戻り値: `set<pair<X,Y>>`。一般rangeは要素の型を保持、bitsetとの混在では位置の型はll、bitset同士はsize_t。片方が空なら空。重複pairは1個。
+///
+/// 注意: 入力を変更せず組を挿入。重複を含む入力の組数分走査しsetへの挿入費用が掛かります。結果メモリは異なるpair数に比例。
+///
+/// 呼び分け: 順序付きpairで、第1入力と第2入力の順を保持します。
 template <size_t N, size_t M>
 set<pair<size_t, size_t>> set_cartesian_product_of(const bitset<N>& a,
                                                     const bitset<M>& b) {
@@ -357,111 +495,320 @@ set<pair<size_t, size_t>> set_cartesian_product_of(const bitset<N>& a,
     return result;
 }
 
+/// 集合の和集合を求める。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はmax(a個数,b個数)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_union_of(vi{1,2,2},vi{2,3}));`
 template <size_t N>
 bitset<N> set_union_of(const bitset<N>& a, const bitset<N>& b) {
     return a | b;
 }
 
+/// 集合の積集合を求める。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はmin(a個数,b個数)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_intersection_of(vi{1,2,2},vi{2,3}));`
 template <size_t N>
 bitset<N> set_intersection_of(const bitset<N>& a, const bitset<N>& b) {
     return a & b;
 }
 
+/// 第1集合から第2集合の要素を除く。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はmax(a個数-b個数,0)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_difference_of(vi{1,2,2},vi{2,3}));`
 template <size_t N>
 bitset<N> set_difference_of(const bitset<N>& a, const bitset<N>& b) {
     return a & ~b;
 }
 
+/// 片方だけに含まれる要素の集合を求める。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はabs(a個数-b個数)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_symmetric_difference_of(vi{1,2,2},vi{2,3}));`
 template <size_t N>
 bitset<N> set_symmetric_difference_of(const bitset<N>& a,
                                       const bitset<N>& b) {
     return a ^ b;
 }
 
+/// 第1集合が第2集合に含まれるか判定する。
+///
+/// 引数 `subset / superset`: 部分集合、全体集合の順。同型set、range、bitset、bitsetと整数rangeの混在。
+///
+/// 戻り値: bool。同じ多重集合型は個数も比較、一般rangeは重複を無視。空のsubsetはtrue。bitsetは立ちbitの位置を要素として扱います。
+///
+/// 注意: 入力を変更しません。同型setの比較/等価関係は双方で一致が必要。異種rangeは共通型の集合にして比較するため変換が値を保つこと。
+///
+/// 呼び分け: set_is_subsetは上の引数順で呼び出します。
+///
+/// 例: `print(set_is_subset(vi{1,1},vi{1,2}));`
 template <size_t N>
 bool set_is_subset(const bitset<N>& subset, const bitset<N>& superset) {
     return (subset & superset) == subset;
 }
 
 // A bitset is interpreted as the set of its zero-based bit positions when mixed with a range.
+/// 集合の和集合を求める。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はmax(a個数,b個数)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_union_of(vi{1,2,2},vi{2,3}));`
 template <size_t N, ranges::input_range R>
 requires ranges::input_range<const R> && is_integral_v<ranges::range_value_t<R>>
 auto set_union_of(const bitset<N>& a, const R& b) {
     return set_union_of(ac_detail::algorithm::bitset_indices(a), b);
 }
 
+/// 集合の和集合を求める。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はmax(a個数,b個数)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_union_of(vi{1,2,2},vi{2,3}));`
 template <ranges::input_range R, size_t N>
 requires ranges::input_range<const R> && is_integral_v<ranges::range_value_t<R>>
 auto set_union_of(const R& a, const bitset<N>& b) {
     return set_union_of(a, ac_detail::algorithm::bitset_indices(b));
 }
 
+/// 集合の積集合を求める。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はmin(a個数,b個数)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_intersection_of(vi{1,2,2},vi{2,3}));`
 template <size_t N, ranges::input_range R>
 requires ranges::input_range<const R> && is_integral_v<ranges::range_value_t<R>>
 auto set_intersection_of(const bitset<N>& a, const R& b) {
     return set_intersection_of(ac_detail::algorithm::bitset_indices(a), b);
 }
 
+/// 集合の積集合を求める。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はmin(a個数,b個数)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_intersection_of(vi{1,2,2},vi{2,3}));`
 template <ranges::input_range R, size_t N>
 requires ranges::input_range<const R> && is_integral_v<ranges::range_value_t<R>>
 auto set_intersection_of(const R& a, const bitset<N>& b) {
     return set_intersection_of(a, ac_detail::algorithm::bitset_indices(b));
 }
 
+/// 第1集合から第2集合の要素を除く。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はmax(a個数-b個数,0)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_difference_of(vi{1,2,2},vi{2,3}));`
 template <size_t N, ranges::input_range R>
 requires ranges::input_range<const R> && is_integral_v<ranges::range_value_t<R>>
 auto set_difference_of(const bitset<N>& a, const R& b) {
     return set_difference_of(ac_detail::algorithm::bitset_indices(a), b);
 }
 
+/// 第1集合から第2集合の要素を除く。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はmax(a個数-b個数,0)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_difference_of(vi{1,2,2},vi{2,3}));`
 template <ranges::input_range R, size_t N>
 requires ranges::input_range<const R> && is_integral_v<ranges::range_value_t<R>>
 auto set_difference_of(const R& a, const bitset<N>& b) {
     return set_difference_of(a, ac_detail::algorithm::bitset_indices(b));
 }
 
+/// 片方だけに含まれる要素の集合を求める。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はabs(a個数-b個数)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_symmetric_difference_of(vi{1,2,2},vi{2,3}));`
 template <size_t N, ranges::input_range R>
 requires ranges::input_range<const R> && is_integral_v<ranges::range_value_t<R>>
 auto set_symmetric_difference_of(const bitset<N>& a, const R& b) {
     return set_symmetric_difference_of(ac_detail::algorithm::bitset_indices(a), b);
 }
 
+/// 片方だけに含まれる要素の集合を求める。
+///
+/// 引数 `a / b`: 同じset型2つ、一般range2つ、同じ幅のbitset2つ、またはbitsetと整数range。
+///
+/// 戻り値: 同型set系は同じ型を返し、多重集合の各値の個数はabs(a個数-b個数)。一般rangeは重複を除く`set<common_type_t<...>>`。bitset同士は同幅bitset、混在は立ちbitの位置をllの値として集合化。
+///
+/// 注意: 入力を変更せず結果を確保。同型setは第1入力の比較器/hash/等価判定を保持し、双方の順序/等価関係が一致すること。一般rangeは共通型への変換が値を保つこと。
+///
+/// 呼び分け: 同じmultiset型は多重度を保持しますが、異種rangeの形式は多重度を捨てます。rangeにはconstで走査できるものを使います。比較・挿入/hash費用に応じた時間、結果と作業集合分のメモリ。
+///
+/// 例: `print(set_symmetric_difference_of(vi{1,2,2},vi{2,3}));`
 template <ranges::input_range R, size_t N>
 requires ranges::input_range<const R> && is_integral_v<ranges::range_value_t<R>>
 auto set_symmetric_difference_of(const R& a, const bitset<N>& b) {
     return set_symmetric_difference_of(a, ac_detail::algorithm::bitset_indices(b));
 }
 
+/// 第1集合が第2集合に含まれるか判定する。
+///
+/// 引数 `subset / superset`: 部分集合、全体集合の順。同型set、range、bitset、bitsetと整数rangeの混在。
+///
+/// 戻り値: bool。同じ多重集合型は個数も比較、一般rangeは重複を無視。空のsubsetはtrue。bitsetは立ちbitの位置を要素として扱います。
+///
+/// 注意: 入力を変更しません。同型setの比較/等価関係は双方で一致が必要。異種rangeは共通型の集合にして比較するため変換が値を保つこと。
+///
+/// 呼び分け: set_is_subsetは上の引数順で呼び出します。
+///
+/// 例: `print(set_is_subset(vi{1,1},vi{1,2}));`
 template <size_t N, ranges::input_range R>
 requires ranges::input_range<const R> && is_integral_v<ranges::range_value_t<R>>
 bool set_is_subset(const bitset<N>& subset, const R& superset) {
     return set_is_subset(ac_detail::algorithm::bitset_indices(subset), superset);
 }
 
+/// 第1集合が第2集合に含まれるか判定する。
+///
+/// 引数 `subset / superset`: 部分集合、全体集合の順。同型set、range、bitset、bitsetと整数rangeの混在。
+///
+/// 戻り値: bool。同じ多重集合型は個数も比較、一般rangeは重複を無視。空のsubsetはtrue。bitsetは立ちbitの位置を要素として扱います。
+///
+/// 注意: 入力を変更しません。同型setの比較/等価関係は双方で一致が必要。異種rangeは共通型の集合にして比較するため変換が値を保つこと。
+///
+/// 呼び分け: set_is_subsetは上の引数順で呼び出します。
+///
+/// 例: `print(set_is_subset(vi{1,1},vi{1,2}));`
 template <ranges::input_range R, size_t N>
 requires ranges::input_range<const R> && is_integral_v<ranges::range_value_t<R>>
 bool set_is_subset(const R& subset, const bitset<N>& superset) {
     return set_is_subset(subset, ac_detail::algorithm::bitset_indices(superset));
 }
 
+/// 指定した全体集合に対する補集合を求める。
+///
+/// 引数 `universe / subset`: 全体集合、除く集合の順。
+///
+/// 引数 `values（1引数版）`: N個のbit位置を全体集合として反転する。
+///
+/// 戻り値: 2引数版はset_difference_of(universe,subset)と同じ型・多重度。1引数bitset版だけN bit全体を反転。subsetの全体集合外の値は影響しません。
+///
+/// 注意: 入力を変更せず結果を確保。一般range/同型setは差集合の制約と費用に従います。
+///
+/// 呼び分け: 有限の補集合にはuniverseを明示。bitsetと整数rangeを混ぜる場合は立ちbit位置が値になります。
+///
+/// 例: `print(set_complement_of(vi{0,1,2},vi{1,9}));`
 template <size_t N, ranges::input_range R>
 requires ranges::input_range<const R> && is_integral_v<ranges::range_value_t<R>>
 auto set_complement_of(const bitset<N>& universe, const R& subset) {
     return set_difference_of(ac_detail::algorithm::bitset_indices(universe), subset);
 }
 
+/// 指定した全体集合に対する補集合を求める。
+///
+/// 引数 `universe / subset`: 全体集合、除く集合の順。
+///
+/// 引数 `values（1引数版）`: N個のbit位置を全体集合として反転する。
+///
+/// 戻り値: 2引数版はset_difference_of(universe,subset)と同じ型・多重度。1引数bitset版だけN bit全体を反転。subsetの全体集合外の値は影響しません。
+///
+/// 注意: 入力を変更せず結果を確保。一般range/同型setは差集合の制約と費用に従います。
+///
+/// 呼び分け: 有限の補集合にはuniverseを明示。bitsetと整数rangeを混ぜる場合は立ちbit位置が値になります。
+///
+/// 例: `print(set_complement_of(vi{0,1,2},vi{1,9}));`
 template <ranges::input_range R, size_t N>
 requires ranges::input_range<const R> && is_integral_v<ranges::range_value_t<R>>
 auto set_complement_of(const R& universe, const bitset<N>& subset) {
     return set_difference_of(universe, ac_detail::algorithm::bitset_indices(subset));
 }
 
+/// 2集合の直積を重複のないpair集合として作る。
+///
+/// 引数 `a / b`: constで走査できるrangeまたはbitset。pairが辞書順で比較可能なこと。
+///
+/// 戻り値: `set<pair<X,Y>>`。一般rangeは要素の型を保持、bitsetとの混在では位置の型はll、bitset同士はsize_t。片方が空なら空。重複pairは1個。
+///
+/// 注意: 入力を変更せず組を挿入。重複を含む入力の組数分走査しsetへの挿入費用が掛かります。結果メモリは異なるpair数に比例。
+///
+/// 呼び分け: 順序付きpairで、第1入力と第2入力の順を保持します。
 template <size_t N, ranges::input_range R>
 requires ranges::input_range<const R>
 auto set_cartesian_product_of(const bitset<N>& a, const R& b) {
     return set_cartesian_product_of(ac_detail::algorithm::bitset_indices(a), b);
 }
 
+/// 2集合の直積を重複のないpair集合として作る。
+///
+/// 引数 `a / b`: constで走査できるrangeまたはbitset。pairが辞書順で比較可能なこと。
+///
+/// 戻り値: `set<pair<X,Y>>`。一般rangeは要素の型を保持、bitsetとの混在では位置の型はll、bitset同士はsize_t。片方が空なら空。重複pairは1個。
+///
+/// 注意: 入力を変更せず組を挿入。重複を含む入力の組数分走査しsetへの挿入費用が掛かります。結果メモリは異なるpair数に比例。
+///
+/// 呼び分け: 順序付きpairで、第1入力と第2入力の順を保持します。
 template <ranges::input_range R, size_t N>
 requires ranges::input_range<const R>
 auto set_cartesian_product_of(const R& a, const bitset<N>& b) {
@@ -469,9 +816,18 @@ auto set_cartesian_product_of(const R& a, const bitset<N>& b) {
 }
 
 // @acf fn each_pair — (int n, F function) -> void — 0 <= i < j < n の各ペアを走査
-/// @acf-doc @brief 添字の組を i 昇順、次に j 昇順で1回ずつ処理する。計算量 O(n^2)、追加メモリ O(1)
-/// @acf-doc @code each_pair(int n, F function) -> void
-/// @acf-doc [function] each_pair
+
+/// 添字の組i<jを順にcallbackで処理する。
+///
+/// 引数 `n`: 非負の要素数。添字は0..n-1。
+///
+/// 引数 `function`: function(i,j)として呼ぶcallable。
+///
+/// 戻り値: void。i昇順、同じiではj昇順。n=0は呼び出しなし。
+///
+/// 注意: callbackを実行。時間O(n^2)（callback除く）、追加メモリO(1)。
+///
+/// 呼び分け: each_pairは上の引数順で呼び出します。
 template <class F>
 constexpr void each_pair(int n, F&& function) {
     for (int i = 0; i < n; ++i)
@@ -479,9 +835,18 @@ constexpr void each_pair(int n, F&& function) {
 }
 
 // @acf fn each_pair_eq — (int n, F function) -> void — 0 <= i <= j < n の各ペアを走査
-/// @acf-doc @brief 対角要素を含む上三角のペアを i 昇順、次に j 昇順で処理する。計算量 O(n^2)、追加メモリ O(1)
-/// @acf-doc @code each_pair_eq(int n, F function) -> void
-/// @acf-doc [function] each_pair_eq
+
+/// 添字の組i<=jを順にcallbackで処理する。
+///
+/// 引数 `n`: 非負の要素数。添字は0..n-1。
+///
+/// 引数 `function`: function(i,j)として呼ぶcallable。
+///
+/// 戻り値: void。i昇順、同じiではj昇順。n=0は呼び出しなし。
+///
+/// 注意: callbackを実行。時間O(n^2)（callback除く）、追加メモリO(1)。
+///
+/// 呼び分け: each_pair_eqは上の引数順で呼び出します。
 template <class F>
 constexpr void each_pair_eq(int n, F&& function) {
     for (int i = 0; i < n; ++i)
@@ -489,9 +854,18 @@ constexpr void each_pair_eq(int n, F&& function) {
 }
 
 // @acf fn each_ordered_pair — (int n, F function) -> void — 相異なる順序付き添字ペアを走査
-/// @acf-doc @brief 0 <= i,j < n かつ i != j のすべてを処理する。計算量 O(n^2)、追加メモリ O(1)
-/// @acf-doc @code each_ordered_pair(int n, F function) -> void
-/// @acf-doc [function] each_ordered_pair
+
+/// 添字の組i!=jを順にcallbackで処理する。
+///
+/// 引数 `n`: 非負の要素数。添字は0..n-1。
+///
+/// 引数 `function`: function(i,j)として呼ぶcallable。
+///
+/// 戻り値: void。i昇順、同じiではj昇順。n=0は呼び出しなし。
+///
+/// 注意: callbackを実行。時間O(n^2)（callback除く）、追加メモリO(1)。
+///
+/// 呼び分け: each_ordered_pairは上の引数順で呼び出します。
 template <class F>
 constexpr void each_ordered_pair(int n, F&& function) {
     for (int i = 0; i < n; ++i)
@@ -500,9 +874,20 @@ constexpr void each_ordered_pair(int n, F&& function) {
 }
 
 // @acf fn all_pairs — (int n, Predicate predicate) -> bool — すべての i < j が条件を満たすか判定
-/// @acf-doc @brief 最初の偽で終了する。ペアがない n <= 1 は true。計算量 O(n^2)、追加メモリ O(1)
-/// @acf-doc @code all_pairs(int n, Predicate predicate) -> bool
-/// @acf-doc [function] all_pairs
+
+/// 0<=i<j<nの組について条件が全て真か判定する。
+///
+/// 引数 `n`: 非負の要素数。
+///
+/// 引数 `predicate`: predicate(i,j)で真偽を返すcallable。
+///
+/// 戻り値: bool。n<=1は組がなくtrue。
+///
+/// 注意: i,j昇順で最初の偽で終了。時間O(n^2)、追加メモリO(1)、callback副作用は別。
+///
+/// 呼び分け: all_pairsは上の引数順で呼び出します。
+///
+/// 例: `print(all_pairs(3,[](int i,int j){return j-i==2;}));`
 template <class Predicate>
 constexpr bool all_pairs(int n, Predicate&& predicate) {
     for (int i = 0; i < n; ++i)
@@ -512,9 +897,20 @@ constexpr bool all_pairs(int n, Predicate&& predicate) {
 }
 
 // @acf fn any_pair — (int n, Predicate predicate) -> bool — 条件を満たす i < j があるか判定
-/// @acf-doc @brief 最初の真で終了する。ペアがない n <= 1 は false。計算量 O(n^2)、追加メモリ O(1)
-/// @acf-doc @code any_pair(int n, Predicate predicate) -> bool
-/// @acf-doc [function] any_pair
+
+/// 0<=i<j<nの組について条件が少なくとも1つ真か判定する。
+///
+/// 引数 `n`: 非負の要素数。
+///
+/// 引数 `predicate`: predicate(i,j)で真偽を返すcallable。
+///
+/// 戻り値: bool。n<=1は組がなくfalse。
+///
+/// 注意: i,j昇順で最初の真で終了。時間O(n^2)、追加メモリO(1)、callback副作用は別。
+///
+/// 呼び分け: any_pairは上の引数順で呼び出します。
+///
+/// 例: `print(any_pair(3,[](int i,int j){return j-i==2;}));`
 template <class Predicate>
 constexpr bool any_pair(int n, Predicate&& predicate) {
     for (int i = 0; i < n; ++i)
@@ -524,9 +920,22 @@ constexpr bool any_pair(int n, Predicate&& predicate) {
 }
 
 // @acf fn map_char — (char c, string_view from, string_view to) -> char — 対応表に従い1文字を変換
-/// @acf-doc @brief from の最初の c の位置に対応する to の文字を返す。長さ不一致または c 不在は invalid_argument。割り当て・文字列コピーなし、計算量 O(from.size())
-/// @acf-doc @code map_char(char c, string_view from, string_view to) -> char
-/// @acf-doc [function] map_char
+
+/// 対応表の最初の一致位置を使い、1文字を別の文字へ変換する。
+///
+/// 引数 `c`: 変換する1バイト。
+///
+/// 引数 `from`: 変換元の文字列。
+///
+/// 引数 `to`: fromと同じ長さの変換先。
+///
+/// 戻り値: char。fromの最初のcに対応するtoの文字。長さ不一致・c不在はinvalid_argument。
+///
+/// 注意: 入力を変更せず探索。時間O(from長)、文字列コピーなし。
+///
+/// 呼び分け: map_charは上の引数順で呼び出します。
+///
+/// 例: `print(map_char('a',"abc","XYZ"));`
 constexpr char map_char(char c, std::string_view from, std::string_view to) {
     if (from.size() != to.size())
         throw invalid_argument("map_char: from and to must have the same size");
@@ -537,9 +946,18 @@ constexpr char map_char(char c, std::string_view from, std::string_view to) {
 }
 
 // @acf fn gcd_range — (range) -> ull — 整数列全体の最大公約数を非負で畳み込む
-/// @acf-doc @brief 整数列を左からGCDへ畳み込む。負数は絶対値、0は単位元。空列は0
-/// @acf-doc @code (range) -> ull
-/// @acf-doc [function] gcd_range
+
+/// 整数列の絶対値の最大公約数を求める。
+///
+/// 引数 `values`: bool以外、64bit以下の整数の列。
+///
+/// 戻り値: ull。空列は0、負数は絶対値として扱い、符号付き最小値にも対応。
+///
+/// 注意: 入力を変更せず左からgcdへ畳み込み。列の長さ×gcd計算費用、追加メモリO(1)。
+///
+/// 呼び分け: gcd_rangeは上の引数順で呼び出します。
+///
+/// 例: `print(gcd_range(vll{-12,18}));`
 template <class R>
 ull gcd_range(const R& values) {
     using T = ac_detail::algorithm::range_value_t<R>;
@@ -564,9 +982,18 @@ ull gcd_range(const R& values) {
 }
 
 // @acf fn lcm_bounded_range — (range, ll limit) -> optional<ll> — 正整数列のLCMを上限内で安全に畳み込む
-/// @acf-doc @brief 正の整数列のLCMを左から畳み込む。途中または最終値が `limit` を超えると `nullopt`。空列のLCMは1
-/// @acf-doc @code (range, ll limit) -> optional<ll>
-/// @acf-doc [function] lcm_bounded_range
+
+/// 正整数列の最小公倍数を上限内で求める。
+///
+/// 引数 `values`: 整数列。要素数・添字はintに収まり、各関数の数値制約を満たすこと。
+///
+/// 引数 `limit`: 非負の上限。
+///
+/// 戻り値: `optional<ll>`。上限以下ならLCM、超過はnullopt。空列は1（limit=0ならnullopt）。0/負要素・負limitはinvalid_argument、要素がllに収まらなければoverflow_error。
+///
+/// 注意: 入力を変更せず安全なLCMを左から計算。超過時点で終了するため後続の不正要素を検査するとは限りません。
+///
+/// 呼び分け: lcm_bounded_rangeは上の引数順で呼び出します。
 template <class R>
 optional<ll> lcm_bounded_range(const R& values, ll limit) {
     using T = ac_detail::algorithm::range_value_t<R>;
@@ -608,9 +1035,20 @@ optional<ll> lcm_bounded_range(const R& values, ll limit) {
 }
 
 // @acf fn inclusion_exclusion_sum — (int n, callback term(mask) -> T) -> T — 非空部分集合の包除符号付き和
-/// @acf-doc @brief `mask=1..(1<<n)-1` の項を、立っているビット数が奇数なら足し、偶数なら引く。交差部分の値はコールバックで計算する
-/// @acf-doc @code (int n, F term) -> T
-/// @acf-doc [function] inclusion_exclusion_sum
+
+/// 非空部分集合の値を包除原理の符号で合計する。
+///
+/// 引数 `n`: 条件の数0..20。
+///
+/// 引数 `term`: 非空maskを受け取りTへ変換可能な項を返すcallable。
+///
+/// 戻り値: T。奇数個のbitの項を加算、偶数個は減算。n=0はT{}でcallbackなし。範囲外nはinvalid_argument。
+///
+/// 注意: mask=1..2^n-1順にcallbackを実行。時間O(2^n)と項の計算費用、メモリO(1)。Tの加減算の中間値が表現できること。
+///
+/// 呼び分け: 戻り値型Tはテンプレート引数で明示します。
+///
+/// 例: `print(inclusion_exclusion_sum<ll>(2,[](int mask){return mask==3?1:3;}));`
 template <class T, class F>
 T inclusion_exclusion_sum(int n, F&& term) {
     if (n < 0 || n > 20) {
@@ -630,9 +1068,16 @@ T inclusion_exclusion_sum(int n, F&& term) {
 }
 
 // @acf fn subset_zeta_transform — (vector<T>& values) -> bool — 部分集合の包含和変換をin-placeで行う
-/// @acf-doc @brief `values[mask]` を `sum_{sub subseteq mask} values[sub]` へ上書きする部分集合ゼータ変換。長さは正の2冪、計算量は O(K 2^K)。常に true
-/// @acf-doc @code (vector<T>& values) -> bool
-/// @acf-doc [function] subset_zeta_transform
+
+/// 部分集合の包含和へ変換する。
+///
+/// 引数 `values`: 長さが正の2冪2^Kの配列。加算が成立し中間値を表せること。
+///
+/// 戻り値: boolで常にtrue。値をin-placeで上書き。長さ0/非2冪はinvalid_argument。長さ1はそのまま。
+///
+/// 注意: 入力を変更。時間O(K*2^K)、追加メモリO(1)。
+///
+/// 呼び分け: zetaとmobiusは同じ方向の対で逆操作になります。
 template <class T>
 bool subset_zeta_transform(vector<T>& values) {
     ac_detail::algorithm::require_subset_transform_size(
@@ -646,9 +1091,16 @@ bool subset_zeta_transform(vector<T>& values) {
 }
 
 // @acf fn subset_mobius_transform — (vector<T>& values) -> bool — 部分集合のメビウス逆変換をin-placeで行う
-/// @acf-doc @brief 部分集合ゼータ変換の逆変換。`values[mask]` を `sum_{sub subseteq mask} (-1)^(|mask|-|sub|) values[sub]` へ戻す。長さは正の2冪、計算量は O(K 2^K)。常に true
-/// @acf-doc @code (vector<T>& values) -> bool
-/// @acf-doc [function] subset_mobius_transform
+
+/// 部分集合の包含和を逆変換する。
+///
+/// 引数 `values`: 長さが正の2冪2^Kの配列。減算が成立し中間値を表せること。
+///
+/// 戻り値: boolで常にtrue。値をin-placeで上書き。長さ0/非2冪はinvalid_argument。長さ1はそのまま。
+///
+/// 注意: 入力を変更。時間O(K*2^K)、追加メモリO(1)。
+///
+/// 呼び分け: zetaとmobiusは同じ方向の対で逆操作になります。
 template <class T>
 bool subset_mobius_transform(vector<T>& values) {
     ac_detail::algorithm::require_subset_transform_size(
@@ -662,9 +1114,16 @@ bool subset_mobius_transform(vector<T>& values) {
 }
 
 // @acf fn superset_zeta_transform — (vector<T>& values) -> bool — 上位集合の包含和変換をin-placeで行う
-/// @acf-doc @brief `values[mask]` を `sum_{super supseteq mask} values[super]` へ上書きする上位集合ゼータ変換。長さは正の2冪、計算量は O(K 2^K)。常に true
-/// @acf-doc @code (vector<T>& values) -> bool
-/// @acf-doc [function] superset_zeta_transform
+
+/// 上位集合の包含和へ変換する。
+///
+/// 引数 `values`: 長さが正の2冪2^Kの配列。加算が成立し中間値を表せること。
+///
+/// 戻り値: boolで常にtrue。値をin-placeで上書き。長さ0/非2冪はinvalid_argument。長さ1はそのまま。
+///
+/// 注意: 入力を変更。時間O(K*2^K)、追加メモリO(1)。
+///
+/// 呼び分け: zetaとmobiusは同じ方向の対で逆操作になります。
 template <class T>
 bool superset_zeta_transform(vector<T>& values) {
     ac_detail::algorithm::require_subset_transform_size(
@@ -678,9 +1137,16 @@ bool superset_zeta_transform(vector<T>& values) {
 }
 
 // @acf fn superset_mobius_transform — (vector<T>& values) -> bool — 上位集合のメビウス逆変換をin-placeで行う
-/// @acf-doc @brief 上位集合ゼータ変換の逆変換。`values[mask]` を `sum_{super supseteq mask} (-1)^(|super|-|mask|) values[super]` へ戻す。長さは正の2冪、計算量は O(K 2^K)。常に true
-/// @acf-doc @code (vector<T>& values) -> bool
-/// @acf-doc [function] superset_mobius_transform
+
+/// 上位集合の包含和を逆変換する。
+///
+/// 引数 `values`: 長さが正の2冪2^Kの配列。減算が成立し中間値を表せること。
+///
+/// 戻り値: boolで常にtrue。値をin-placeで上書き。長さ0/非2冪はinvalid_argument。長さ1はそのまま。
+///
+/// 注意: 入力を変更。時間O(K*2^K)、追加メモリO(1)。
+///
+/// 呼び分け: zetaとmobiusは同じ方向の対で逆操作になります。
 template <class T>
 bool superset_mobius_transform(vector<T>& values) {
     ac_detail::algorithm::require_subset_transform_size(
@@ -694,8 +1160,20 @@ bool superset_mobius_transform(vector<T>& values) {
 }
 
 // @acf fn count_multiples_union — (ll limit, range divisors) -> ll — いずれかの正の約数で割り切れる数を包除で数える
-/// @acf-doc @brief `1..limit` のうち、`divisors` の少なくとも1つで割り切れる整数の個数を包除原理で数える。重複・冗長な約数を整理し、異なる約数は20個以下とする
-/// @acf-doc [function] count_multiples_union
+
+/// 1..limitで、指定した少なくとも1つの数で割り切れる整数を数える。
+///
+/// 引数 `limit`: 数える上限。0以下は直ちに0。
+///
+/// 引数 `divisors`: 正の整数列。上限超過・重複・他の約数の倍数を除いた後に20個以下。値はi128で扱えること。
+///
+/// 戻り値: llの個数。空列は0。limit>0で非正の約数または整理後21個以上はinvalid_argument。limit<=0は約数を検査せず0。
+///
+/// 注意: 入力を変更せず約数を整理し、安全なLCMを包除項に使用。m個の残った約数についてO(m*2^m)、元列のsortと冗長性検査は別。
+///
+/// 呼び分け: count_multiples_unionは上の引数順で呼び出します。
+///
+/// 例: `print(count_multiples_union(10,vi{2,3,4,2}));`
 template <class R>
 ll count_multiples_union(ll limit, const R& divisors) {
     using T = ac_detail::algorithm::range_value_t<R>;
@@ -751,9 +1229,16 @@ ll count_multiples_union(ll limit, const R& divisors) {
 }
 
 // @acf fn merge_intervals — (const pair range) -> vector<pair<T,T>> — 重なる区間を左端順に統合
-/// @acf-doc @brief 同じ端点型のpair列をコピー・ソートし、重なる区間と同端点で接する区間を統合する。既定は閉 `[l,r]`、`<false>` は半開 `[l,r)`。入力は変更しない。整数隣接は統合しない。O(M log M)、追加メモリ O(M)
-/// @acf-doc @code template <bool Closed=true, class R> auto merge_intervals(const R& intervals)
-/// @acf-doc [function] merge_intervals
+
+/// 端点のpair列をコピーしてソートし、重なる区間を統合します。
+///
+/// 引数 `intervals`: 同じ端点型`T`の`pair`を持つ、constで走査できるrange。`vector<pair<T,T>>`、`set<pair<T,T>>`、`map<T,T>`など。mapはキーが左端、値が右端で、同じ左端の区間を複数保持できません。各区間は`l <= r`。浮動小数点数にNaNを含めません。
+///
+/// 戻り値: 左端順の`vector<pair<T,T>>`。mapのconstキーもコピー先では通常の`T`になります。空入力には空vectorを返します。`l > r`なら`invalid_argument`を送出します。
+///
+/// 注意: 入力を変更しません。M区間の比較回数はO(M log M)、追加メモリはO(M)です。端点への加減算はしないため、整数型の最小値・最大値も扱えます。
+///
+/// 呼び分け: `merge_intervals(intervals)`は閉区間`[l,r]`で、`[a,a]`も残します。`merge_intervals<false>(intervals)`は半開区間`[l,r)`で、`[a,a)`を除きます。どちらも同じ端点で接する区間を統合します。整数隣接の`[1,2]`と`[3,4]`は統合しません。X→区間一覧のmapは、Xごとに中の区間一覧を渡します。
 template <bool Closed = true, class R>
 requires(ranges::input_range<const R> && pair_like<ranges::range_value_t<const R>>)
 auto merge_intervals(const R& intervals) {
@@ -782,70 +1267,86 @@ auto merge_intervals(const R& intervals) {
 }
 
 // @acf fn CoordinateCompressor — (vector<T>) -> CoordinateCompressor<T> — 座標圧縮の値と順位を保持
-/// @acf-doc @brief 座標圧縮後の値一覧と、元の値からの順位を同時に扱う
-/// @acf-doc [function] CoordinateCompressor
+
+/// 大小関係を保って値を 0 からの順位へ置き換えるために、異なる値の昇順一覧を保持する型です。大きい座標を配列添字へ圧縮し、元の値にも戻したいときに使います。
+///
+/// 引数 `values`: 登録する値。大小比較と等値比較ができる T。値渡しで受け取り、内部でソート・重複削除する。空配列も可。
+///
+/// 戻り値: 構築される`CoordinateCompressor<T>`。`index(value)`は登録値の0始まりの順位。`lower_bound(value)`は未登録値にも使え、末尾なら`size()`。`operator[](i)`は元の値への`const T&`、`values()`は一覧への`const vector<T>&`。
+///
+/// 注意: 元の lvalue 配列は変更しません。std::move で渡した配列は通常の move 後の状態になります。index は登録済み値のみ、operator[] は 0<=i<size() のみで使います。空の構築は size()==0、lower_bound は0です。
+///
+/// 呼び分け: `CoordinateCompressor<T>`() は空、`CoordinateCompressor<T>`(values) は値一覧から構築。コンストラクタは値を返す関数呼び出しとは区別し、構築後のオブジェクトで index / values を使います。
 template <class T>
 class CoordinateCompressor {
     vector<T> values_;
 
 public:
-    /// @brief 空の座標圧縮器を作る。
+    /// 空の座標圧縮器を作る。
     CoordinateCompressor() = default;
 
-    /// @brief 値をソート・重複削除して座標圧縮器を構築する。
+    /// 値をソート・重複削除して座標圧縮器を構築する。
     explicit CoordinateCompressor(vector<T> values) : values_(std::move(values)) {
         sort(ALL(values_));
         values_.erase(unique(ALL(values_)), values_.end());
     }
 
-    /// @brief 圧縮後の異なる値の個数を返す。
+    /// 圧縮後の異なる値の個数を返す。
     int size() const { return static_cast<int>(values_.size()); }
 
-    /// @brief `value` 以上の最初の圧縮順位を返す。値が存在しなくてもよい。
+    /// `value` 以上の最初の圧縮順位を返す。値が存在しなくてもよい。
     int lower_bound(const T& value) const {
         return static_cast<int>(std::lower_bound(ALL(values_), value) -
                                 values_.begin());
     }
 
-    /// @brief 登録済みの `value` の圧縮順位を返す。
+    /// 登録済みの `value` の圧縮順位を返す。
     int index(const T& value) const {
         auto it = std::lower_bound(ALL(values_), value);
         assert(it != values_.end() && *it == value);
         return static_cast<int>(it - values_.begin());
     }
 
-    /// @brief 圧縮順位 `index` に対応する元の値を返す。
+    /// 圧縮順位 `index` に対応する元の値を返す。
     const T& operator[](int index) const {
         assert(0 <= index && index < size());
         return values_[index];
     }
 
-    /// @brief 圧縮後の値を昇順で保持するvectorを返す。
+    /// 圧縮後の値を昇順で保持するvectorを返す。
     const vector<T>& values() const { return values_; }
 };
 
 // @acf fn Imos — (int n) -> Imos<T> — 1次元の半開区間加算をまとめて反映
-/// @acf-doc @brief `[l,r)` への加算を O(1) で登録し、`build()` で全要素を O(N) に復元
-/// @acf-doc [function] Imos
+
+/// 半開区間への加算をまとめて登録し、配列へ復元する。
+///
+/// 引数 `n`: 非負の要素数。n+1がintに収まること。
+///
+/// 戻り値: `Imos<T>`。add(l,r,x)で0<=l<=r<=nの区間加算、build()は長さnの結果。初期は0、空区間は変化なし。T{}が加算単位元で加減算が必要。
+///
+/// 注意: addは内部差分を変更しO(1)、buildは差分を変更せずO(n)。中間値もTに収まること。サイズと範囲はassert。
+///
+/// 呼び分け: `Imos<T>`(n)または既定構築で0要素。build後も追加可能で再buildに反映。
 template <class T>
 class Imos {
     int n_ = 0;
     vector<T> difference_;
 
 public:
-    /// @brief 要素数0の差分配列を作る。
+    /// 要素数0の差分配列を作る。
     Imos() = default;
 
-    /// @brief 要素数 `n` の1次元いもす法を構築する。
+    /// 要素数 `n` の1次元いもす法を構築する。
     explicit Imos(int n)
         : n_(n), difference_(n >= 0 ? n + 1 : 0, T{}) {
         assert(n >= 0);
     }
 
-    /// @brief 対象配列の要素数を返す。
+    /// 対象配列の要素数を返す。
     int size() const { return n_; }
 
-    /// @brief 半開区間 `[l,r)` に `value` を加算登録する。
+    /// 半開区間 `[l,r)` に `value` を加算登録する。
     void add(int l, int r, const T& value) {
         assert(0 <= l && l <= r && r <= n_);
         if (l == r) return;
@@ -853,7 +1354,7 @@ public:
         difference_[r] -= value;
     }
 
-    /// @brief 登録した全区間を反映した配列を返す。
+    /// 登録した全区間を反映した配列を返す。
     vector<T> build() const {
         vector<T> result(n_);
         T current{};
@@ -866,18 +1367,26 @@ public:
 };
 
 // @acf fn Imos2D — (int h, int w) -> Imos2D<T> — 2次元の半開矩形加算をまとめて反映
-/// @acf-doc @brief `[r1,r2)×[c1,c2)` への加算を登録し、`build()` でグリッドへ復元
-/// @acf-doc [function] Imos2D
+
+/// 半開矩形への加算をまとめて登録し、グリッドへ復元する。
+///
+/// 引数 `h / w`: 非負の高さ/幅。h+1,w+1がintに収まること。
+///
+/// 戻り値: `Imos2D<T>`。add(r1,c1,r2,c2,x)は行[r1,r2)、列[c1,c2)への加算。buildはh×wの配列。空矩形は変化なし。
+///
+/// 注意: addは内部差分を変更しO(1)、buildは差分を変更せずO((h+1)(w+1))、配列を確保。Tの加減算と中間値を表せること。範囲はassert。
+///
+/// 呼び分け: 左上(r1,c1)、右下の除外端(r2,c2)の順。既定構築は高さ・幅0。空矩形の追加は何も変更しません。
 template <class T>
 class Imos2D {
     int h_ = 0, w_ = 0;
     vector<vector<T>> difference_;
 
 public:
-    /// @brief 高さ・幅0の差分グリッドを作る。
+    /// 高さ・幅0の差分グリッドを作る。
     Imos2D() = default;
 
-    /// @brief `h`×`w` の2次元いもす法を構築する。
+    /// `h`×`w` の2次元いもす法を構築する。
     Imos2D(int h, int w)
         : h_(h),
           w_(w),
@@ -886,10 +1395,10 @@ public:
         assert(h >= 0 && w >= 0);
     }
 
-    /// @brief `(高さ, 幅)` を返す。
+    /// `(高さ, 幅)` を返す。
     pair<int, int> size() const { return {h_, w_}; }
 
-    /// @brief 半開矩形 `[r1,r2)×[c1,c2)` に `value` を加算登録する。
+    /// 半開矩形 `[r1,r2)×[c1,c2)` に `value` を加算登録する。
     void add(int r1, int c1, int r2, int c2, const T& value) {
         assert(0 <= r1 && r1 <= r2 && r2 <= h_);
         assert(0 <= c1 && c1 <= c2 && c2 <= w_);
@@ -900,7 +1409,7 @@ public:
         difference_[r2][c2] += value;
     }
 
-    /// @brief 登録した全矩形を反映した2次元配列を返す。
+    /// 登録した全矩形を反映した2次元配列を返す。
     vector<vector<T>> build() const {
         auto result = difference_;
         for (int r = 0; r < h_; ++r)
@@ -916,40 +1425,48 @@ public:
 };
 
 // @acf fn Fenwick — (int n) -> Fenwick<T> — 0-indexの一点加算・半開区間和
-/// @acf-doc @brief 0-indexで `add(i,x)`、`sum(l,r)`（`[l,r)`）を O(log N) で処理する。nは0以上でINT_MAX未満。n=INT_MAXは確保前にlength_error。
-/// @acf-doc [function] Fenwick
+
+/// 更新される配列の区間和を保持する型です。add(i,x) で一点に加算し、sum(l,r) で [l,r) の総和を求めます。頻度表や更新のある累積和に使います。
+///
+/// 引数 `n / values`: 初期要素数 n>=0（全要素 T{}）、または初期配列。T は加算・減算を扱える型。
+///
+/// 戻り値: 構築される`Fenwick<T>`。`sum(right)`は`[0,right)`の和、`sum(left,right)`は`[left,right)`の和を`T`型で返す。空区間は`T{}`。`get(i)`は現在値。`lower_bound_prefix(target)`は累積値が`target`以上になる最初の要素の添字で、該当なしは`size()`、`target<=T{}`は0。
+///
+/// 注意: add / set は内部の配列集計を更新します。添字は 0-indexed。add/get/set は 0<=i<size()、sum は 0<=left<=right<=size()。lower_bound_prefix には非負の要素を登録して使います。初期配列はコピーして集計するため、元配列の変更とは同期しません。n=INT_MAXは内部添字の上限を超えるため、配列確保前にlength_errorを送出します。
+///
+/// 呼び分け: `Fenwick<T>`() は要素0、`Fenwick<T>`(n) は零初期化、`Fenwick<T>`(values) は配列から構築。sum(right) と sum(left,right) はどちらも右端を含みません。
 template <class T>
 class Fenwick {
     int n_ = 0;
     vector<T> bit_;
 
 public:
-    /// @brief 要素数0のFenwick木を作る。
+    /// 要素数0のFenwick木を作る。
     Fenwick() = default;
 
-    /// @brief 要素数 `n` のFenwick木を構築する。
+    /// 要素数 `n` のFenwick木を構築する。
     explicit Fenwick(int n) : n_(n) {
         assert(n >= 0);
         if (n == numeric_limits<int>::max())
             throw length_error("Fenwick: size is too large for int indexing");
         bit_.assign(static_cast<size_t>(n) + 1, T{});
     }
-    /// @brief 初期配列 `values` の各値を登録したFenwick木を構築する。
+    /// 初期配列 `values` の各値を登録したFenwick木を構築する。
     explicit Fenwick(const vector<T>& values) : Fenwick(sz(values)) {
         for (int i = 0; i < n_; ++i) add(i, values[i]);
     }
 
-    /// @brief 要素数を返す。
+    /// 要素数を返す。
     int size() const { return n_; }
 
-    /// @brief 添字 `index` に `value` を加算する。
+    /// 添字 `index` に `value` を加算する。
     void add(int index, const T& value) {
         assert(0 <= index && index < n_);
         for (unsigned i = static_cast<unsigned>(index) + 1;
              i <= static_cast<unsigned>(n_); i += i & -i) bit_[i] += value;
     }
 
-    /// @brief 半開区間 `[0,right)` の総和を返す。
+    /// 半開区間 `[0,right)` の総和を返す。
     T sum(int right) const {
         assert(0 <= right && right <= n_);
         T result{};
@@ -957,27 +1474,27 @@ public:
         return result;
     }
 
-    /// @brief 半開区間 `[left,right)` の総和を返す。
+    /// 半開区間 `[left,right)` の総和を返す。
     T sum(int left, int right) const {
         assert(0 <= left && left <= right && right <= n_);
         return sum(right) - sum(left);
     }
 
-    /// @brief 添字 `index` の現在値を返す。
+    /// 添字 `index` の現在値を返す。
     T get(int index) const {
         assert(0 <= index && index < n_);
         return sum(index, index + 1);
     }
 
-    /// @brief 添字 `index` の値を `value` に置き換える。
+    /// 添字 `index` の値を `value` に置き換える。
     void set(int index, const T& value) { add(index, value - get(index)); }
 
-    /// @brief 全要素の総和を返す。
+    /// 全要素の総和を返す。
     T total() const { return sum(n_); }
 
     // 非負値を登録したとき、prefix sum が target 以上になる最小の添字。
     // 存在しなければ size()、target<=0 なら 0 を返す。
-    /// @brief prefix sumが `target` 以上になる最小の境界を返す。
+    /// prefix sumが `target` 以上になる最小の境界を返す。
     int lower_bound_prefix(const T& target) const {
         if (!(T{} < target)) return 0;
         int index = 0;
@@ -996,45 +1513,52 @@ public:
 };
 
 // @acf fn RangeFenwick — (int n) -> RangeFenwick<T> — 0-indexの半開区間加算・区間和
-/// @acf-doc @brief 数値型 `T` の `[l,r)` 加算と半開区間和を O(log N) で処理する。内部は2本のFenwick。nは0以上でINT_MAX未満。n=INT_MAXは確保前にlength_error。
-/// @acf-doc @code (int n) -> RangeFenwick<T>
-/// @acf-doc [function] RangeFenwick
+
+/// 半開区間加算と区間和をオンラインで管理する。
+///
+/// 引数 `n / values`: 非負の要素数の零配列、または初期配列。サイズはintに収まること。
+///
+/// 戻り値: `RangeFenwick<T>`。add(l,r,x)とsum(l,r)は0-index半開区間、sum(r)は[0,r)。get/setは1要素、totalは全体和。空区間の和は0。
+///
+/// 注意: add/setは内部を更新、時間O(log n)。サイズ構築O(n)、配列構築O(n log n)、メモリO(n)。Tの加減算・添字との積を中間値まで表せること。範囲はassert。n=INT_MAXは内部Fenwickの添字上限を超えるため、配列確保前にlength_errorを送出します。
+///
+/// 呼び分け: RangeFenwickは上の引数順で呼び出します。
 template <class T>
 class RangeFenwick {
     int n_ = 0;
     Fenwick<T> slope_;
     Fenwick<T> intercept_;
 
-    /// @brief 区間加算の差分イベントを登録する内部処理。
+    /// 区間加算の差分イベントを登録する内部処理。
     void add_event(int index, const T& slope, const T& intercept) {
         if (index == n_) return;
         slope_.add(index, slope);
         intercept_.add(index, intercept);
     }
 
-    /// @brief `[0,right)` の総和を計算する内部処理。
+    /// `[0,right)` の総和を計算する内部処理。
     T prefix_sum(int right) const {
         const T width = static_cast<T>(right);
         return slope_.sum(right) * width + intercept_.sum(right);
     }
 
 public:
-    /// @brief 要素数0のRangeFenwickを作る。
+    /// 要素数0のRangeFenwickを作る。
     RangeFenwick() = default;
 
-    /// @brief 要素数 `n` の区間加算Fenwick木を構築する。
+    /// 要素数 `n` の区間加算Fenwick木を構築する。
     explicit RangeFenwick(int n) : n_(n), slope_(n), intercept_(n) {
         assert(n >= 0);
     }
-    /// @brief 初期配列 `values` を登録したRangeFenwickを構築する。
+    /// 初期配列 `values` を登録したRangeFenwickを構築する。
     explicit RangeFenwick(const vector<T>& values) : RangeFenwick(sz(values)) {
         for (int i = 0; i < n_; ++i) add(i, i + 1, values[i]);
     }
 
-    /// @brief 要素数を返す。
+    /// 要素数を返す。
     int size() const { return n_; }
 
-    /// @brief 半開区間 `[left,right)` に `value` を加算する。
+    /// 半開区間 `[left,right)` に `value` を加算する。
     void add(int left, int right, const T& value) {
         assert(0 <= left && left <= right && right <= n_);
         if (left == right) return;
@@ -1044,37 +1568,45 @@ public:
         add_event(right, -value, value * r);
     }
 
-    /// @brief 半開区間 `[0,right)` の総和を返す。
+    /// 半開区間 `[0,right)` の総和を返す。
     T sum(int right) const {
         assert(0 <= right && right <= n_);
         return prefix_sum(right);
     }
 
-    /// @brief 半開区間 `[left,right)` の総和を返す。
+    /// 半開区間 `[left,right)` の総和を返す。
     T sum(int left, int right) const {
         assert(0 <= left && left <= right && right <= n_);
         return sum(right) - sum(left);
     }
 
-    /// @brief 添字 `index` の現在値を返す。
+    /// 添字 `index` の現在値を返す。
     T get(int index) const {
         assert(0 <= index && index < n_);
         return sum(index, index + 1);
     }
 
-    /// @brief 添字 `index` の値を `value` に置き換える。
+    /// 添字 `index` の値を `value` に置き換える。
     void set(int index, const T& value) {
         assert(0 <= index && index < n_);
         add(index, index + 1, value - get(index));
     }
 
-    /// @brief 全要素の総和を返す。
+    /// 全要素の総和を返す。
     T total() const { return sum(n_); }
 };
 
 // @acf fn KSmallestSum — (int k) -> KSmallestSum<T=ll> — 追加・1個削除つきの小さい方からK個の和
-/// @acf-doc @brief 重複を含む値を `insert`・`erase_one` で O(log N) で更新し、小さい方から `min(k,size())` 個の和を `sum()` で O(1) で返す。`k>=0`、和と更新途中の加減算が `T` に収まること
-/// @acf-doc [function] KSmallestSum
+
+/// 重複を含む集合の、小さい方からk個の和を更新する。
+///
+/// 引数 `k`: 非負の選択個数。負はinvalid_argument。
+///
+/// 戻り値: `KSmallestSum<T=ll>`。sumはmin(k,size())個の和（空/k=0は0）。kthは1始まりk番目、k=0/要素不足はnullopt。erase_oneは1個だけ削除し、不在ならfalse。
+///
+/// 注意: insert/erase_oneは内部の2多重集合を更新しO(log n)、sum/kthはO(1)。Tで和・更新途中の加減算を表せること。
+///
+/// 呼び分け: KSmallestSumは上の引数順で呼び出します。
 template <class T = ll>
 class KSmallestSum {
     size_t k_;
@@ -1098,24 +1630,24 @@ class KSmallestSum {
     }
 
 public:
-    /// @brief 小さい方から選ぶ個数を `k>=0` に固定して空の集合を作る。
+    /// 小さい方から選ぶ個数を `k>=0` に固定して空の集合を作る。
     explicit KSmallestSum(int k) : k_(static_cast<size_t>(k)) {
         if (k < 0) throw invalid_argument("KSmallestSum: k must be non-negative");
     }
 
-    /// @brief 重複を含めた全要素数を返す。
+    /// 重複を含めた全要素数を返す。
     size_t size() const { return small_.size() + large_.size(); }
 
-    /// @brief 小さい方から `min(k,size())` 個の和を返す。空集合と `k=0` は0。
+    /// 小さい方から `min(k,size())` 個の和を返す。空集合と `k=0` は0。
     T sum() const { return sum_; }
 
-    /// @brief 小さい方から `k` 番目の値。`k=0` または要素数不足なら nullopt。
+    /// 小さい方から `k` 番目の値。`k=0` または要素数不足なら nullopt。
     optional<T> kth() const {
         if (k_ == 0 || small_.size() < k_) return nullopt;
         return *small_.rbegin();
     }
 
-    /// @brief 値を1個追加する。重複・負数も扱う。
+    /// 値を1個追加する。重複・負数も扱う。
     void insert(const T& value) {
         if (!small_.empty() && !(*small_.rbegin() < value)) {
             small_.insert(value);
@@ -1126,7 +1658,7 @@ public:
         rebalance();
     }
 
-    /// @brief 等しい値を1個だけ削除して true。不在なら変更せず false。
+    /// 等しい値を1個だけ削除して true。不在なら変更せず false。
     bool erase_one(const T& value) {
         auto it = small_.find(value);
         if (it != small_.end()) {
@@ -1143,13 +1675,21 @@ public:
 };
 
 // @acf fn UnionFind — (int n) -> UnionFind — 経路圧縮とサイズ併合の素集合データ構造
-/// @acf-doc @brief `unite`・`same`・連結成分サイズをほぼ O(1)（償却）で扱う
-/// @acf-doc [function] UnionFind
+
+/// 要素を互いに重ならないグループへ分け、併合と「同じグループか」の判定を管理する型です。辺を足した後の連結性や成分サイズを求めるときに使います。
+///
+/// 引数 `n`: 要素数 n>=0。構築時は各要素が別々のグループに属する。
+///
+/// 戻り値: 構築される UnionFind。unite(a,b) は新しく併合したとき true、既に同じなら false。same(a,b) は同じグループか、component_size(v) は所属グループの要素数、count() はグループ数。
+///
+/// 注意: unite は所属関係と成分数を更新します。find / same / component_size など非 const 操作は経路圧縮で内部表現も変えます。要素添字は 0<=v<n。併合の取り消しや成分分割はできません。空構築は count()==0。
+///
+/// 呼び分け: UnionFind() は要素0、UnionFind(n) は n 個の単独成分。構築してから unite / same を呼びます。
 class UnionFind {
     vector<int> parent_or_size_;
     int components_ = 0;
 
-    /// @brief 経路圧縮を伴わずに代表元を探す内部処理。
+    /// 経路圧縮を伴わずに代表元を探す内部処理。
     int root_const(int x) const {
         assert(0 <= x && x < sz(parent_or_size_));
         while (parent_or_size_[x] >= 0) x = parent_or_size_[x];
@@ -1157,26 +1697,26 @@ class UnionFind {
     }
 
 public:
-    /// @brief 要素数0のUnion-Findを作る。
+    /// 要素数0のUnion-Findを作る。
     UnionFind() = default;
 
-    /// @brief `n` 個の互いに異なる要素からUnion-Findを構築する。
+    /// `n` 個の互いに異なる要素からUnion-Findを構築する。
     explicit UnionFind(int n)
         : parent_or_size_(n >= 0 ? n : 0, -1), components_(n >= 0 ? n : 0) {
         assert(n >= 0);
     }
 
-    /// @brief 要素数を返す。
+    /// 要素数を返す。
     int size() const { return sz(parent_or_size_); }
 
-    /// @brief 要素 `x` の属する集合の代表元を返す。
+    /// 要素 `x` の属する集合の代表元を返す。
     int find(int x) {
         assert(0 <= x && x < size());
         if (parent_or_size_[x] < 0) return x;
         return parent_or_size_[x] = find(parent_or_size_[x]);
     }
 
-    /// @brief `a` と `b` の集合を併合し、併合できたらtrueを返す。
+    /// `a` と `b` の集合を併合し、併合できたらtrueを返す。
     bool unite(int a, int b) {
         a = find(a);
         b = find(b);
@@ -1188,16 +1728,16 @@ public:
         return true;
     }
 
-    /// @brief `a` と `b` が同じ集合に属するか判定する。
+    /// `a` と `b` が同じ集合に属するか判定する。
     bool same(int a, int b) { return find(a) == find(b); }
 
-    /// @brief `x` の属する集合の要素数を返す。
+    /// `x` の属する集合の要素数を返す。
     int component_size(int x) { return -parent_or_size_[find(x)]; }
 
-    /// @brief 現在の集合数を返す。
+    /// 現在の集合数を返す。
     int count() const { return components_; }
 
-    /// @brief 各集合を頂点一覧として返す。
+    /// 各集合を頂点一覧として返す。
     vector<vi> groups() const {
         vector<vi> result(size());
         for (int v = 0; v < size(); ++v) result[root_const(v)].push_back(v);
@@ -1210,15 +1750,23 @@ public:
 };
 
 // @acf fn WeightedUnionFind — (int n) -> WeightedUnionFind<T> — 差分制約付きの素集合データ構造
-/// @acf-doc @brief `value[y] - value[x]` の制約を併合し、成分内の差分をほぼ O(1)（償却）で扱う
-/// @acf-doc [function] WeightedUnionFind
+
+/// value[y]-value[x]の差分制約を集合間で管理する。
+///
+/// 引数 `n`: 非負の要素数。頂点は0..n-1。
+///
+/// 戻り値: `WeightedUnionFind<T>`。unite(x,y,d)は制約が整合すればtrue（既に同じ集合でもtrue）、矛盾ならfalse。diff(x,y)は同じ集合のvalue[y]-value[x]。空はcount=0。
+///
+/// 注意: unite/find/potential等は経路圧縮で内部を変更。サイズ併合で償却ほぼO(1)、メモリO(n)。Tの差分と途中の和を表せること。diffは同一集合、各頂点の範囲をassert。
+///
+/// 呼び分け: 通常のUnionFind.uniteの「新規併合ならtrue」とは戻り値の意味が異なります。
 template <class T>
 class WeightedUnionFind {
     vector<int> parent_or_size_;
     vector<T> weight_;
     int components_ = 0;
 
-    /// @brief 経路圧縮しながら代表元を探す内部処理。
+    /// 経路圧縮しながら代表元を探す内部処理。
     int root(int x) {
         assert(0 <= x && x < size());
         if (parent_or_size_[x] < 0) return x;
@@ -1230,10 +1778,10 @@ class WeightedUnionFind {
     }
 
 public:
-    /// @brief 要素数0の重み付きUnion-Findを作る。
+    /// 要素数0の重み付きUnion-Findを作る。
     WeightedUnionFind() = default;
 
-    /// @brief `n` 個の要素から重み付きUnion-Findを構築する。
+    /// `n` 個の要素から重み付きUnion-Findを構築する。
     explicit WeightedUnionFind(int n)
         : parent_or_size_(n >= 0 ? n : 0, -1),
           weight_(n >= 0 ? n : 0, T{}),
@@ -1241,24 +1789,24 @@ public:
         assert(n >= 0);
     }
 
-    /// @brief 要素数を返す。
+    /// 要素数を返す。
     int size() const { return sz(parent_or_size_); }
 
-    /// @brief 要素 `x` の属する集合の代表元を返す。
+    /// 要素 `x` の属する集合の代表元を返す。
     int find(int x) { return root(x); }
 
-    /// @brief 要素 `x` の基準元からの相対ポテンシャルを返す。
+    /// 要素 `x` の基準元からの相対ポテンシャルを返す。
     T potential(int x) {
         root(x);
         return weight_[x];
     }
 
-    /// @brief `x` と `y` が同じ集合に属するか判定する。
+    /// `x` と `y` が同じ集合に属するか判定する。
     bool same(int x, int y) { return root(x) == root(y); }
 
     // Enforce value[y] - value[x] == difference.
     // Returns false only when the new constraint contradicts an existing one.
-    /// @brief `value[y] - value[x] == difference` の制約を追加する。
+    /// `value[y] - value[x] == difference` の制約を追加する。
     bool unite(int x, int y, T difference) {
         int rx = root(x);
         int ry = root(y);
@@ -1277,24 +1825,36 @@ public:
         return true;
     }
 
-    /// @brief 同じ集合に属する `x`,`y` の `value[y] - value[x]` を返す。
+    /// 同じ集合に属する `x`,`y` の `value[y] - value[x]` を返す。
     T diff(int x, int y) {
         assert(same(x, y));
         return potential(y) - potential(x);
     }
 
-    /// @brief `x` の属する集合の要素数を返す。
+    /// `x` の属する集合の要素数を返す。
     int component_size(int x) {
         return -parent_or_size_[root(x)];
     }
 
-    /// @brief 現在の集合数を返す。
+    /// 現在の集合数を返す。
     int count() const { return components_; }
 };
 
 // @acf fn SegmentTree — (vector<T>, identity[, op]) -> SegmentTree<T> — 汎用の静的モノイド区間木
-/// @acf-doc @brief 半開区間の結合・一点更新を O(log N) で処理。`max_right` / `min_left` も提供。内部配列の要素数がintに収まらない場合は、確保前にlength_error。
-/// @acf-doc [function] SegmentTree
+
+/// 結合演算で半開区間を集約し、1点更新する。
+///
+/// 引数 `n / values`: 非負の要素数の単位元配列、または初期配列。内部の2冪配列がintに収まるサイズ。
+///
+/// 引数 `identity`: 演算の両側の単位元。省略時は `T{}`。
+///
+/// 引数 `op`: 結合則を満たす二項演算。省略時は `Op{}（既定plus<T>）`。
+///
+/// 戻り値: `SegmentTree<T,Op>`。prod(l,r)は0-index半開区間の左からの集約、空区間はidentity。all_prod/get/setも利用可能。max_right/min_leftは条件を保つ端点を返します。
+///
+/// 注意: setは内部を変更しO(log n)。構築時間/メモリO(n)、prod/端点探索O(log n)、get/all_prodはO(1)（演算費用は別）。callbackは副作用なく安定した判定、identityでtrue、区間を伸ばすとtrue→falseの単調性が必要です。内部の2冪配列の要素数がintに収まらないサイズは、配列確保前にlength_errorを送出します。
+///
+/// 呼び分け: max_right(left,pred) / min_left(right,pred)。範囲とidentityの条件はassert、結合則や単調性は自動検証しません。
 template <class T, class Op = plus<T>>
 class SegmentTree {
     int n_ = 0, size_ = 1;
@@ -1302,7 +1862,7 @@ class SegmentTree {
     Op op_{};
     vector<T> data_{2, T{}};
 
-    /// @brief 要素数・単位元・演算を指定して内部配列を初期化する。
+    /// 要素数・単位元・演算を指定して内部配列を初期化する。
     void init(int n, const T& identity, Op op) {
         assert(n >= 0);
         n_ = n;
@@ -1318,14 +1878,14 @@ class SegmentTree {
     }
 
 public:
-    /// @brief 要素数0のSegmentTreeを作る。
+    /// 要素数0のSegmentTreeを作る。
     SegmentTree() = default;
 
-    /// @brief 要素数 `n`、単位元 `identity` のSegmentTreeを構築する。
+    /// 要素数 `n`、単位元 `identity` のSegmentTreeを構築する。
     explicit SegmentTree(int n, T identity = T{}, Op op = Op{}) {
         init(n, identity, std::move(op));
     }
-    /// @brief 初期配列 `values` からSegmentTreeを構築する。
+    /// 初期配列 `values` からSegmentTreeを構築する。
     explicit SegmentTree(const vector<T>& values, T identity = T{}, Op op = Op{}) {
         init(sz(values), identity, std::move(op));
         for (int i = 0; i < n_; ++i) data_[size_ + i] = values[i];
@@ -1333,10 +1893,10 @@ public:
             data_[i] = op_(data_[i << 1], data_[i << 1 | 1]);
     }
 
-    /// @brief 元配列の要素数を返す。
+    /// 元配列の要素数を返す。
     int size() const { return n_; }
 
-    /// @brief 添字 `index` の値を更新する。
+    /// 添字 `index` の値を更新する。
     void set(int index, const T& value) {
         assert(0 <= index && index < n_);
         index += size_;
@@ -1345,13 +1905,13 @@ public:
             data_[index] = op_(data_[index << 1], data_[index << 1 | 1]);
     }
 
-    /// @brief 添字 `index` の値を返す。
+    /// 添字 `index` の値を返す。
     T get(int index) const {
         assert(0 <= index && index < n_);
         return data_[size_ + index];
     }
 
-    /// @brief 半開区間 `[left,right)` を演算 `op` で畳み込む。
+    /// 半開区間 `[left,right)` を演算 `op` で畳み込む。
     T prod(int left, int right) const {
         assert(0 <= left && left <= right && right <= n_);
         T left_result = identity_, right_result = identity_;
@@ -1366,10 +1926,10 @@ public:
         return op_(left_result, right_result);
     }
 
-    /// @brief 全要素を演算 `op` で畳み込む。
+    /// 全要素を演算 `op` で畳み込む。
     T all_prod() const { return data_[1]; }
 
-    /// @brief `predicate` を保つ最長の左からの半開区間の右端を返す。
+    /// `predicate` を保つ最長の左からの半開区間の右端を返す。
     template <class F>
     int max_right(int left, F predicate) const {
         assert(0 <= left && left <= n_ && predicate(identity_));
@@ -1395,7 +1955,7 @@ public:
         return n_;
     }
 
-    /// @brief `predicate` を保つ最長の右からの半開区間の左端を返す。
+    /// `predicate` を保つ最長の右からの半開区間の左端を返す。
     template <class F>
     int min_left(int right, F predicate) const {
         assert(0 <= right && right <= n_ && predicate(identity_));
@@ -1423,8 +1983,18 @@ public:
 };
 
 // @acf fn SparseTable — (vector<T>[, op]) -> SparseTable<T> — 更新なしの静的区間畳み込み
-/// @acf-doc @brief 構築 O(N log N)、一般の結合演算は query O(log N)、冪等演算は idempotent_query O(1)
-/// @acf-doc [function] SparseTable
+
+/// 更新しない配列を前処理して半開区間を集約する。
+///
+/// 引数 `values`: 初期配列。サイズはintに収まること。
+///
+/// 引数 `op`: 結合則を満たす演算。省略時は `Op{}（既定min）`。
+///
+/// 戻り値: `SparseTable<T,Op>`。query(l,r)は一般の結合演算、idempotent_queryは冪等演算専用。どちらも0<=l<r<=sizeで空区間は不可。空の構築は可、問い合わせ不可。
+///
+/// 注意: 構築/buildが内部表を更新してO(n log n)時間/メモリ。queryはO(log n)、冪等queryはO(1)（演算費用別）。入力配列は変更しません。
+///
+/// 呼び分け: 加算は冪等ではないのでqueryを使います。範囲はassert、冪等性は自動検証しません。
 template <class T, class Op = ac_detail::algorithm::min_op<T>>
 class SparseTable {
     vector<vector<T>> table_;
@@ -1432,16 +2002,16 @@ class SparseTable {
     Op op_{};
 
 public:
-    /// @brief 空のSparseTableを作る。
+    /// 空のSparseTableを作る。
     SparseTable() = default;
 
-    /// @brief 初期配列 `values` からSparseTableを構築する。
+    /// 初期配列 `values` からSparseTableを構築する。
     explicit SparseTable(const vector<T>& values, Op op = Op{})
         : op_(std::move(op)) {
         build(values);
     }
 
-    /// @brief 初期配列から区間畳み込み表を再構築する。
+    /// 初期配列から区間畳み込み表を再構築する。
     void build(const vector<T>& values) {
         int n = sz(values);
         logarithm_.assign(n + 1, 0);
@@ -1458,10 +2028,10 @@ public:
         }
     }
 
-    /// @brief 元配列の要素数を返す。
+    /// 元配列の要素数を返す。
     int size() const { return table_.empty() ? 0 : sz(table_[0]); }
 
-    /// @brief 半開区間 `[left,right)` を一般の演算で畳み込む。
+    /// 半開区間 `[left,right)` を一般の演算で畳み込む。
     T query(int left, int right) const {
         assert(0 <= left && left < right && right <= size());
         int length = right - left;
@@ -1478,7 +2048,7 @@ public:
         return result;
     }
 
-    /// @brief 冪等演算の半開区間 `[left,right)` をO(1)で畳み込む。
+    /// 冪等演算の半開区間 `[left,right)` をO(1)で畳み込む。
     T idempotent_query(int left, int right) const {
         assert(0 <= left && left < right && right <= size());
         int k = logarithm_[right - left];
@@ -1487,9 +2057,20 @@ public:
 };
 
 // @acf fn count_subarrays_with_sum — (range, ll target) -> ll — 和がtargetになる非空部分配列の個数
-/// @acf-doc @brief prefix sum `p` ごとに過去の `p-target` の個数を数え、和が `target` になる非空部分配列を期待 O(N) で求める。累積値は `ll` に収まる必要がある
-/// @acf-doc @code (range, ll target) -> ll
-/// @acf-doc [function] count_subarrays_with_sum
+
+/// 和がtargetになる非空の連続部分配列を数える。
+///
+/// 引数 `values`: 整数列。要素数・添字はintに収まり、各関数の数値制約を満たすこと。
+///
+/// 引数 `target`: 目標和。
+///
+/// 戻り値: llの個数。空列は0。要素と個数はllに収まること。途中の累積値とprefix-targetもllに収まること。
+///
+/// 注意: 入力を変更せず過去の頻度をunordered_mapで保持。期待時間/メモリO(n)。同じ位置を2回使う組は数えません。
+///
+/// 呼び分け: count_subarrays_with_sumは上の引数順で呼び出します。
+///
+/// 例: `print(count_subarrays_with_sum(vi{1,-1,1},1));`
 template <class R>
 ll count_subarrays_with_sum(const R& values, ll target) {
     using T = ac_detail::algorithm::range_value_t<R>;
@@ -1512,8 +2093,18 @@ ll count_subarrays_with_sum(const R& values, ll target) {
 }
 
 // @acf fn count_equal_pairs — (range) -> ll — 同じ値の非空ペアの個数を期待O(N)で数える
-/// @acf-doc @brief 左から過去の同値要素の個数を足し、`i<j` かつ `a[i]==a[j]` の組を期待 O(N) で数える。要素は `ll` に収まる必要がある
-/// @acf-doc [function] count_equal_pairs
+
+/// i<jで値が等しい添字の組を数える。
+///
+/// 引数 `values`: 整数列。要素数・添字はintに収まり、各関数の数値制約を満たすこと。
+///
+/// 戻り値: llの個数。空列は0。要素と個数はllに収まること。
+///
+/// 注意: 入力を変更せず過去の頻度をunordered_mapで保持。期待時間/メモリO(n)。同じ位置を2回使う組は数えません。
+///
+/// 呼び分け: count_equal_pairsは上の引数順で呼び出します。
+///
+/// 例: `print(count_equal_pairs(vi{2,2,2}));`
 template <class R>
 ll count_equal_pairs(const R& values) {
     using T = ac_detail::algorithm::range_value_t<R>;
@@ -1529,8 +2120,20 @@ ll count_equal_pairs(const R& values) {
 }
 
 // @acf fn count_pairs_with_sum — (range, ll target) -> ll — 和がtargetになる非空ペアの個数を期待O(N)で数える
-/// @acf-doc @brief 左から過去の `target-x` の個数を足し、`i<j` かつ `a[i]+a[j]==target` の組を期待 O(N) で数える。要素と和は `ll` に収まる必要がある
-/// @acf-doc [function] count_pairs_with_sum
+
+/// i<jで値の和がtargetになる組を数える。
+///
+/// 引数 `values`: 整数列。要素数・添字はintに収まり、各関数の数値制約を満たすこと。
+///
+/// 引数 `target`: 目標和。
+///
+/// 戻り値: llの個数。空列は0。要素と個数はllに収まること。
+///
+/// 注意: 入力を変更せず過去の頻度をunordered_mapで保持。期待時間/メモリO(n)。同じ位置を2回使う組は数えません。
+///
+/// 呼び分け: count_pairs_with_sumは上の引数順で呼び出します。
+///
+/// 例: `print(count_pairs_with_sum(vi{1,2,2,3},4));`
 template <class R>
 ll count_pairs_with_sum(const R& values, ll target) {
     using T = ac_detail::algorithm::range_value_t<R>;
@@ -1551,11 +2154,18 @@ ll count_pairs_with_sum(const R& values, ll target) {
 }
 
 // Exact DP strategies. A forced strategy still obeys the resource budgets.
+/// DPの解法の指定。Autoは予算内の候補から選び、Denseは重さ・和、Valueは価値を軸にする。
+/// Enumerateは全列挙、MeetInMiddleは半分ずつ列挙する。指定しても予算制限は無効にならない。
 enum class DpMethod { Auto, Dense, Value, Enumerate, MeetInMiddle };
+/// 部分和・ナップサックで使う解法と、メモリ・計算量の予算。
 struct DpOptions {
+    /// 使用する解法。既定のAutoなら予算に収まる候補から選ぶ。
     DpMethod method;
+    /// メモリ予算のバイト数。既定は128MiB。
     size_t memory_limit_bytes;
+    /// 推定する処理量の上限。実行時間のミリ秒指定ではない。既定は2億。
     ull work_limit;
+    /// 解法・メモリ予算・処理量予算を指定する。省略した項目には既定値を使う。
     DpOptions(DpMethod method = DpMethod::Auto,
               size_t memory_limit_bytes = 128ULL * 1024 * 1024,
               ull work_limit = 200'000'000)
@@ -1787,9 +2397,22 @@ inline optional<i128> optimize(const vector<Item>& items, ll bound, bool cover, 
 } // namespace ac_detail::dp
 
 // @acf fn subset_sum_max_leq — (range, ll limit, DpOptions options={}) -> ll — 上限以下の部分和の最大値
-/// @acf-doc @brief 非負整数の最大部分和。既定Autoはbitset DP・全探索・半分全列挙から予算内の方式を選ぶ。全方式で厳密解を返し、適用範囲外はlength_error
-/// @acf-doc @code (range, ll limit, DpOptions options={}) -> ll
-/// @acf-doc [function] subset_sum_max_leq
+
+/// 各項を1回まで選び、limit以下の最大の部分和を求める。
+///
+/// 引数 `values`: 非負整数列。各値はllに収まること。要素数の固定上限はなく、選択方式の予算で判定します。
+///
+/// 引数 `limit`: 非負の上限。
+///
+/// 引数 `options`: 方式、追加メモリ見積り上限、処理量見積り上限。既定はAuto・128 MiB・2億。DpMethodだけでも指定できます。
+///
+/// 戻り値: ll。空列・limit=0は0。負値・負limitはinvalid_argument、要素がllに収まらないとoverflow_error。
+///
+/// 注意: 入力は変更せず、使う項目を内部へコピーします。Autoは予算内の厳密解法から処理量の見積りが最小の方式を選びます。手動指定も予算を検査し、適用範囲外はlength_error、非対応方式はinvalid_argument。見積りは実行時間・プロセス全体のメモリを保証しません。方式別の計算量と選択条件は[DPテンプレート](../../../guides/dp-template.md#dp-auto)に記載しています。
+///
+/// 呼び分け: 既定はAuto。最後の引数にDpMethod::Denseなどを指定できます。対応する手動方式はDense・Enumerate・MeetInMiddleです。
+///
+/// 例: `print(subset_sum_max_leq(vi{3,5,8},10));`
 template <class R>
 ll subset_sum_max_leq(const R& values, ll limit, DpOptions options = {}) {
     using T = ac_detail::algorithm::range_value_t<R>;
@@ -1811,9 +2434,22 @@ ll subset_sum_max_leq(const R& values, ll limit, DpOptions options = {}) {
 }
 
 // @acf fn subset_sum_possible — (range, ll target, DpOptions options={}) -> bool — 非負整数の0-1部分和判定
-/// @acf-doc @brief 既定Autoで厳密な部分和判定。target<0はfalse。手動方式・資源上限はDpOptionsで指定
-/// @acf-doc @code (range, ll target, DpOptions options={}) -> bool
-/// @acf-doc [function] subset_sum_possible
+
+/// 非負整数を各1回まで選び、ちょうどtargetを作れるか判定する。
+///
+/// 引数 `values`: 非負整数列。各値はllに収まること。
+///
+/// 引数 `target`: 非負の目標値・容量。部分和判定2関数では負なら直ちにfalse。
+///
+/// 引数 `options`: 方式、追加メモリ見積り上限、処理量見積り上限。既定はAuto・128 MiB・2億。DpMethodだけでも指定できます。
+///
+/// 戻り値: bool。空列はtarget=0だけtrue。非負の各値はllに収まること。target>=0で負要素はinvalid_argument。
+///
+/// 注意: 入力は変更せず、使う項目を内部へコピーします。Autoは予算内の厳密解法から処理量の見積りが最小の方式を選びます。手動指定も予算を検査し、適用範囲外はlength_error、非対応方式はinvalid_argument。見積りは実行時間・プロセス全体のメモリを保証しません。方式別の計算量と選択条件は[DPテンプレート](../../../guides/dp-template.md#dp-auto)に記載しています。
+///
+/// 呼び分け: 既定はAuto。最後の引数にDpMethod::Denseなどを指定できます。対応する手動方式はDense・Enumerate・MeetInMiddleです。
+///
+/// 例: `print(subset_sum_possible(vi{2,3},5));`
 template <class R>
 bool subset_sum_possible(const R& values, ll target, DpOptions options = {}) {
     if (target < 0) return false;
@@ -1821,9 +2457,22 @@ bool subset_sum_possible(const R& values, ll target, DpOptions options = {}) {
 }
 
 // @acf fn bounded_subset_sum_possible — (values, counts, ll target, DpOptions options={}) -> bool — 個数制限付き部分和判定
-/// @acf-doc @brief 個数を二進分割し、Autoで部分和を判定する。値・個数は非負、target<0はfalse。中間状態と計算量をDpOptionsの予算内に制限
-/// @acf-doc @code (values, counts, ll target, DpOptions options={}) -> bool
-/// @acf-doc [function] bounded_subset_sum_possible
+
+/// 各値を指定個数以内使い、targetを作れるか判定する。
+///
+/// 引数 `values / counts`: 同じ長さの非負整数列。値と使用上限の順。
+///
+/// 引数 `target`: 非負の目標値・容量。部分和判定2関数では負なら直ちにfalse。
+///
+/// 引数 `options`: 方式、追加メモリ見積り上限、処理量見積り上限。既定はAuto・128 MiB・2億。DpMethodだけでも指定できます。
+///
+/// 戻り値: bool。空列はtarget=0だけtrue。target>=0で負値/負個数/長さ不一致はinvalid_argument。値0は可否を変えません。
+///
+/// 注意: 入力は変更せず、使う項目を内部へコピーします。Autoは予算内の厳密解法から処理量の見積りが最小の方式を選びます。手動指定も予算を検査し、適用範囲外はlength_error、非対応方式はinvalid_argument。見積りは実行時間・プロセス全体のメモリを保証しません。方式別の計算量と選択条件は[DPテンプレート](../../../guides/dp-template.md#dp-auto)に記載しています。 個数はtarget/valueで打ち切り、二進分割して0-1部分和へ変換します。
+///
+/// 呼び分け: 既定はAuto。最後の引数にDpMethod::Denseなどを指定できます。対応する手動方式はDense・Enumerate・MeetInMiddleです。
+///
+/// 例: `print(bounded_subset_sum_possible(vi{2,3},vi{1,2},8));`
 template <class VR, class CR>
 bool bounded_subset_sum_possible(const VR& values, const CR& counts, ll target, DpOptions options = {}) {
     using V = ac_detail::algorithm::range_value_t<VR>;
@@ -1853,9 +2502,20 @@ bool bounded_subset_sum_possible(const VR& values, const CR& counts, ll target, 
 }
 
 // @acf fn knapsack01_max_value — (weights, values, ll capacity, DpOptions options={}) -> ll — 0-1ナップサックの最大価値
-/// @acf-doc @brief Autoで容量DP・価値DP・全探索・半分全列挙を選ぶ。重さは非負、負の価値は選ばない。ゼロ重みも各1回。答えのll超過はoverflow_error
-/// @acf-doc @code (weights, values, ll capacity, DpOptions options={}) -> ll
-/// @acf-doc [function] knapsack01_max_value
+
+/// 容量以内で各品物を1回まで選ぶ最大価値を求める。
+///
+/// 引数 `weights / values`: 同じ長さの整数列。重さは非負。中間和はi128で検査します。容量超過の品物と正でない価値を除き、ゼロ重みの正の価値は各1回使います。
+///
+/// 引数 `capacity`: 非負の目標値・容量。部分和判定2関数では負なら直ちにfalse。
+///
+/// 引数 `options`: 方式、追加メモリ見積り上限、処理量見積り上限。既定はAuto・128 MiB・2億。DpMethodだけでも指定できます。
+///
+/// 戻り値: ll。何も選ばない0を許し、負価値を選ぶ必要はありません。空品物は0。負容量/重さ・長さ不一致はinvalid_argument、答えがll範囲外はoverflow_error。
+///
+/// 注意: 入力は変更せず、使う項目を内部へコピーします。Autoは予算内の厳密解法から処理量の見積りが最小の方式を選びます。手動指定も予算を検査し、適用範囲外はlength_error、非対応方式はinvalid_argument。見積りは実行時間・プロセス全体のメモリを保証しません。方式別の計算量と選択条件は[DPテンプレート](../../../guides/dp-template.md#dp-auto)に記載しています。
+///
+/// 呼び分け: 既定はAuto。最後の引数にDpMethod::MeetInMiddleなどを指定できます。対応する手動方式はDense・Enumerate・MeetInMiddle・Valueです。
 template <class WR, class VR>
 ll knapsack01_max_value(const WR& weights, const VR& values, ll capacity, DpOptions options = {}) {
     using W = ac_detail::algorithm::range_value_t<WR>;
@@ -1876,9 +2536,20 @@ ll knapsack01_max_value(const WR& weights, const VR& values, ll capacity, DpOpti
 }
 
 // @acf fn min_cost_to_reach — (gains, costs, ll target, DpOptions options={}) -> optional<ll> — 0-1最小コスト閾値到達
-/// @acf-doc @brief Autoで利益DP・費用DP・全探索・半分全列挙を選ぶ。利益・費用は非負、到達不能はnullopt。手動指定でも予算を検査
-/// @acf-doc @code (gains, costs, ll target, DpOptions options={}) -> optional<ll>
-/// @acf-doc [function] min_cost_to_reach
+
+/// 各項を1回まで選び、利益target以上を達成する最小費用を求める。
+///
+/// 引数 `gains / costs`: 同じ長さの非負整数列。利益と費用の順、i128で扱えること。
+///
+/// 引数 `target`: 非負の目標値・容量。部分和判定2関数では負なら直ちにfalse。
+///
+/// 引数 `options`: 方式、追加メモリ見積り上限、処理量見積り上限。既定はAuto・128 MiB・2億。DpMethodだけでも指定できます。
+///
+/// 戻り値: `optional<ll>`。達成可能なら費用、不能はnullopt。target=0は0。負値/負target/長さ不一致はinvalid_argument、費用の表現超過はoverflow_error。
+///
+/// 注意: 入力は変更せず、使う項目を内部へコピーします。Autoは予算内の厳密解法から処理量の見積りが最小の方式を選びます。手動指定も予算を検査し、適用範囲外はlength_error、非対応方式はinvalid_argument。見積りは実行時間・プロセス全体のメモリを保証しません。方式別の計算量と選択条件は[DPテンプレート](../../../guides/dp-template.md#dp-auto)に記載しています。
+///
+/// 呼び分け: 既定はAuto。最後の引数にDpMethod::MeetInMiddleなどを指定できます。対応する手動方式はDense・Enumerate・MeetInMiddle・Valueです。
 template <class GR, class CR>
 optional<ll> min_cost_to_reach(const GR& gains, const CR& costs, ll target, DpOptions options = {}) {
     using G = ac_detail::algorithm::range_value_t<GR>;
@@ -1902,9 +2573,20 @@ optional<ll> min_cost_to_reach(const GR& gains, const CR& costs, ll target, DpOp
 }
 
 // @acf fn min_partition_max_sum — (range, DpOptions options={}) -> ll — 2群分割の大きい和の最小値
-/// @acf-doc @brief 合計の半分以下の最大部分和をAutoで求め、全体から引く。intを超える合計にも対応。答えのll超過はoverflow_error
-/// @acf-doc @code (range, DpOptions options={}) -> ll
-/// @acf-doc [function] min_partition_max_sum
+
+/// 全要素を2群に分け、大きい方の和を最小化する。
+///
+/// 引数 `values`: 非負整数列。各値と答えはllに収まること。合計はi128で扱い、intを超えても使えます。
+///
+/// 引数 `options`: 方式、追加メモリ見積り上限、処理量見積り上限。既定はAuto・128 MiB・2億。DpMethodだけでも指定できます。
+///
+/// 戻り値: llの最小値。片方の群を空にしてよく、空列は0。負値はinvalid_argument、各値・答え・中間和の表現超過はoverflow_error。
+///
+/// 注意: 入力は変更せず、使う項目を内部へコピーします。Autoは予算内の厳密解法から処理量の見積りが最小の方式を選びます。手動指定も予算を検査し、適用範囲外はlength_error、非対応方式はinvalid_argument。見積りは実行時間・プロセス全体のメモリを保証しません。方式別の計算量と選択条件は[DPテンプレート](../../../guides/dp-template.md#dp-auto)に記載しています。
+///
+/// 呼び分け: 既定はAuto。最後の引数にDpMethod::Denseなどを指定できます。対応する手動方式はDense・Enumerate・MeetInMiddleです。
+///
+/// 例: `print(min_partition_max_sum(vi{2,3,4}));`
 template <class R>
 ll min_partition_max_sum(const R& values, DpOptions options = {}) {
     using T = ac_detail::algorithm::range_value_t<R>;
@@ -1925,9 +2607,18 @@ ll min_partition_max_sum(const R& values, DpOptions options = {}) {
 }
 
 // @acf fn min_k_span — (range, int k) -> optional<ll> — K個を含む最小1次元区間の幅
-/// @acf-doc @brief 整数列から `k` 個を選んだときの最小の `max-min` を O(N log N) で求める。要素数不足や `k<=0` は nullopt
-/// @acf-doc @code (range, int k) -> optional<ll>
-/// @acf-doc [function] min_k_span
+
+/// k個の要素を含む最小区間の幅を求める。
+///
+/// 引数 `values`: bool以外の整数列。添字がint、値と差の計算がi128に収まること。
+///
+/// 引数 `k`: 選ぶ個数。
+///
+/// 戻り値: `optional<ll>`。最小max-min、k<=0/要素不足はnullopt、k=1は0。幅がllに収まらなければoverflow_error。
+///
+/// 注意: 入力を変更せずコピーをsort。時間O(n log n)、メモリO(n)。
+///
+/// 呼び分け: min_k_spanは上の引数順で呼び出します。
 template <class R>
 optional<ll> min_k_span(const R& values, int k) {
     using T = ac_detail::algorithm::range_value_t<R>;
@@ -1949,23 +2640,32 @@ optional<ll> min_k_span(const R& values, int k) {
 }
 
 // @acf fn SubsetSumCounter — (int target, size_t memory_limit_bytes=128MiB) -> SubsetSumCounter<Mint> — 追加削除つき部分和の通り数
-/// @acf-doc @brief 加減算可能な `Mint` 上で値の追加・削除を O(target) で処理し、部分和の通り数を返す。追加時は降順、削除時は昇順に更新する
-/// @acf-doc @code (int target, size_t memory_limit_bytes=128MiB) -> SubsetSumCounter<Mint>
-/// @acf-doc [function] SubsetSumCounter
+
+/// 正の値の追加・削除に応じて部分和の通り数を管理する。
+///
+/// 引数 `target`: 非負の最大和。target+1がintに収まり配列確保可能なこと。
+///
+/// 引数 `memory_limit_bytes`: 通り数と多重度の配列の合計バイト数の上限。方式は切り替えません。
+///
+/// 戻り値: `SubsetSumCounter<Mint>`。count(s)は0..targetの和の通り数。空集合でcount(0)=1。他は0。重複の各項は別の選択肢。add/eraseの値は1..target。
+///
+/// 注意: addは降順、eraseは昇順に内部DPを更新。時間O(target)、メモリO(target)。Mintの加減算が必要で、個数と多重度が表せること。 配列確保前にメモリ上限を検査し、超過はlength_error。多重度のint超過はoverflow_error。
+///
+/// 呼び分け: 負target、不正値、不在の削除、範囲外countはinvalid_argument。整数型も使えますが通り数の超過を自動検出しません。
 template <class Mint>
 class SubsetSumCounter {
     int target_ = 0;
     vector<Mint> ways_;
     vector<int> multiplicity_;
 
-    /// @brief `value` が対象範囲に入っていることを確認する。
+    /// `value` が対象範囲に入っていることを確認する。
     void check_value(int value) const {
         if (value <= 0 || value > target_)
             throw invalid_argument("SubsetSumCounter: value must be in [1, target]");
     }
 
 public:
-    /// @brief 目標和 `target` 以下の部分和カウンタを構築する。
+    /// 目標和 `target` 以下の部分和カウンタを構築する。
     explicit SubsetSumCounter(int target, size_t memory_limit_bytes = 128ULL * 1024 * 1024) : target_(target) {
         if (target < 0) throw invalid_argument("SubsetSumCounter: target must be non-negative");
         if (target == numeric_limits<int>::max())
@@ -1978,7 +2678,7 @@ public:
         ways_[0] = 1;
     }
 
-    /// @brief 値 `value` を1個追加する。
+    /// 値 `value` を1個追加する。
     void add(int value) {
         check_value(value);
         if (multiplicity_[value] == numeric_limits<int>::max())
@@ -1987,7 +2687,7 @@ public:
         ++multiplicity_[value];
     }
 
-    /// @brief 値 `value` を1個削除する。
+    /// 値 `value` を1個削除する。
     void erase(int value) {
         check_value(value);
         if (multiplicity_[value] == 0)
@@ -1996,20 +2696,30 @@ public:
         --multiplicity_[value];
     }
 
-    /// @brief 和 `sum` を作る部分集合の通り数を返す。
+    /// 和 `sum` を作る部分集合の通り数を返す。
     Mint count(int sum) const {
         if (sum < 0 || sum > target_)
             throw invalid_argument("SubsetSumCounter: sum must be in [0, target]");
         return ways_[sum];
     }
 
-    /// @brief 扱える最大の和を返す。
+    /// 扱える最大の和を返す。
     int target() const { return target_; }
 };
 
 // @acf fn inversion_count — (range) -> ll — 配列の転倒数を O(N log N) で数える
-/// @acf-doc @brief `i<j` かつ `a[i]>a[j]` となる組の個数。重複値は転倒に数えない
-/// @acf-doc [function] inversion_count
+
+/// `i<j` かつ `a[i]>a[j]` の転倒数を求める。
+///
+/// 引数 `values`: コピー可能で比較できる要素列。要素数はintに収まること。
+///
+/// 戻り値: llの個数。同じ値は転倒に含めません。空列は0。個数はllに収まること。
+///
+/// 注意: 入力を変更せず座標圧縮とFenwick。時間O(n log n)、追加メモリO(n)。
+///
+/// 呼び分け: inversion_countは上の引数順で呼び出します。
+///
+/// 例: `print(inversion_count(vi{3,1,2}));`
 template <class R>
 ll inversion_count(const R& values) {
     using T = ac_detail::algorithm::range_value_t<R>;
@@ -2026,8 +2736,20 @@ ll inversion_count(const R& values) {
 }
 
 // @acf fn lis_length — (range[, strict]) -> int — 最長増加部分列の長さ
-/// @acf-doc @brief `strict=true` なら狭義、`false` なら広義のLIS長を O(N log N) で求める
-/// @acf-doc [function] lis_length
+
+/// 最長増加部分列の長さを求める。
+///
+/// 引数 `values`: コピー可能で比較できる要素列。要素数はintに収まること。
+///
+/// 引数 `strict`: trueは狭義増加、falseは同値を許す非減少。省略時は `true`。
+///
+/// 戻り値: intの最大長。空は0。
+///
+/// 注意: 入力を変更せずlower_bound/upper_boundで処理。時間O(n log n)、追加メモリO(n)。
+///
+/// 呼び分け: lis_lengthは上の引数順で呼び出します。
+///
+/// 例: `print(lis_length(vi{1,1,2}));`
 template <class R>
 int lis_length(const R& values, bool strict = true) {
     using T = ac_detail::algorithm::range_value_t<R>;
@@ -2042,8 +2764,20 @@ int lis_length(const R& values, bool strict = true) {
 }
 
 // @acf fn lis_indices — (range[, strict]) -> vi — LISの添字を1つ復元
-/// @acf-doc @brief LISの長さだけでなく、元配列上の添字列を O(N log N) で復元
-/// @acf-doc [function] lis_indices
+
+/// 最長増加部分列の添字列を復元する。
+///
+/// 引数 `values`: コピー可能で比較できる要素列。要素数はintに収まること。
+///
+/// 引数 `strict`: trueは狭義増加、falseは同値を許す非減少。省略時は `true`。
+///
+/// 戻り値: viの元列の0-index添字列を1つ。空は空列。複数解で特定の辞書順は保証しません。
+///
+/// 注意: 入力を変更せずlower_bound/upper_boundで処理。時間O(n log n)、追加メモリO(n)。
+///
+/// 呼び分け: lis_indicesは上の引数順で呼び出します。
+///
+/// 例: `print(lis_indices(vi{3,1,2}));`
 template <class R>
 vi lis_indices(const R& values, bool strict = true) {
     using T = ac_detail::algorithm::range_value_t<R>;
@@ -2072,8 +2806,20 @@ vi lis_indices(const R& values, bool strict = true) {
 }
 
 // @acf fn lis_member_indices — (range[, strict]) -> vi — いずれかのLISに属する添字
-/// @acf-doc @brief 最長増加部分列の少なくとも1つに含められる元配列の添字をすべて O(N log N) で返す。`strict=false` は広義単調
-/// @acf-doc [function] lis_member_indices
+
+/// 最長増加部分列の候補の添字を求める。
+///
+/// 引数 `values`: コピー可能で比較できる要素列。要素数はintに収まること。
+///
+/// 引数 `strict`: trueは狭義増加、falseは同値を許す非減少。省略時は `true`。
+///
+/// 戻り値: viの昇順の0-index添字。少なくとも1つの最長列に属せる位置を全て返し、1本のLISの復元とは異なります。空は空列。
+///
+/// 注意: 入力を変更せずlower_bound/upper_boundで処理。時間O(n log n)、追加メモリO(n)。
+///
+/// 呼び分け: lis_member_indicesは上の引数順で呼び出します。
+///
+/// 例: `print(lis_member_indices(vi{1,2,2,3}));`
 template <class R>
 vi lis_member_indices(const R& values, bool strict = true) {
     using T = ac_detail::algorithm::range_value_t<R>;
@@ -2107,9 +2853,22 @@ vi lis_member_indices(const R& values, bool strict = true) {
 }
 
 // @acf fn prefix_lis_query — (values, rights, limits) -> vi — 接頭辞・上限制約つきLISクエリ
-/// @acf-doc @brief 各クエリ `(right, limit)` について、先頭 `right` 個から値が `limit` 以下の厳密増加部分列の最大長を O((N+Q) log N + Q log Q) で返す。3列のクエリ数は同じである必要がある
-/// @acf-doc @code (values, rights, limits) -> vi
-/// @acf-doc [function] prefix_lis_query
+
+/// 接頭辞と値の上限を指定し、狭義LISの長さをまとめて求める。
+///
+/// 引数 `values`: 整数列。長さはintに収まり、値はi128で扱えること。
+///
+/// 引数 `rights`: 各問い合わせの先頭要素数0..N。
+///
+/// 引数 `limits`: rightsと同じ長さの整数列。各問い合わせで使える値の上限（以下）。
+///
+/// 戻り値: vi。元の問い合わせ順に最大長を返し、right=0は0。問い合わせ0個なら空。rights/limitsの長さ不一致・不正rightはinvalid_argument。
+///
+/// 注意: 入力を変更せずオフラインでright順に処理。時間O((N+Q)log N+Q log Q)、追加メモリO(N+Q)。
+///
+/// 呼び分け: rightsとlimitsの2列だけが同じ問い合わせ数であり、valuesの要素数と揃える必要はありません。
+///
+/// 例: `print(prefix_lis_query(vi{3,1,2},vi{0,2,3},vi{9,9,2}));`
 template <class VR, class RR, class XR>
 vi prefix_lis_query(const VR& values, const RR& rights, const XR& limits) {
     using V = ac_detail::algorithm::range_value_t<VR>;
@@ -2182,8 +2941,20 @@ vi prefix_lis_query(const VR& values, const RR& rights, const XR& limits) {
 }
 
 // @acf fn sliding_window_min — (range, width) -> vector<T> — スライド区間の最小値
-/// @acf-doc @brief 幅 `width` の各半開窓の最小値を償却 O(N) で返す
-/// @acf-doc [function] sliding_window_min
+
+/// 固定幅の連続区間ごとの最小値を返す。
+///
+/// 引数 `values`: コピー可能で比較できる要素列。要素数はintに収まること。
+///
+/// 引数 `width`: 窓の幅。
+///
+/// 戻り値: `vector<T>`のN-width+1個。width<=0またはwidth>Nは空。左端0からの順。
+///
+/// 注意: 入力を変更せずコピーと単調deque。時間O(N)、追加メモリO(N)（コピーと結果を含む）。
+///
+/// 呼び分け: sliding_window_minは上の引数順で呼び出します。
+///
+/// 例: `print(sliding_window_min(vi{3,1,2,4},2));`
 template <class R>
 vector<ac_detail::algorithm::range_value_t<R>> sliding_window_min(
     const R& values, int width) {
@@ -2193,8 +2964,20 @@ vector<ac_detail::algorithm::range_value_t<R>> sliding_window_min(
 }
 
 // @acf fn sliding_window_max — (range, width) -> vector<T> — スライド区間の最大値
-/// @acf-doc @brief 幅 `width` の各半開窓の最大値を償却 O(N) で返す
-/// @acf-doc [function] sliding_window_max
+
+/// 固定幅の連続区間ごとの最大値を返す。
+///
+/// 引数 `values`: コピー可能で比較できる要素列。要素数はintに収まること。
+///
+/// 引数 `width`: 窓の幅。
+///
+/// 戻り値: `vector<T>`のN-width+1個。width<=0またはwidth>Nは空。左端0からの順。
+///
+/// 注意: 入力を変更せずコピーと単調deque。時間O(N)、追加メモリO(N)（コピーと結果を含む）。
+///
+/// 呼び分け: sliding_window_maxは上の引数順で呼び出します。
+///
+/// 例: `print(sliding_window_max(vi{3,1,2,4},2));`
 template <class R>
 vector<ac_detail::algorithm::range_value_t<R>> sliding_window_max(
     const R& values, int width) {
@@ -2204,8 +2987,18 @@ vector<ac_detail::algorithm::range_value_t<R>> sliding_window_max(
 }
 
 // @acf fn next_greater_indices — (range) -> vi — 右側の次のより大きい要素の添字
-/// @acf-doc @brief 各位置から右へ見て最初に現れる「より大きい値」の添字を O(N) で返す
-/// @acf-doc [function] next_greater_indices
+
+/// 各位置の右で、最初のより大きい値の位置を求める。
+///
+/// 引数 `values`: コピー可能で比較できる要素列。要素数はintに収まること。
+///
+/// 戻り値: viの長さN。該当位置は0-index、不在はN（-1ではありません）。同値は対象外。空は空列。
+///
+/// 注意: 入力を変更せずコピーと単調stack。時間/追加メモリO(N)。
+///
+/// 呼び分け: next_greater_indicesは上の引数順で呼び出します。
+///
+/// 例: `print(next_greater_indices(vi{2,2,3,2}));`
 template <class R>
 vi next_greater_indices(const R& values) {
     using T = ac_detail::algorithm::range_value_t<R>;
@@ -2222,8 +3015,18 @@ vi next_greater_indices(const R& values) {
 }
 
 // @acf fn next_smaller_indices — (range) -> vi — 右側の次のより小さい要素の添字
-/// @acf-doc @brief 各位置から右へ見て最初に現れる「より小さい値」の添字を O(N) で返す
-/// @acf-doc [function] next_smaller_indices
+
+/// 各位置の右で、最初のより小さい値の位置を求める。
+///
+/// 引数 `values`: コピー可能で比較できる要素列。要素数はintに収まること。
+///
+/// 戻り値: viの長さN。該当位置は0-index、不在はN（-1ではありません）。同値は対象外。空は空列。
+///
+/// 注意: 入力を変更せずコピーと単調stack。時間/追加メモリO(N)。
+///
+/// 呼び分け: next_smaller_indicesは上の引数順で呼び出します。
+///
+/// 例: `print(next_smaller_indices(vi{2,2,3,2}));`
 template <class R>
 vi next_smaller_indices(const R& values) {
     using T = ac_detail::algorithm::range_value_t<R>;
@@ -2240,8 +3043,18 @@ vi next_smaller_indices(const R& values) {
 }
 
 // @acf fn prefix_function — (string_view) -> vi — KMPの接頭辞関数
-/// @acf-doc @brief `s[0..i]` の真の接頭辞でもある接尾辞の最大長を各位置で求める
-/// @acf-doc [function] prefix_function
+
+/// 各接頭辞について、自分自身より短い共通の接頭辞・接尾辞の最大長を求める。
+///
+/// 引数 `s`: バイト単位で扱う文字列。長さはintに収まること。
+///
+/// 戻り値: viの長さN。result[i]はs[0..i]の真の接頭辞でもある接尾辞の最大長。空は空列。
+///
+/// 注意: 文字列を変更せず結果を確保。時間/追加メモリO(N)。
+///
+/// 呼び分け: 文字の比較はchar単位。UTF-8の文字数や正規化を扱う形式ではありません。
+///
+/// 例: `print(prefix_function("ababa"));`
 inline vi prefix_function(string_view s) {
     vi result(s.size());
     for (int i = 1; i < sz(s); ++i) {
@@ -2254,8 +3067,18 @@ inline vi prefix_function(string_view s) {
 }
 
 // @acf fn z_function — (string_view) -> vi — 文字列の各位置からのLCP長
-/// @acf-doc @brief `z[0]=|s|`、`z[i]` は `s` と `s[i..]` の最長共通接頭辞長
-/// @acf-doc [function] z_function
+
+/// 文字列の各位置から、先頭との最長共通接頭辞長を求める。
+///
+/// 引数 `s`: バイト単位で扱う文字列。長さはintに収まること。
+///
+/// 戻り値: viの長さN。result[0]=N、result[i]はsとs[i..]のLCP長。空は空列。
+///
+/// 注意: 文字列を変更せず結果を確保。時間/追加メモリO(N)。
+///
+/// 呼び分け: 文字の比較はchar単位。UTF-8の文字数や正規化を扱う形式ではありません。
+///
+/// 例: `print(z_function("ababa"));`
 inline vi z_function(string_view s) {
     int n = sz(s);
     vi result(n);
@@ -2275,8 +3098,20 @@ inline vi z_function(string_view s) {
 }
 
 // @acf fn kmp_search — (text, pattern) -> vi — KMPでパターンの出現位置を列挙
-/// @acf-doc @brief 文字列 `text` 中の `pattern` の開始位置を重複込みで O(|text|+|pattern|) に列挙
-/// @acf-doc [function] kmp_search
+
+/// 文字列からパターンの全出現位置を求める。
+///
+/// 引数 `text`: 検索対象。長さはintに収まること。
+///
+/// 引数 `pattern`: 完全一致させるバイト列。長さはintに収まること。
+///
+/// 戻り値: viの昇順の0-index開始位置。重なった出現も含めます。見つからない、textが空、patternが空なら空列。
+///
+/// 注意: 入力を変更せずKMP。時間O(text長+pattern長)、追加メモリはpatternと結果に比例。
+///
+/// 呼び分け: kmp_searchは上の引数順で呼び出します。
+///
+/// 例: `print(kmp_search("ababa","aba"));`
 inline vi kmp_search(string_view text, string_view pattern) {
     if (pattern.empty()) return {};
     vi prefix = prefix_function(pattern), result;
@@ -2294,9 +3129,22 @@ inline vi kmp_search(string_view text, string_view pattern) {
 }
 
 // @acf fn lcs_length — (string_view s, string_view t, DpOptions options={}) -> int — 2文字列の最長共通部分列長
-/// @acf-doc @brief 2つの文字列の最長共通部分列（LCS）の長さを1次元DPで返す。時間 O(|s||t|)、追加メモリ O(min(|s|,|t|))
-/// @acf-doc @code (string_view s, string_view t, DpOptions options={}) -> int
-/// @acf-doc [function] lcs_length
+
+/// 2文字列の最長共通部分列の長さを求める。
+///
+/// 引数 `s`: 第1文字列。バイト単位、長さはintに収まること。
+///
+/// 引数 `t`: 第2文字列。バイト単位、長さはintに収まること。
+///
+/// 引数 `options`: AutoとDenseのみ。従来の1次元DPを使い、追加メモリ見積り128 MiB・処理量見積り2億を既定の上限とします。
+///
+/// 戻り値: int。連続でなくてよい共通部分列の最大長。片方が空なら0。
+///
+/// 注意: 文字列を変更せず1次元DP。時間O(|s||t|)、追加メモリO(min(|s|,|t|))。 上限超過はlength_error、非対応方式はinvalid_argument。intの添字・結果で扱えない長さはoverflow_error。
+///
+/// 呼び分け: 共通の連続部分文字列長を求める形式ではありません。
+///
+/// 例: `print(lcs_length("abc","ac"));`
 inline int lcs_length(string_view s, string_view t, DpOptions options = {}) {
     if (options.method != DpMethod::Auto && options.method != DpMethod::Dense)
         throw invalid_argument("lcs_length: only Auto/Dense is supported");
@@ -2320,9 +3168,22 @@ inline int lcs_length(string_view s, string_view t, DpOptions options = {}) {
 }
 
 // @acf fn edit_distance — (string_view s, string_view t, DpOptions options={}) -> int — 2文字列の編集距離
-/// @acf-doc @brief 挿入・削除・置換を各1回とする2文字列のLevenshtein距離を1次元DPで返す。時間 O(|s||t|)、追加メモリ O(min(|s|,|t|))
-/// @acf-doc @code (string_view s, string_view t, DpOptions options={}) -> int
-/// @acf-doc [function] edit_distance
+
+/// 挿入・削除・置換を各1回として2文字列の編集距離を求める。
+///
+/// 引数 `s`: 第1文字列。バイト単位、長さはintに収まること。
+///
+/// 引数 `t`: 第2文字列。バイト単位、長さはintに収まること。
+///
+/// 引数 `options`: AutoとDenseのみ。従来の1次元DPを使い、追加メモリ見積り128 MiB・処理量見積り2億を既定の上限とします。
+///
+/// 戻り値: intのLevenshtein距離。同じ列なら0、片方が空なら他方のバイト長。隣接文字の交換は1操作ではありません。
+///
+/// 注意: 文字列を変更せず1次元DP。時間O(|s||t|)、追加メモリO(min(|s|,|t|))。 上限超過はlength_error、非対応方式はinvalid_argument。intの添字・結果で扱えない長さはoverflow_error。
+///
+/// 呼び分け: edit_distanceは上の引数順で呼び出します。
+///
+/// 例: `print(edit_distance("kitten","sitting"));`
 inline int edit_distance(string_view s, string_view t, DpOptions options = {}) {
     if (options.method != DpMethod::Auto && options.method != DpMethod::Dense)
         throw invalid_argument("edit_distance: only Auto/Dense is supported");
@@ -2351,8 +3212,14 @@ inline int edit_distance(string_view s, string_view t, DpOptions options = {}) {
 }
 
 // @acf fn Trie — () -> Trie — 文字列の挿入・完全一致・接頭辞個数を扱うTrie
-/// @acf-doc @brief charのバイト列を扱い、空文字・重複挿入・1個削除・完全一致・接頭辞検索に対応。各操作はO(|s| log Σ)、Σは最大256の文字種数
-/// @acf-doc [function] Trie
+
+/// 文字列の登録個数と接頭辞で始まる語の個数を管理する。
+///
+/// 戻り値: 空のTrie。insertで1個登録、eraseは1個削除し不在ならfalse。contains/countは完全一致、prefix_count/starts_withは接頭辞一致の個数/有無。emptyは登録0個かを返します。空文字と重複を扱います。
+///
+/// 注意: insert/erase/clearは内部状態を変更。全char値のバイト列に対応し、大小文字・NUL・上位ビットも区別します。操作はO(|s| log Σ)、Σは最大256。空文字の操作とsize/emptyはO(1)。ノード数と個数はintに収まること。eraseはノードを解放せず、clearで空の1ノードに戻します。
+///
+/// 呼び分け: メンバはstring_viewを受け取り入力文字列を保存しません。NULを含む語は長さ付きstring_viewかstringで渡します。UTF-8はバイト列として扱います。prefix_count("")はsize()、starts_with("")は!empty()です。
 class Trie {
     struct Node {
         map<char, int> next;
@@ -2363,7 +3230,7 @@ class Trie {
     vector<Node> nodes_{1};
     int words_ = 0;
 
-    /// @brief 文字列が対応する状態を探し、なければ `-1` を返す。
+    /// 文字列が対応する状態を探し、なければ `-1` を返す。
     int node_for(string_view s) const {
         int v = 0;
         for (char c : s) {
@@ -2375,16 +3242,16 @@ class Trie {
     }
 
 public:
-    /// @brief 空のTrieを構築する。
+    /// 空のTrieを構築する。
     Trie() = default;
 
-    /// @brief 登録語をすべて削除して空のTrieに戻す。
+    /// 登録語をすべて削除して空のTrieに戻す。
     void clear() {
         nodes_.assign(1, Node{});
         words_ = 0;
     }
 
-    /// @brief 文字列 `s` を1個登録する。
+    /// 文字列 `s` を1個登録する。
     void insert(string_view s) {
         int v = 0;
         ++nodes_[v].pass;
@@ -2399,7 +3266,7 @@ public:
         ++words_;
     }
 
-    /// @brief 文字列 `s` を1個削除し、存在しなければ `false` を返す。
+    /// 文字列 `s` を1個削除し、存在しなければ `false` を返す。
     bool erase(string_view s) {
         int v = node_for(s);
         if (v < 0 || nodes_[v].terminal == 0) return false;
@@ -2414,38 +3281,45 @@ public:
         return true;
     }
 
-    /// @brief 文字列 `s` が1個以上登録されているか判定する。
+    /// 文字列 `s` が1個以上登録されているか判定する。
     bool contains(string_view s) const {
         int v = node_for(s);
         return v >= 0 && nodes_[v].terminal > 0;
     }
 
-    /// @brief 文字列 `s` の登録個数を返す。
+    /// 文字列 `s` の登録個数を返す。
     int count(string_view s) const {
         int v = node_for(s);
         return v < 0 ? 0 : nodes_[v].terminal;
     }
 
-    /// @brief `prefix` で始まる登録語の個数を返す。
+    /// `prefix` で始まる登録語の個数を返す。
     int prefix_count(string_view prefix) const {
         int v = node_for(prefix);
         return v < 0 ? 0 : nodes_[v].pass;
     }
 
-    /// @brief prefixで始まる登録語があるか判定する。空prefixは登録語があればtrue。
+    /// prefixで始まる登録語があるか判定する。空prefixは登録語があればtrue。
     bool starts_with(string_view prefix) const { return prefix_count(prefix) > 0; }
 
-    /// @brief 登録語がないか判定する。
+    /// 登録語がないか判定する。
     bool empty() const { return words_ == 0; }
 
-    /// @brief 重複と空文字を含む登録語の総数を返す。
+    /// 重複と空文字を含む登録語の総数を返す。
     int size() const { return words_; }
 };
 
 // @acf fn AhoCorasick — (string alphabet="abcdefghijklmnopqrstuvwxyz") -> AhoCorasick — 複数パターンの失敗リンク付き文字列オートマトン
-/// @acf-doc @brief 辞書語を登録し、失敗リンク・出力リンクを持つ遷移を O(Σ|pattern|·|alphabet|) で構築する。照合は O(|text|+出力数)
-/// @acf-doc @code (string alphabet="abcdefghijklmnopqrstuvwxyz") -> AhoCorasick
-/// @acf-doc [function] AhoCorasick
+
+/// 複数のパターンを登録し、文章内の出現をまとめて照合する。
+///
+/// 引数 `alphabet`: 空でなく、重複のないバイト文字の列。省略時は `"abcdefghijklmnopqrstuvwxyz"`。
+///
+/// 戻り値: 未構築のAhoCorasick。add(pattern)で登録順のIDを得て、build()後にmatch_counts(text)でIDごとの出現数を取得。重複・重なりも数えます。登録0件なら空結果。
+///
+/// 注意: add/buildは内部を更新。buildは再実行可。状態数をS、alphabet長をAとすると構築時間/メモリO(SA)。照合は文章長と出力数に比例。各個数と状態IDがintに収まること。
+///
+/// 呼び分け: addはbuild前かつ非空のパターン。範囲外文字、空/重複alphabet、build後のaddはinvalid_argument。構築前の照合や不正状態はassert。
 class AhoCorasick {
     struct Node {
         vector<int> next;
@@ -2454,7 +3328,7 @@ class AhoCorasick {
         int output_link = 0;
         int output_count = 0;
 
-        /// @brief 指定したアルファベット数の空状態を構築する。
+        /// 指定したアルファベット数の空状態を構築する。
         explicit Node(int alphabet_size) : next(alphabet_size, -1) {}
     };
 
@@ -2464,22 +3338,22 @@ class AhoCorasick {
     vector<int> pattern_nodes_;
     bool built_ = false;
 
-    /// @brief 構築済みであることを確認する内部処理。
+    /// 構築済みであることを確認する内部処理。
     void require_built() const { assert(built_); }
 
-    /// @brief 文字をアルファベットの添字へ変換する内部処理。
+    /// 文字をアルファベットの添字へ変換する内部処理。
     int code(char c) const {
         return code_[static_cast<unsigned char>(c)];
     }
 
-    /// @brief 状態番号が有効であることを確認する内部処理。
+    /// 状態番号が有効であることを確認する内部処理。
     int checked_state(int state) const {
         assert(0 <= state && state < static_cast<int>(nodes_.size()));
         return state;
     }
 
 public:
-    /// @brief 指定したアルファベットで空のオートマトンを構築する。
+    /// 指定したアルファベットで空のオートマトンを構築する。
     explicit AhoCorasick(string alphabet = "abcdefghijklmnopqrstuvwxyz")
         : alphabet_size_(static_cast<int>(alphabet.size())) {
         if (alphabet.empty())
@@ -2494,7 +3368,7 @@ public:
         nodes_.emplace_back(alphabet_size_);
     }
 
-    /// @brief パターンを登録し、登録順のパターンIDを返す。
+    /// パターンを登録し、登録順のパターンIDを返す。
     int add(string_view pattern) {
         if (built_)
             throw invalid_argument("AhoCorasick: add must precede build");
@@ -2519,7 +3393,7 @@ public:
         return pattern_id;
     }
 
-    /// @brief BFS順に失敗リンクと未接続文字の遷移を構築する。
+    /// BFS順に失敗リンクと未接続文字の遷移を構築する。
     void build() {
         if (built_) return;
         queue<int> pending;
@@ -2556,15 +3430,15 @@ public:
         built_ = true;
     }
 
-    /// @brief オートマトンの状態数を返す。
+    /// オートマトンの状態数を返す。
     int size() const { return static_cast<int>(nodes_.size()); }
 
-    /// @brief 登録済みパターン数を返す。
+    /// 登録済みパターン数を返す。
     int pattern_count() const {
         return static_cast<int>(pattern_nodes_.size());
     }
 
-    /// @brief 状態 `state` から文字 `c` を読んだ遷移先を返す。
+    /// 状態 `state` から文字 `c` を読んだ遷移先を返す。
     int step(int state, char c) const {
         require_built();
         checked_state(state);
@@ -2574,31 +3448,31 @@ public:
         return nodes_[state].next[index];
     }
 
-    /// @brief 状態 `state` の失敗リンク先を返す。
+    /// 状態 `state` の失敗リンク先を返す。
     int failure_link(int state) const {
         require_built();
         return nodes_[checked_state(state)].failure;
     }
 
-    /// @brief failure chain上で最も近い出力状態を返す。
+    /// failure chain上で最も近い出力状態を返す。
     int output_link(int state) const {
         require_built();
         return nodes_[checked_state(state)].output_link;
     }
 
-    /// @brief 状態 `state` で終わる登録パターンIDの一覧を返す。
+    /// 状態 `state` で終わる登録パターンIDの一覧を返す。
     const vi& terminal_ids(int state) const {
         require_built();
         return nodes_[checked_state(state)].terminal_ids;
     }
 
-    /// @brief 状態 `state` を末尾とするパターン総数を返す。
+    /// 状態 `state` を末尾とするパターン総数を返す。
     int output_count(int state) const {
         require_built();
         return nodes_[checked_state(state)].output_count;
     }
 
-    /// @brief `text` 中の各登録パターンの出現回数を返す。
+    /// `text` 中の各登録パターンの出現回数を返す。
     vi match_counts(string_view text) const {
         require_built();
         vi result(pattern_count(), 0);
@@ -2616,9 +3490,18 @@ public:
 };
 
 // @acf fn RollingHash — (string_view[, ull base]) -> RollingHash — 文字列の半開区間を61bitハッシュで比較
-/// @acf-doc @brief 文字列を前処理 O(N)、半開区間ハッシュを O(1) で取得する。ハッシュ一致は確率的な判定
-/// @acf-doc @code (string_view[, ull base]) -> RollingHash
-/// @acf-doc [function] RollingHash
+
+/// 文字列を前処理し、半開区間のハッシュを取得・比較する。
+///
+/// 引数 `value`: 前処理するバイト列。長さはintに収まること。
+///
+/// 引数 `base`: 2以上、modulus=(2^61)-1未満。省略時は `default_base = 1000000007ULL`。
+///
+/// 戻り値: RollingHashオブジェクト。get(l,r)は0<=l<=r<=size()の半開区間ハッシュ、whole()は全体、equalは長さ・base・ハッシュを比較。空区間のハッシュは0。衝突があり得るため一致は確率的な判定です。
+///
+/// 注意: 入力文字列を変更せずprefixと累乗を保存。前処理時間/メモリO(N)、get/equalはO(1)。baseと範囲はassert。
+///
+/// 呼び分け: 比較対象は同じbaseを使います。元文字列そのものの厳密比較は行いません。
 class RollingHash {
     static constexpr ull modulus_ = (1ULL << 61) - 1;
 
@@ -2626,19 +3509,19 @@ class RollingHash {
     vector<ull> hash_;
     vector<ull> powers_;
 
-    /// @brief 61bit法による剰余加算を行う内部処理。
+    /// 61bit法による剰余加算を行う内部処理。
     static ull add_mod(ull left, ull right) {
         ull result = left + right;
         if (result >= modulus_) result -= modulus_;
         return result;
     }
 
-    /// @brief 61bit法による剰余減算を行う内部処理。
+    /// 61bit法による剰余減算を行う内部処理。
     static ull sub_mod(ull left, ull right) {
         return left >= right ? left - right : modulus_ - (right - left);
     }
 
-    /// @brief 61bit法による剰余乗算を行う内部処理。
+    /// 61bit法による剰余乗算を行う内部処理。
     static ull mul_mod(ull left, ull right) {
         const u128 product = static_cast<u128>(left) * right;
         ull result = static_cast<ull>(product >> 61) +
@@ -2652,7 +3535,7 @@ public:
     static constexpr ull modulus = modulus_;
     static constexpr ull default_base = 1'000'000'007ULL;
 
-    /// @brief `value` を前処理し、区間ハッシュを取得できるようにする。
+    /// `value` を前処理し、区間ハッシュを取得できるようにする。
     explicit RollingHash(string_view value, ull base = default_base)
         : base_(base), hash_(value.size() + 1), powers_(value.size() + 1, 1) {
         assert(2 <= base_ && base_ < modulus_);
@@ -2663,19 +3546,19 @@ public:
         }
     }
 
-    /// @brief 前処理した文字列の長さを返す。
+    /// 前処理した文字列の長さを返す。
     int size() const { return sz(hash_) - 1; }
 
-    /// @brief 半開区間 `[left,right)` のハッシュ値を返す。
+    /// 半開区間 `[left,right)` のハッシュ値を返す。
     ull get(int left, int right) const {
         assert(0 <= left && left <= right && right <= size());
         return sub_mod(hash_[right], mul_mod(hash_[left], powers_[right - left]));
     }
 
-    /// @brief 文字列全体のハッシュ値を返す。
+    /// 文字列全体のハッシュ値を返す。
     ull whole() const { return get(0, size()); }
 
-    /// @brief 2つの半開区間が同じ文字列かハッシュで比較する。
+    /// 2つの半開区間が同じ文字列かハッシュで比較する。
     bool equal(int left, int right, const RollingHash& other,
                int other_left, int other_right) const {
         assert(0 <= left && left <= right && right <= size());

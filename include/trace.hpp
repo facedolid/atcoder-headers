@@ -39,7 +39,7 @@ inline constexpr const char* TRACE_COLOR_BEGIN = "";
 inline constexpr const char* TRACE_COLOR_END = "";
 #endif
 
-/// @brief ファイルパスから最後のファイル名部分を返す。
+/// ファイルパスから最後のファイル名部分を返す。
 inline const char* trace_basename(const char* path) {
     const char* base = path;
     for (const char* p = path; *p != '\0'; ++p) {
@@ -50,7 +50,7 @@ inline const char* trace_basename(const char* path) {
     return base;
 }
 
-/// @brief `trace` の引数文字列を括弧・引用符を考慮して名前へ分割する。
+/// `trace` の引数文字列を括弧・引用符を考慮して名前へ分割する。
 inline std::vector<std::string> trace_split_names(const char* names, bool use_angle = true) {
     std::vector<std::string> result;
     if (names == nullptr || names[0] == '\0') {
@@ -250,11 +250,11 @@ concept Streamable = requires(std::ostream& os, T& value) {
    !Iterable<T>;
 
 template <typename T>
-/// @brief 値をトレース出力へ表示する。
+/// 値をトレース出力へ表示する。
 void trace_print(std::ostream& os, T&& value);
 
 template <typename T>
-/// @brief iterableの要素を上限付きで区切り表示する。
+/// iterableの要素を上限付きで区切り表示する。
 void trace_print_delimited(std::ostream& os, T&& value) {
     bool first = true;
     std::size_t count = 0;
@@ -273,7 +273,7 @@ void trace_print_delimited(std::ostream& os, T&& value) {
 }
 
 template <typename T>
-/// @brief map風コンテナのキーと値を区切り表示する。
+/// map風コンテナのキーと値を区切り表示する。
 void trace_print_map_like(std::ostream& os, T&& value) {
     bool first = true;
     std::size_t count = 0;
@@ -296,7 +296,7 @@ void trace_print_map_like(std::ostream& os, T&& value) {
 }
 
 template <std::size_t... Is, typename Tuple>
-/// @brief tupleの指定された要素列を表示する内部処理。
+/// tupleの指定された要素列を表示する内部処理。
 void trace_print_tuple_impl(std::ostream& os, Tuple&& tuple, std::index_sequence<Is...>) {
     bool first = true;
     auto print_elem = [&](auto&& elem) {
@@ -310,7 +310,7 @@ void trace_print_tuple_impl(std::ostream& os, Tuple&& tuple, std::index_sequence
 }
 
 template <typename T>
-/// @brief 型に応じた形式で値をトレース出力へ表示する。
+/// 型に応じた形式で値をトレース出力へ表示する。
 void trace_print(std::ostream& os, T&& value) {
     using U = std::remove_cvref_t<T>;
 
@@ -418,7 +418,7 @@ void trace_print(std::ostream& os, T&& value) {
 }
 
 template <std::size_t I, typename T>
-/// @brief 名前付き引数を1件表示する内部処理。
+/// 名前付き引数を1件表示する内部処理。
 void trace_print_entry(std::ostream& os, const std::vector<std::string>& names,
                        T&& value) {
     if (I > 0) {
@@ -433,14 +433,14 @@ void trace_print_entry(std::ostream& os, const std::vector<std::string>& names,
 }
 
 template <std::size_t... Is, typename... Args>
-/// @brief 複数のトレース引数をまとめて表示する内部処理。
+/// 複数のトレース引数をまとめて表示する内部処理。
 void trace_print_all(std::ostream& os, const std::vector<std::string>& names,
                      std::index_sequence<Is...>, Args&&... args) {
     (trace_print_entry<Is>(os, names, std::forward<Args>(args)), ...);
 }
 
 template <typename... Args>
-/// @brief ファイル名・行番号付きでトレースを出力する。
+/// ファイル名・行番号付きでトレースを出力する。
 void trace_impl(const char* file, int line, const char* names, Args&&... args) {
     // 引数数と分割数を照合する。マクロ展開や比較式とテンプレートの混在は曖昧さが残る。
     auto name_list = trace_split_names(names, false);
@@ -454,7 +454,7 @@ void trace_impl(const char* file, int line, const char* names, Args&&... args) {
 }
 
 template <typename Container, typename Index>
-/// @brief 添字と、その添字で参照したコンテナ要素を表示する。
+/// 添字と、その添字で参照したコンテナ要素を表示する。
 void trace_print_index(std::ostream& os, std::string_view container_name,
                        std::string_view index_name, const Container& container,
                        const Index& index) {
@@ -486,7 +486,7 @@ void trace_print_index(std::ostream& os, std::string_view container_name,
 }
 
 template <std::size_t... Is, typename Container, typename... Indices>
-/// @brief 複数の添字について `trace_print_index` を呼び出す内部処理。
+/// 複数の添字について `trace_print_index` を呼び出す内部処理。
 void trace_print_indices(std::ostream& os, std::string_view container_name,
                          const std::vector<std::string>& index_names,
                          const Container& container, std::index_sequence<Is...>,
@@ -500,7 +500,7 @@ void trace_print_indices(std::ostream& os, std::string_view container_name,
 }
 
 template <typename Expr, typename Container, typename... Indices>
-/// @brief 式とコンテナ添字の値をファイル名・行番号付きで出力する。
+/// 式とコンテナ添字の値をファイル名・行番号付きで出力する。
 void trace_indexed_impl(const char* file, int line, const char* expression_name,
                         Expr&& expression_value, const char* container_name,
                         const Container& container, const char* index_names,
@@ -518,8 +518,12 @@ void trace_indexed_impl(const char* file, int line, const char* expression_name,
 
 }  // namespace debug
 
+/// 値と式の名前を、ファイル名・行番号付きで標準エラーへ出力する。
+/// `trace(x, y)` のように使う。ac.hpp経由ではLOCAL時だけ有効で、提出時は引数も評価しない。
 #define trace(...) \
     debug::trace_impl(__FILE__, __LINE__, #__VA_ARGS__, __VA_ARGS__)
+/// 式の値と、指定したコンテナの添字位置を標準エラーへ出力する。
+/// `trace_idx(x, a, i, j)` のように使う。添字は対象コンテナの範囲内で指定する。
 #define trace_idx(expr, container, ...)                                      \
     debug::trace_indexed_impl(__FILE__, __LINE__, #expr, (expr), #container, \
                               (container), #__VA_ARGS__, __VA_ARGS__)
