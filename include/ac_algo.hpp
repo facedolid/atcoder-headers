@@ -1858,16 +1858,20 @@ public:
 template <class T, class Op = plus<T>>
 class SegmentTree {
     int n_ = 0, size_ = 1;
-    T identity_{};
-    Op op_{};
-    vector<T> data_{2, T{}};
+    T identity_;
+    Op op_;
+    vector<T> data_;
 
-    /// 要素数・単位元・演算を指定して内部配列を初期化する。
-    void init(int n, const T& identity, Op op) {
+    static int checked_count(size_t n) {
+        if (n > static_cast<size_t>(numeric_limits<int>::max()))
+            throw length_error("SegmentTree: size is too large for int indexing");
+        return static_cast<int>(n);
+    }
+
+    /// 指定済みの単位元で内部配列を初期化する。
+    void init(int n) {
         assert(n >= 0);
         n_ = n;
-        identity_ = identity;
-        op_ = std::move(op);
         size_ = 1;
         while (size_ < n_) {
             if (size_ > numeric_limits<int>::max() / 4)
@@ -1878,16 +1882,19 @@ class SegmentTree {
     }
 
 public:
-    /// 要素数0のSegmentTreeを作る。
-    SegmentTree() = default;
+    /// 要素数0の木を作る。TとOpがデフォルト構築できる場合のみ利用可能。
+    SegmentTree() requires (is_default_constructible_v<T> && is_default_constructible_v<Op>)
+        : SegmentTree(0, T{}, Op{}) {}
 
-    /// 要素数 `n`、単位元 `identity` のSegmentTreeを構築する。
-    explicit SegmentTree(int n, T identity = T{}, Op op = Op{}) {
-        init(n, identity, std::move(op));
+    /// n要素を単位元で初期化する。通常の初期値と単位元を混同しないこと。
+    explicit SegmentTree(int n, T identity = T{}, Op op = Op{})
+        : identity_(std::move(identity)), op_(std::move(op)) {
+        init(n);
     }
-    /// 初期配列 `values` からSegmentTreeを構築する。
-    explicit SegmentTree(const vector<T>& values, T identity = T{}, Op op = Op{}) {
-        init(sz(values), identity, std::move(op));
+    /// 配列をコピーして構築する。単位元と演算を渡せば非default構築型・capture付きラムダも使える。
+    explicit SegmentTree(const vector<T>& values, T identity = T{}, Op op = Op{})
+        : identity_(std::move(identity)), op_(std::move(op)) {
+        init(checked_count(values.size()));
         for (int i = 0; i < n_; ++i) data_[size_ + i] = values[i];
         for (int i = size_ - 1; i > 0; --i)
             data_[i] = op_(data_[i << 1], data_[i << 1 | 1]);
@@ -3568,3 +3575,252 @@ public:
                base_ == other.base_ && get(left, right) == other.get(other_left, other_right);
     }
 };
+
+// @acf fn make_segtree — (vector<T>, identity, combine) -> SegmentTree — 演算を指定してセグメント木を作る
+/// 配列・単位元・集約関数から作る。ac_algo.hppが必要。decltypeの記述は不要。
+/// 例: `make_segtree(vector<string>{"a","b"}, string{}, [](auto a, auto b){ return a+b; })`。
+/// prod(0,2)は"ab"。空区間・空配列の全体結果はidentity。入力配列は変更しない。
+/// combine(a,b)はTの集約値を返す。結合則とcombine(e,x)=combine(x,e)=xが必要。
+/// 交換則は不要。左からの順序を保つ。Tはコピー構築・代入可能であること。
+/// combineはconst呼出し可能で、副作用なく同じ入力に同じ結果を返すこと。
+/// 値captureも使える。参照capture先の寿命・値の変更には注意。関数の型消去はしない。
+/// 構築O(n)、set/prod/端点探索O(log n)、get/all_prod O(1)。演算費用は別。
+/// set/getは0<=i<size()、prodは0<=l<=r<=size()の半開区間。範囲はassert。
+template <class T, class Op>
+auto make_segtree(const vector<T>& values, type_identity_t<T> identity, Op combine) {
+    return SegmentTree<T, Op>(values, std::move(identity), std::move(combine));
+}
+
+// @acf fn make_min_segtree — (vector<T>, identity[, less]) -> SegmentTree — pairや自作型の最小値
+/// pairや自作型の最小値を求める。ac_algo.hppが必要。単位元は明示する。
+/// 例: `make_min_segtree(vector<pair<int,int>>{{-3,2},{-3,1}}, pair{INT_MAX,INT_MAX})`。
+/// all_prod()は{-3,1}。既定のless<>はpairを辞書順で比較する。
+/// less(a,b)は「aがbより小さい」ならtrue。厳密弱順序で、途中で規則を変えないこと。
+/// 同順位は左側を採用。identityは全実値より厳密に大きいか、同順位なら値も同一であること。
+/// 空区間・空配列はidentity。入力をコピーし変更しない。構築O(n)、set/prod O(log n)。
+/// 数値だけなら単位元を省略できる。整数は型の端値、浮動小数点は±無限大（なければ端値）。
+/// 浮動小数点のNaNは不可。独自集約にはmake_segtreeを使う。
+template <class T, class Compare = less<>>
+auto make_min_segtree(const vector<T>& values, type_identity_t<T> identity, Compare less_than = {}) {
+    auto combine = [less_than = std::move(less_than)](const T& a, const T& b) -> T {
+        return less_than(b, a) ? b : a;
+    };
+    return make_segtree(values, std::move(identity), std::move(combine));
+}
+
+// @acf fn make_max_segtree — (vector<T>, identity[, less]) -> SegmentTree — pairや自作型の最大値
+/// pairや自作型の最大値を求める。ac_algo.hppが必要。単位元は明示する。
+/// 例: `make_max_segtree(vector<pair<int,int>>{{3,-2},{3,-1}}, pair{INT_MIN,INT_MIN})`。
+/// all_prod()は{3,-1}。less(a,b)は「aがbより小さい」ならtrueで、既定は辞書順。
+/// lessは厳密弱順序。同順位は左側を採用。比較規則は途中で変えないこと。
+/// identityは全実値より厳密に小さいか、同順位なら値も同一であること。
+/// 空区間・空配列はidentity。入力をコピーし変更しない。構築O(n)、set/prod O(log n)。
+/// 数値だけなら単位元を省略できる。整数は型の端値、浮動小数点は±無限大（なければ端値）。
+/// 浮動小数点のNaNは不可。独自集約にはmake_segtreeを使う。
+template <class T, class Compare = less<>>
+auto make_max_segtree(const vector<T>& values, type_identity_t<T> identity, Compare less_than = {}) {
+    auto combine = [less_than = std::move(less_than)](const T& a, const T& b) -> T {
+        return less_than(a, b) ? b : a;
+    };
+    return make_segtree(values, std::move(identity), std::move(combine));
+}
+
+// @acf fn make_sum_segtree — (vector<T>) -> SegmentTree<T> — 区間和のセグメント木を作る
+/// 配列から区間和のセグメント木を作る。演算関数・単位元の指定は不要。
+/// `values` はコピーして保持する。要素型Tの加算とT{}（ゼロ）を使う。
+/// `seg.prod(l,r)` は半開区間[l,r)の和、`seg.set(i,x)` は代入。
+/// 空区間・空配列の全体和はT{}。合計・中間値がTに収まること。
+/// 整数の大きな和はvector<ll>を渡す。浮動小数点は加算順で丸め誤差が変わる。
+/// 構築O(n)、更新・区間取得O(log n)。入力配列は変更しない。
+/// 例: `auto seg = make_sum_segtree(vector<ll>{2,3,4});` → `seg.prod(0,2)` は5。
+/// 既存の`SegmentTree<T> seg(values)`と同じ。要素数だけなら`SegmentTree<ll> seg(n)`。
+template <class T>
+requires (!is_same_v<T, bool>)
+auto make_sum_segtree(const vector<T>& values) {
+    return SegmentTree<T>(values);
+}
+
+/// 数値配列から区間最小値のセグメント木を作る。ラムダ・decltypeは不要。
+/// `seg.prod(l,r)`は半開区間[l,r)の最小値、`seg.set(i,x)`は代入。
+/// 空区間・空配列は整数なら型の最大値、浮動小数点なら正の無限大を返す。
+/// 無限大のない浮動小数点型では型の最大値を使う。NaNは渡さない。
+/// 要素型はbool以外の算術型。入力配列は変更しない。
+/// 構築O(n)、更新・区間取得O(log n)。
+/// 例: `auto seg = make_min_segtree(vector<ll>{5,2,7});` → `seg.prod(0,2)` は2。
+template <class T>
+requires (is_arithmetic_v<T> && !is_same_v<T, bool>)
+auto make_min_segtree(const vector<T>& values) {
+    constexpr T identity = numeric_limits<T>::has_infinity
+                               ? numeric_limits<T>::infinity()
+                               : numeric_limits<T>::max();
+    return SegmentTree<T, ac_detail::algorithm::min_op<T>>(values, identity);
+}
+
+/// 数値配列から区間最大値のセグメント木を作る。ラムダ・decltypeは不要。
+/// `seg.prod(l,r)`は半開区間[l,r)の最大値、`seg.set(i,x)`は代入。
+/// 空区間・空配列は整数なら型の最小値、浮動小数点なら負の無限大を返す。
+/// 無限大のない浮動小数点型では型の最小値を使う。NaNは渡さない。
+/// 要素型はbool以外の算術型。入力配列は変更しない。
+/// 構築O(n)、更新・区間取得O(log n)。
+/// 例: `auto seg = make_max_segtree(vector<ll>{-5,-2,-7});` → `seg.prod(0,3)` は-2。
+template <class T>
+requires (is_arithmetic_v<T> && !is_same_v<T, bool>)
+auto make_max_segtree(const vector<T>& values) {
+    constexpr T identity = numeric_limits<T>::has_infinity
+                               ? -numeric_limits<T>::infinity()
+                               : numeric_limits<T>::lowest();
+    auto op = [](const T& a, const T& b) -> T { return std::max(a, b); };
+    return SegmentTree<T, decltype(op)>(values, identity, op);
+}
+
+// @acf fn make_gcd_segtree — (vector<T>) -> SegmentTree — 区間GCDのセグメント木を作る
+/// 非負整数の配列から、区間の最大公約数を求めるセグメント木を作る。
+/// `seg.prod(l,r)`は半開区間[l,r)のGCD、`seg.set(i,x)`は代入。
+/// 初期値と更新値はすべて非負にする。空区間・空配列の全体GCDは0。
+/// 要素型はbool以外の整数型。入力配列は変更しない。
+/// 構築O(n)回、更新・区間取得O(log n)回のGCD計算を行う。
+/// 例: `auto seg = make_gcd_segtree(vector<ll>{12,18,9});` → `seg.prod(0,2)` は6。
+template <class T>
+requires (is_integral_v<T> && !is_same_v<T, bool>)
+auto make_gcd_segtree(const vector<T>& values) {
+    auto op = [](T a, T b) -> T { return std::gcd(a, b); };
+    return SegmentTree<T, decltype(op)>(values, T{}, op);
+}
+
+// @acf fn make_and_segtree — (vector<T>) -> SegmentTree — 区間bit ANDのセグメント木を作る
+/// 整数配列からbit AND（共通して立つbit）のセグメント木を作る。
+/// `seg.prod(l,r)`は半開区間[l,r)のAND、`seg.set(i,x)`は代入。
+/// 空区間・空配列は全bitが1の値（符号付きなら-1）を返す。論理ANDではない。
+/// 要素型はbool以外の整数型。入力配列は変更しない。
+/// 構築O(n)、更新・区間取得O(log n)。
+/// 例: `auto seg = make_and_segtree(vector<unsigned>{6,3});` → `seg.all_prod()` は2。
+template <class T>
+requires (is_integral_v<T> && !is_same_v<T, bool>)
+auto make_and_segtree(const vector<T>& values) {
+    return SegmentTree<T, bit_and<T>>(values, static_cast<T>(~T{}));
+}
+
+// @acf fn make_or_segtree — (vector<T>) -> SegmentTree — 区間bit ORのセグメント木を作る
+/// 整数配列からbit OR（どれかで立つbit）のセグメント木を作る。
+/// `seg.prod(l,r)`は半開区間[l,r)のOR、`seg.set(i,x)`は代入。
+/// 空区間・空配列は0を返す。論理ORではない。
+/// 要素型はbool以外の整数型。入力配列は変更しない。
+/// 構築O(n)、更新・区間取得O(log n)。
+/// 例: `auto seg = make_or_segtree(vector<unsigned>{6,3});` → `seg.all_prod()` は7。
+template <class T>
+requires (is_integral_v<T> && !is_same_v<T, bool>)
+auto make_or_segtree(const vector<T>& values) {
+    return SegmentTree<T, bit_or<T>>(values, T{});
+}
+
+// @acf fn make_xor_segtree — (vector<T>) -> SegmentTree — 区間bit XORのセグメント木を作る
+/// 整数配列からbit XOR（奇数回立つbit）のセグメント木を作る。
+/// `seg.prod(l,r)`は半開区間[l,r)のXOR、`seg.set(i,x)`は代入。
+/// 空区間・空配列は0を返す。要素型はbool以外の整数型。
+/// 構築O(n)、更新・区間取得O(log n)。入力配列は変更しない。
+/// 例: `auto seg = make_xor_segtree(vector<unsigned>{6,3});` → `seg.all_prod()` は5。
+template <class T>
+requires (is_integral_v<T> && !is_same_v<T, bool>)
+auto make_xor_segtree(const vector<T>& values) {
+    return SegmentTree<T, bit_xor<T>>(values, T{});
+}
+
+#ifdef AC_HAS_ACL
+namespace ac_detail::algorithm {
+// Mode: 0 = 和、1 = 最小、2 = 最大。空ノードには加算しない。
+template <class T, int Mode>
+class range_add_tree {
+    struct node { T value; int len; };
+    static T identity() {
+        if constexpr (Mode == 0) return T{};
+        if constexpr (Mode == 1) return numeric_limits<T>::max();
+        return numeric_limits<T>::lowest();
+    }
+    static node op(node a, node b) {
+        if (a.len == 0) return b;
+        if (b.len == 0) return a;
+        if constexpr (Mode == 0) return {a.value + b.value, a.len + b.len};
+        if constexpr (Mode == 1) return {std::min(a.value, b.value), a.len + b.len};
+        return {std::max(a.value, b.value), a.len + b.len};
+    }
+    static node e() { return {identity(), 0}; }
+    static node mapping(T delta, node x) {
+        if (x.len == 0) return x;
+        if constexpr (Mode == 0) x.value += delta * static_cast<T>(x.len);
+        else x.value += delta;
+        return x;
+    }
+    static T composition(T f, T g) { return f + g; }
+    static T id() { return T{}; }
+    static vector<node> initial(const vector<T>& values) {
+        assert(values.size() <= static_cast<size_t>(numeric_limits<int>::max()));
+        vector<node> result;
+        result.reserve(values.size());
+        for (T x : values) result.push_back({x, 1});
+        return result;
+    }
+    atcoder::lazy_segtree<node, op, e, T, mapping, composition, id> tree_;
+    int size_;
+public:
+    /// 配列をコピーして構築する。元の配列は変更しない。O(n)。
+    explicit range_add_tree(const vector<T>& values)
+        : tree_(initial(values)), size_(static_cast<int>(values.size())) {}
+    /// 管理する要素数を返す。O(1)。
+    int size() const { return size_; }
+    /// 添字iの値をxに上書きする。0 <= i < size()。O(log n)。
+    void set(int i, T x) { tree_.set(i, {x, 1}); }
+    /// 添字iの現在値を返す。0 <= i < size()。O(log n)。
+    T get(int i) { return tree_.get(i).value; }
+    /// 半開区間[l,r)を集約する。0 <= l <= r <= size()。O(log n)。
+    /// 空区間は和なら0、最小ならTの最大値、最大ならTの最小値。
+    T prod(int l, int r) { return tree_.prod(l, r).value; }
+    /// 全体の集約値を返す。空配列の結果はprod(0,0)と同じ。O(1)。
+    T all_prod() { return tree_.all_prod().value; }
+    /// 半開区間[l,r)の各要素にdeltaを足す。空区間は何もしない。
+    /// 0 <= l <= r <= size()。負のdeltaで減算できる。O(log n)。
+    void apply(int l, int r, T delta) { tree_.apply(l, r, delta); }
+};
+} // namespace ac_detail::algorithm
+
+// @acf fn make_range_add_sum_segtree — (vector<T>) -> 遅延セグメント木 — 区間加算・区間和
+/// 配列から区間加算・区間和の遅延セグメント木を作る。ACL有効時のみ使用可。
+/// includeはac_algo.hpp。例: `auto seg = make_range_add_sum_segtree(vector<ll>{1,2,3});`
+/// `seg.apply(0,2,5)`で{6,7,3}、`seg.prod(0,3)`は16。添字0始まり、区間[l,r)。
+/// prod/get/all_prodは数値を返す。set(i,x)は1点代入。空区間の和は0。
+/// Tはint以上の幅の符号付き整数。値・区間和・加算量の累積・delta*長さはT内に収める。
+/// オーバーフロー検出や型の自動拡張はしない。通常はvector<ll>を渡す。
+/// 入力配列は変更しない。構築O(n)、更新・区間取得O(log n)、全体取得O(1)。
+template <class T>
+requires (is_integral_v<T> && is_signed_v<T> && sizeof(T) >= sizeof(int))
+auto make_range_add_sum_segtree(const vector<T>& values) {
+    return ac_detail::algorithm::range_add_tree<T, 0>(values);
+}
+
+// @acf fn make_range_add_min_segtree — (vector<T>) -> 遅延セグメント木 — 区間加算・区間最小値
+/// 配列から区間加算・区間最小値の遅延セグメント木を作る。ACL有効時のみ使用可。
+/// includeはac_algo.hpp。例: `auto seg = make_range_add_min_segtree(vector<ll>{1,2,3});`
+/// `seg.apply(0,2,5)`で{6,7,3}、`seg.prod(0,3)`は3。添字0始まり、区間[l,r)。
+/// prod/get/all_prodは数値を返す。set(i,x)は1点代入。空区間はTの最大値。
+/// Tはint以上の幅の符号付き整数。各要素と加算量の累積をT内に収める。
+/// 空ノードには加算しない。オーバーフロー検出や型の自動拡張はしない。
+/// 入力配列は変更しない。構築O(n)、更新・区間取得O(log n)、全体取得O(1)。
+template <class T>
+requires (is_integral_v<T> && is_signed_v<T> && sizeof(T) >= sizeof(int))
+auto make_range_add_min_segtree(const vector<T>& values) {
+    return ac_detail::algorithm::range_add_tree<T, 1>(values);
+}
+
+// @acf fn make_range_add_max_segtree — (vector<T>) -> 遅延セグメント木 — 区間加算・区間最大値
+/// 配列から区間加算・区間最大値の遅延セグメント木を作る。ACL有効時のみ使用可。
+/// includeはac_algo.hpp。例: `auto seg = make_range_add_max_segtree(vector<ll>{1,2,3});`
+/// `seg.apply(0,2,5)`で{6,7,3}、`seg.prod(0,3)`は7。添字0始まり、区間[l,r)。
+/// prod/get/all_prodは数値を返す。set(i,x)は1点代入。空区間はTの最小値。
+/// Tはint以上の幅の符号付き整数。各要素と加算量の累積をT内に収める。
+/// 空ノードには加算しない。オーバーフロー検出や型の自動拡張はしない。
+/// 入力配列は変更しない。構築O(n)、更新・区間取得O(log n)、全体取得O(1)。
+template <class T>
+requires (is_integral_v<T> && is_signed_v<T> && sizeof(T) >= sizeof(int))
+auto make_range_add_max_segtree(const vector<T>& values) {
+    return ac_detail::algorithm::range_add_tree<T, 2>(values);
+}
+#endif // AC_HAS_ACL
