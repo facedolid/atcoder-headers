@@ -9510,3 +9510,25 @@ void draw_object(Canvas& canvas, const Cuboid<A, B>& cuboid, int color_idx) {
 }
 }  // namespace debug::graphical
 #endif
+
+// @acf fn wrapgrid — (Point2<T> position, ll h, ll w) -> Point2<T> — 行・列をトーラス状に折り返す
+
+/// グリッドの端を越えた座標を、反対側へ折り返して返す。
+///
+/// 引数 `position`: 0番目が行、1番目が列。Tはlong long以下の符号付き整数型。
+/// 引数 `h / w`: 正の高さ・幅。0以下ならinvalid_argument。
+///
+/// 戻り値: 元と同じPoint2<T>型。行は[0,h)、列は[0,w)。結果がTに収まらなければoverflow_error。
+///
+/// 注意: 入力は変更しません。負数や何周分も離れた座標にも対応。時間・追加メモリO(1)。
+///
+/// 例: `current = wrapgrid(current, H, W);`。`wrapgrid(Point2<int>{-1,4},3,4)`は(2,0)。
+template <class T>
+requires signed_integral<T> && (numeric_limits<T>::digits <= numeric_limits<ll>::digits)
+constexpr Point2<T> wrapgrid(const Point2<T>& position, ll h, ll w) {
+    const ll row = wrap0(position[0], h);
+    const ll col = wrap0(position[1], w);
+    if (row > numeric_limits<T>::max() || col > numeric_limits<T>::max())
+        throw overflow_error("wrapgrid: result does not fit in coordinate type");
+    return {static_cast<T>(row), static_cast<T>(col)};
+}
