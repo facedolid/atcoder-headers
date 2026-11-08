@@ -7343,3 +7343,126 @@ inline string anti_diagonal(const vector<string>& grid) {
 
 /// `for (const auto& value : (range))` と同じ。range式は1回評価し、要素をコピーしない。break / continue は通常の範囲forと同じ。走査時間は要素数と本体の処理による
 #define repeach(value, range) for (const auto& value : (range))
+
+// @acf fn sorted_copy — (range, comp) -> vector<T> — 入力を変えずにソートする
+/// 入力をコピーして比較器順に並べたvectorを返す。比較器は厳密弱順序が必要。
+/// 省略時は昇順。時間O(N log N)、追加メモリO(N)。同値の順序は未保証。
+template <ranges::input_range R, class Comp = std::less<>>
+auto sorted_copy(R&& values, Comp comp = {}) {
+    vector<ranges::range_value_t<R>> out;
+    for (auto&& value : values) out.push_back(value);
+    std::sort(out.begin(), out.end(), std::move(comp));
+    return out;
+}
+
+// @acf fn sorted_by — (range, key) -> vector<T> — キー順に安定ソートしたコピー
+/// 各要素にkeyを1回適用し、キー順に安定ソートしたvectorを返す。
+/// キーには厳密弱順序が必要。比較回数は通常O(N log N)、補助領域が不足する場合はO(N log² N)。入力は変更しない。
+template <ranges::input_range R, class F>
+auto sorted_by(R&& values, F key) {
+    using T = ranges::range_value_t<R>;
+    using K = std::decay_t<std::invoke_result_t<F&, ranges::range_reference_t<R>>>;
+    vector<pair<K, T>> keyed;
+    for (auto&& value : values) keyed.emplace_back(std::invoke(key, value), value);
+    std::stable_sort(keyed.begin(), keyed.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    vector<T> out;
+    out.reserve(keyed.size());
+    for (auto& item : keyed) out.push_back(std::move(item.second));
+    return out;
+}
+
+// @acf fn group_by — (range, key) -> map<K,vector<T>> — キーごとに入力順で分類
+/// keyの結果ごとに要素をまとめる。キーはmapの昇順、各グループ内は入力順。
+/// keyは各要素に1回適用。キーの比較には厳密弱順序が必要。時間O(N log N)、追加メモリO(N)。
+template <ranges::input_range R, class F>
+auto group_by(R&& values, F key) {
+    using T = ranges::range_value_t<R>;
+    using K = std::decay_t<std::invoke_result_t<F&, ranges::range_reference_t<R>>>;
+    map<K, vector<T>> out;
+    for (auto&& value : values) out[std::invoke(key, value)].push_back(value);
+    return out;
+}
+
+// @acf fn get_or — (map, key, fallback) -> mapped_type — 既定値付きで辞書から取得
+/// 辞書にkeyがあればその値、なければfallbackを値で返す。辞書に要素を追加しない。
+/// fallbackはmapped_typeへ変換可能であること。計算量は辞書のfindに従う。
+template <class Map, class Key, class Default>
+auto get_or(const Map& values, const Key& key, Default&& fallback) -> typename Map::mapped_type {
+    auto it = values.find(key);
+    return it == values.end() ? static_cast<typename Map::mapped_type>(std::forward<Default>(fallback)) : it->second;
+}
+
+// @acf fn unique_by — (range, key) -> vector<T> — キーごとの最初の要素を残す
+/// キーごとの最初の要素を入力順のvectorで返す。keyは各要素に1回適用する。
+/// キーの比較には厳密弱順序が必要。時間O(N log N)、追加メモリO(N)。入力は変更しない。
+template <ranges::input_range R, class F>
+auto unique_by(R&& values, F key) {
+    using T = ranges::range_value_t<R>;
+    using K = std::decay_t<std::invoke_result_t<F&, ranges::range_reference_t<R>>>;
+    set<K> seen;
+    vector<T> out;
+    for (auto&& value : values) if (seen.insert(std::invoke(key, value)).second) out.push_back(value);
+    return out;
+}
+
+// @acf fn unique_stable — (range) -> vector<T> — 最初の出現順で重複除去
+/// 比較順序で同値の要素をまとめ、最初の出現だけを入力順で返す。
+/// 要素には厳密弱順序が必要。時間O(N log N)、追加メモリO(N)。入力は変更しない。
+template <ranges::input_range R>
+auto unique_stable(R&& values) {
+    return unique_by(std::forward<R>(values), [](const auto& value) { return ranges::range_value_t<R>(value); });
+}
+
+// @acf fn count_by — (range, key) -> map<K,ll> — キーごとの個数を数える
+/// keyを各要素に1回適用し、キーごとの個数を返す。キーは厳密弱順序が必要。
+/// 時間O(N log N)、追加メモリO(K)。Kは異なるキーの数。
+template <ranges::input_range R, class F>
+auto count_by(R&& values, F key) {
+    using K = std::decay_t<std::invoke_result_t<F&, ranges::range_reference_t<R>>>;
+    map<K, ll> out;
+    for (auto&& value : values) ++out[std::invoke(key, value)];
+    return out;
+}
+
+// @acf fn partition_vec — (range, pred) -> pair<vector<T>,vector<T>> — 条件で2つに分ける
+/// predが真の要素と偽の要素をそれぞれ入力順にコピーして返す。predは各要素に1回適用。
+/// 時間O(N)、追加メモリO(N)。
+template <ranges::input_range R, class Pred>
+auto partition_vec(R&& values, Pred pred) {
+    using T = ranges::range_value_t<R>;
+    pair<vector<T>, vector<T>> out;
+    for (auto&& value : values) (std::invoke(pred, value) ? out.first : out.second).push_back(value);
+    return out;
+}
+
+// @acf fn zip_strict — (range, range) -> vector<pair<T,U>> — 同じ長さの列を組にする
+/// 2つの有限rangeを走査して値のpairを保存する。長さが違えばinvalid_argumentを投げる。
+/// 一時rangeも安全に扱う。時間O(N)、追加メモリO(N)。要素内部の参照先は複製しない。
+template <ranges::input_range R, ranges::input_range S>
+auto zip_strict(R&& a, S&& b) {
+    using T = ranges::range_value_t<R>; using U = ranges::range_value_t<S>;
+    vector<pair<T, U>> out;
+    auto i = ranges::begin(a); auto j = ranges::begin(b);
+    auto e = ranges::end(a); auto f = ranges::end(b);
+    while (i != e && j != f) { out.emplace_back(*i, *j); ++i; ++j; }
+    if (i != e || j != f) throw invalid_argument("zip_strict: lengths differ");
+    return out;
+}
+
+// @acf fn zip_longest — (range, range) -> vector<pair<optional<T>,optional<U>>> — 長い列まで組にする
+/// 2つの有限rangeを長い方の末尾まで走査し、足りない値はnulloptにする。
+/// 結果は値を所有するvector。一時rangeも扱える。時間・追加メモリO(max(N,M))。
+template <ranges::input_range R, ranges::input_range S>
+auto zip_longest(R&& a, S&& b) {
+    using T = ranges::range_value_t<R>; using U = ranges::range_value_t<S>;
+    vector<pair<optional<T>, optional<U>>> out;
+    auto i = ranges::begin(a); auto j = ranges::begin(b);
+    auto e = ranges::end(a); auto f = ranges::end(b);
+    while (i != e || j != f) {
+        optional<T> x; optional<U> y;
+        if (i != e) { x.emplace(*i); ++i; }
+        if (j != f) { y.emplace(*j); ++j; }
+        out.emplace_back(std::move(x), std::move(y));
+    }
+    return out;
+}
