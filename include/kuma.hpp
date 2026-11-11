@@ -527,3 +527,174 @@ std::map<K, V> dict_from_rows(const C& rows) {
     return result;
 }
 }  // namespace kuma_rt
+
+#define KUMA_CPP_INTEROP_ABI 1
+
+// M6 helpers operate on ordinary C++ values. The native compiler resolves types.
+// They do not claim M1-M5 borrow checking for arbitrary user-defined C++ code.
+namespace kuma_rt {
+template<class R>
+using cpp_item = std::remove_cvref_t<decltype(*std::begin(std::declval<const R&>()))>;
+
+template<class R, class F, class P>
+auto cpp_collect(const R& values, F transform, P predicate) {
+    using Out = std::decay_t<decltype(transform(*std::begin(values)))>;
+    std::vector<Out> result;
+    for (const auto& item : values)
+        if (predicate(item)) result.push_back(transform(item));
+    return result;
+}
+template<class R, class F, class P>
+auto cpp_flat_collect(const R& values, F transform, P predicate) {
+    using Inner = std::decay_t<decltype(transform(*std::begin(values)))>;
+    using Out = typename Inner::value_type;
+    std::vector<Out> result;
+    for (const auto& item : values) if (predicate(item)) {
+        auto inner = transform(item);
+        result.insert(result.end(), std::make_move_iterator(inner.begin()), std::make_move_iterator(inner.end()));
+    }
+    return result;
+}
+template<class R, class F>
+auto cpp_map(const R& values, F callback) {
+    return cpp_collect(values, std::move(callback), [](const auto&) { return true; });
+}
+template<class R, class F>
+auto cpp_filter(const R& values, F callback) {
+    return cpp_collect(values, [](const auto& x) { return x; }, std::move(callback));
+}
+template<class R>
+auto cpp_sum(const R& values) {
+    using E = cpp_item<R>;
+    static_assert(std::is_arithmetic_v<E>, "Kuma sum requires numeric elements");
+    using Out = std::conditional_t<std::is_integral_v<E>, std::common_type_t<long long, E>, E>;
+    Out result{};
+    for (const auto& item : values) result += item;
+    return result;
+}
+template<class R>
+long long cpp_len(const R& values) { return numeric_cast<long long>(std::size(values)); }
+template<class R, class F, class A>
+auto cpp_reduce(const R& values, F callback, A initial) {
+    for (const auto& item : values) initial = callback(std::move(initial), item);
+    return initial;
+}
+template<class R, class F>
+bool cpp_any(const R& values, F predicate) {
+    for (const auto& item : values) if (predicate(item)) return true;
+    return false;
+}
+template<class R, class F>
+bool cpp_all(const R& values, F predicate) {
+    for (const auto& item : values) if (!predicate(item)) return false;
+    return true;
+}
+template<class R> bool cpp_any(const R& values) {
+    return cpp_any(values, [](const auto& x) { return static_cast<bool>(x); });
+}
+template<class R> bool cpp_all(const R& values) {
+    return cpp_all(values, [](const auto& x) { return static_cast<bool>(x); });
+}
+template<class R, class... Args>
+void cpp_sort(R& values, Args... args) { std::sort(std::begin(values), std::end(values), std::move(args)...); }
+template<class R, class... Args>
+auto cpp_sorted(R values, Args... args) { cpp_sort(values, std::move(args)...); return values; }
+template<class R>
+auto cpp_enumerate(const R& values, long long start) { return enumerate<cpp_item<R>>(values, start); }
+template<class... Rs>
+auto cpp_zip(bool strict, const Rs&... values) { return zip<std::tuple<cpp_item<Rs>...>>(strict, values...); }
+} // namespace kuma_rt
+
+namespace kuma_rt {
+template<class R, class... As>
+decltype(auto) cpp_member_map(R&& values, As&&... args) {
+    if constexpr (requires { std::forward<R>(values).map(std::forward<As>(args)...); })
+        return std::forward<R>(values).map(std::forward<As>(args)...);
+    else
+        return kuma_rt::cpp_map(std::forward<R>(values), std::forward<As>(args)...);
+}
+template<class R, class... As>
+decltype(auto) cpp_member_filter(R&& values, As&&... args) {
+    if constexpr (requires { std::forward<R>(values).filter(std::forward<As>(args)...); })
+        return std::forward<R>(values).filter(std::forward<As>(args)...);
+    else
+        return kuma_rt::cpp_filter(std::forward<R>(values), std::forward<As>(args)...);
+}
+template<class R, class... As>
+decltype(auto) cpp_member_sum(R&& values, As&&... args) {
+    if constexpr (requires { std::forward<R>(values).sum(std::forward<As>(args)...); })
+        return std::forward<R>(values).sum(std::forward<As>(args)...);
+    else
+        return kuma_rt::cpp_sum(std::forward<R>(values), std::forward<As>(args)...);
+}
+template<class R, class... As>
+decltype(auto) cpp_member_sort(R&& values, As&&... args) {
+    if constexpr (requires { std::forward<R>(values).sort(std::forward<As>(args)...); })
+        return std::forward<R>(values).sort(std::forward<As>(args)...);
+    else
+        return kuma_rt::cpp_sort(std::forward<R>(values), std::forward<As>(args)...);
+}
+template<class R, class... As>
+decltype(auto) cpp_member_sorted(R&& values, As&&... args) {
+    if constexpr (requires { std::forward<R>(values).sorted(std::forward<As>(args)...); })
+        return std::forward<R>(values).sorted(std::forward<As>(args)...);
+    else
+        return kuma_rt::cpp_sorted(std::forward<R>(values), std::forward<As>(args)...);
+}
+template<class R, class... As>
+decltype(auto) cpp_member_reduce(R&& values, As&&... args) {
+    if constexpr (requires { std::forward<R>(values).reduce(std::forward<As>(args)...); })
+        return std::forward<R>(values).reduce(std::forward<As>(args)...);
+    else
+        return kuma_rt::cpp_reduce(std::forward<R>(values), std::forward<As>(args)...);
+}
+template<class R, class... As>
+decltype(auto) cpp_member_reverse(R&& values, As&&... args) {
+    if constexpr (requires { std::forward<R>(values).reverse(std::forward<As>(args)...); })
+        return std::forward<R>(values).reverse(std::forward<As>(args)...);
+    else
+        return kuma_rt::reverse(std::forward<R>(values), std::forward<As>(args)...);
+}
+template<class R, class... As>
+decltype(auto) cpp_member_reversed(R&& values, As&&... args) {
+    if constexpr (requires { std::forward<R>(values).reversed(std::forward<As>(args)...); })
+        return std::forward<R>(values).reversed(std::forward<As>(args)...);
+    else
+        return kuma_rt::reversed(std::forward<R>(values), std::forward<As>(args)...);
+}
+template<class R, class... As>
+decltype(auto) cpp_member_len(R&& values, As&&... args) {
+    if constexpr (requires { std::forward<R>(values).len(std::forward<As>(args)...); })
+        return std::forward<R>(values).len(std::forward<As>(args)...);
+    else
+        return kuma_rt::cpp_len(std::forward<R>(values), std::forward<As>(args)...);
+}
+template<class R, class... As>
+decltype(auto) cpp_member_any(R&& values, As&&... args) {
+    if constexpr (requires { std::forward<R>(values).any(std::forward<As>(args)...); })
+        return std::forward<R>(values).any(std::forward<As>(args)...);
+    else
+        return kuma_rt::cpp_any(std::forward<R>(values), std::forward<As>(args)...);
+}
+template<class R, class... As>
+decltype(auto) cpp_member_some(R&& values, As&&... args) {
+    if constexpr (requires { std::forward<R>(values).some(std::forward<As>(args)...); })
+        return std::forward<R>(values).some(std::forward<As>(args)...);
+    else
+        return kuma_rt::cpp_any(std::forward<R>(values), std::forward<As>(args)...);
+}
+template<class R, class... As>
+decltype(auto) cpp_member_all(R&& values, As&&... args) {
+    if constexpr (requires { std::forward<R>(values).all(std::forward<As>(args)...); })
+        return std::forward<R>(values).all(std::forward<As>(args)...);
+    else
+        return kuma_rt::cpp_all(std::forward<R>(values), std::forward<As>(args)...);
+}
+template<class R, class... As>
+decltype(auto) cpp_member_every(R&& values, As&&... args) {
+    if constexpr (requires { std::forward<R>(values).every(std::forward<As>(args)...); })
+        return std::forward<R>(values).every(std::forward<As>(args)...);
+    else
+        return kuma_rt::cpp_all(std::forward<R>(values), std::forward<As>(args)...);
+}
+} // namespace kuma_rt
