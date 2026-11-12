@@ -241,6 +241,34 @@ void sort(std::vector<T>& values) {
 }
 
 template<class T>
+long long algorithm_index(T value) {
+    static_assert(std::is_integral_v<T> && !std::is_same_v<T, bool>,
+                  "algorithm start/end must be integer indices");
+    return numeric_cast<long long>(value);
+}
+
+template<class R>
+auto algorithm_bounds(R& values, long long start, std::optional<long long> end) {
+    const auto size = numeric_cast<long long>(std::size(values));
+    const auto stop = end.value_or(size);
+    if (start < 0 || stop < start || stop > size)
+        error("algorithm range requires 0 <= start <= end <= size");
+    return std::pair{std::begin(values) + start, std::begin(values) + stop};
+}
+
+template<class R, class F = std::less<>>
+void sort_range(R& values, long long start, std::optional<long long> end, F compare = {}) {
+    auto [first, last] = algorithm_bounds(values, start, end);
+    std::sort(first, last, std::move(compare));
+}
+
+template<class R>
+void reverse_range(R& values, long long start, std::optional<long long> end) {
+    auto [first, last] = algorithm_bounds(values, start, end);
+    std::reverse(first, last);
+}
+
+template<class T>
 std::vector<T> sorted(std::vector<T> values) {
     kuma_rt::sort(values);
     return values;
@@ -600,6 +628,10 @@ void cpp_sort(R& values, Args... args) { std::sort(std::begin(values), std::end(
 template<class R, class... Args>
 auto cpp_sorted(R values, Args... args) { cpp_sort(values, std::move(args)...); return values; }
 template<class R>
+void cpp_reverse(R& values) { std::reverse(std::begin(values), std::end(values)); }
+template<class R>
+auto cpp_reversed(R values) { cpp_reverse(values); return values; }
+template<class R>
 auto cpp_enumerate(const R& values, long long start) { return enumerate<cpp_item<R>>(values, start); }
 template<class... Rs>
 auto cpp_zip(bool strict, const Rs&... values) { return zip<std::tuple<cpp_item<Rs>...>>(strict, values...); }
@@ -653,14 +685,14 @@ decltype(auto) cpp_member_reverse(R&& values, As&&... args) {
     if constexpr (requires { std::forward<R>(values).reverse(std::forward<As>(args)...); })
         return std::forward<R>(values).reverse(std::forward<As>(args)...);
     else
-        return kuma_rt::reverse(std::forward<R>(values), std::forward<As>(args)...);
+        return kuma_rt::cpp_reverse(std::forward<R>(values), std::forward<As>(args)...);
 }
 template<class R, class... As>
 decltype(auto) cpp_member_reversed(R&& values, As&&... args) {
     if constexpr (requires { std::forward<R>(values).reversed(std::forward<As>(args)...); })
         return std::forward<R>(values).reversed(std::forward<As>(args)...);
     else
-        return kuma_rt::reversed(std::forward<R>(values), std::forward<As>(args)...);
+        return kuma_rt::cpp_reversed(std::forward<R>(values), std::forward<As>(args)...);
 }
 template<class R, class... As>
 decltype(auto) cpp_member_len(R&& values, As&&... args) {
