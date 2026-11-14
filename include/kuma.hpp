@@ -168,7 +168,7 @@ struct PrintOptions {
 };
 
 template<class T>
-void write_value(const T& value, const PrintOptions& options) {
+void write_value_to(const T& value, const PrintOptions& options, std::ostream& output) {
     using U = std::remove_cvref_t<T>;
     if constexpr (is_vector<U>::value || is_associative<U>::value || is_kuma_view<U>::value) {
         using E = typename U::value_type;
@@ -176,29 +176,34 @@ void write_value(const T& value, const PrintOptions& options) {
             ? options.row_sep : options.sep;
         bool first = true;
         for (const auto& item : value) {
-            if (!first && !std::is_same_v<E, char>) std::cout << separator;
+            if (!first && !std::is_same_v<E, char>) output << separator;
             first = false;
-            write_value(item, options);
+            write_value_to(item, options, output);
         }
     } else if constexpr (requires { kuma_fields(value); }) {
-        write_value(kuma_fields(value), options);
+        write_value_to(kuma_fields(value), options, output);
     } else if constexpr (is_tuple<U>::value) {
         bool first = true;
         std::apply([&](const auto&... fields) {
             auto emit = [&](const auto& field) {
-                if (!first) std::cout << options.sep;
+                if (!first) output << options.sep;
                 first = false;
-                write_value(field, options);
+                write_value_to(field, options, output);
             };
             (emit(fields), ...);
         }, value);
     } else if constexpr (std::is_same_v<U, bool> || std::is_same_v<U, std::vector<bool>::reference>) {
-        std::cout << (static_cast<bool>(value) ? "true" : "false");
+        output << (static_cast<bool>(value) ? "true" : "false");
     } else if constexpr (std::is_floating_point_v<U>) {
-        std::cout << std::setprecision(std::numeric_limits<U>::max_digits10) << value;
+        output << std::setprecision(std::numeric_limits<U>::max_digits10) << value;
     } else {
-        std::cout << value;
+        output << value;
     }
+}
+
+template<class T>
+void write_value(const T& value, const PrintOptions& options) {
+    write_value_to(value, options, std::cout);
 }
 
 template<class... Ts>
@@ -212,6 +217,19 @@ void print(const PrintOptions& options, const Ts&... values) {
     (emit(values), ...);
     std::cout << options.end;
     if (options.flush) std::cout.flush();
+}
+
+template<class... Ts>
+void debug_print(const PrintOptions& options, const Ts&... values) {
+    bool first = true;
+    auto emit = [&](const auto& value) {
+        if (!first) std::cerr << options.sep;
+        first = false;
+        write_value_to(value, options, std::cerr);
+    };
+    (emit(values), ...);
+    std::cerr << options.end;
+    if (options.flush) std::cerr.flush();
 }
 
 template<class T>
@@ -485,6 +503,32 @@ C slice(const C& values, std::optional<long long> first,
     for (Wide index = start; step > 0 ? index < stop : index > stop; index += step)
         result.push_back(values[static_cast<std::size_t>(index)]);
     return result;
+}
+
+// Braced initialization sequences source and bounds left-to-right. The source
+// reference is used only during this full expression, including temporary input.
+template<class C>
+struct CppSliceRequest {
+    const C& values;
+    std::optional<long long> first, last, stride;
+};
+template<class C>
+CppSliceRequest(const C&, std::optional<long long>, std::optional<long long>,
+                std::optional<long long>) -> CppSliceRequest<C>;
+
+template<class T>
+std::optional<long long> cpp_slice_bound(T value) {
+    static_assert(std::is_integral_v<T> && !std::is_same_v<T, bool>,
+                  "Kuma slice bounds must be integers (not bool)");
+    const __int128 wide = value;
+    if (wide < std::numeric_limits<long long>::min() ||
+        wide > std::numeric_limits<long long>::max())
+        error("slice bound exceeds signed 64-bit range");
+    return static_cast<long long>(value);
+}
+template<class C>
+C cpp_slice(CppSliceRequest<C> request) {
+    return slice(request.values, request.first, request.last, request.stride);
 }
 
 // Build a replacement before swapping: overlap and failed copies do not leave
