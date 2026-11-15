@@ -305,18 +305,43 @@ std::vector<T> reversed(std::vector<T> values) {
 
 struct Range {
     struct Iterator {
-        long long value;
+        long long value, stop, step;
+        bool done;
         long long operator*() const { return value; }
-        Iterator& operator++() { ++value; return *this; }
-        bool operator!=(const Iterator& other) const { return value != other.value; }
+        Iterator& operator++() {
+            const __int128 next = static_cast<__int128>(value) + step;
+            done = step > 0 ? next >= stop : next <= stop;
+            if (!done) value = static_cast<long long>(next);
+            return *this;
+        }
+        bool operator!=(const Iterator&) const { return !done; }
     };
-    long long first, last;
-    Iterator begin() const { return {first}; }
-    Iterator end() const { return {last}; }
+    long long first, last, step = 1;
+    Iterator begin() const { return {first, last, step, step > 0 ? first >= last : first <= last}; }
+    Iterator end() const { return {last, last, step, true}; }
 };
 
-inline Range range(long long begin, long long end) {
-    return {begin < end ? begin : end, end};
+inline Range range(long long begin, long long end, long long step = 1) {
+    if (step == 0) error("range step must not be zero");
+    return {begin, end, step};
+}
+inline Range range(long long end) { return range(0, end); }
+template<class T>
+long long range_bound(T value) {
+    static_assert(std::is_integral_v<T> && !std::is_same_v<T, bool>,
+                  "Kuma range arguments must be integers (not bool)");
+    const __int128 wide = value;
+    if (wide < std::numeric_limits<long long>::min() || wide > std::numeric_limits<long long>::max())
+        error("range argument exceeds signed 64-bit range");
+    return static_cast<long long>(value);
+}
+// Braced arguments are evaluated left-to-right, exactly once in mixed code.
+inline Range range_args(std::initializer_list<long long> args) {
+    auto p = args.begin();
+    if (args.size() == 1) return range(p[0]);
+    if (args.size() == 2) return range(p[0], p[1]);
+    if (args.size() == 3) return range(p[0], p[1], p[2]);
+    error("range needs one to three arguments");
 }
 
 inline long long count(long long n) {
