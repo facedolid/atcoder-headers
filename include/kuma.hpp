@@ -8,13 +8,196 @@
 #include "ac.hpp"
 #include "ac_io.hpp"
 #include <optional>
+#if __has_include(<ext/pb_ds/assoc_container.hpp>) && __has_include(<ext/pb_ds/tree_policy.hpp>)
+#include <ext/pb_ds/assoc_container.hpp>
+#include <ext/pb_ds/tree_policy.hpp>
+#define KUMA_HAS_PBDS 1
+#endif
 
 namespace kuma_rt {
+template<class T>
+class Prefix2D {
+    static_assert(std::is_same_v<T, int> || std::is_same_v<T, long long> || std::is_same_v<T, double>,
+                  "Prefix2D supports int, long long or double");
+    std::vector<std::vector<T>> table_{{T{}}};
+public:
+    Prefix2D() = default;
+    explicit Prefix2D(const std::vector<std::vector<T>>& grid) {
+        const auto width = grid.empty() ? 0 : grid.front().size();
+        for (const auto& row : grid)
+            if (row.size() != width) throw std::invalid_argument("prefix2d: rows must have equal length");
+        table_ = ::prefix_sum2d(grid);
+    }
+    T sum(long long r1, long long c1, long long r2, long long c2) const {
+        if (table_.empty() || table_.front().empty() || r1 < 0 || c1 < 0 || r1 > r2 || c1 > c2 ||
+            static_cast<unsigned long long>(r2) >= table_.size() ||
+            static_cast<unsigned long long>(c2) >= table_.front().size())
+            throw std::out_of_range("prefix2d: invalid rectangle bounds");
+        if (r1 == r2 || c1 == c2) return T{};
+        return table_[r2][c2] - table_[r1][c2] - table_[r2][c1] + table_[r1][c1];
+    }
+};
+template<class T>
+Prefix2D<T> prefix2d(const std::vector<std::vector<T>>& grid) { return Prefix2D<T>(grid); }
+template<class T>
+T range_sum(const Prefix2D<T>& prefix, long long r1, long long c1, long long r2, long long c2) {
+    return prefix.sum(r1, c1, r2, c2);
+}
+
 static_assert(std::numeric_limits<int>::digits == 31, "Kuma needs 32-bit int");
 static_assert(std::numeric_limits<long long>::digits == 63, "Kuma needs 64-bit long long");
 
 [[noreturn]] inline void error(const std::string& message) {
     throw std::runtime_error(message);
+}
+
+// The fallback keeps portability where GNU policy-based data structures are unavailable.
+#ifndef KUMA_HAS_PBDS
+template<class Key, class T> class SortedListFallbackTree {
+    std::map<Key, T> values_;
+public:
+    using const_iterator = typename std::map<Key, T>::const_iterator;
+    auto size() const { return values_.size(); }
+    bool empty() const { return values_.empty(); }
+    auto begin() const { return values_.begin(); }
+    auto end() const { return values_.end(); }
+    auto lower_bound(const Key& key) const { return values_.lower_bound(key); }
+    void insert(const std::pair<Key, T>& item) { values_.insert(item); }
+    void erase(const_iterator it) { values_.erase(it); }
+    std::size_t order_of_key(const Key& key) const { return std::distance(values_.begin(), values_.lower_bound(key)); }
+    const_iterator find_by_order(std::size_t i) const { auto it = values_.begin(); std::advance(it, i); return it; }
+};
+#endif
+
+template<class T, class = void> struct KumaOrderedValue : std::bool_constant<std::is_arithmetic_v<T> || std::is_same_v<T, std::string>> {};
+template<class... T> struct KumaOrderedValue<std::tuple<T...>, void> : std::bool_constant<((!std::is_reference_v<T> && KumaOrderedValue<std::remove_cv_t<T>>::value) && ...)> {};
+template<class A, class B> struct KumaOrderedValue<std::pair<A, B>, void> : std::bool_constant<!std::is_reference_v<A> && !std::is_reference_v<B> && KumaOrderedValue<std::remove_cv_t<A>>::value && KumaOrderedValue<std::remove_cv_t<B>>::value> {};
+template<class T> struct KumaOrderedValue<T, std::void_t<typename T::kuma_gen_owned_record,
+    typename T::kuma_gen_value_types, decltype(std::declval<const T&>().kuma_gen_value_fields())>> :
+    KumaOrderedValue<typename T::kuma_gen_value_types> {};
+// Capture only recursively checked owning values; the resulting copy has no borrowed fields.
+template<class T> auto sorted_key_capture(const T& value) {
+    using U = std::remove_cvref_t<T>;
+    static_assert(KumaOrderedValue<U>::value,
+                  "SortedList key captures must be supported owning ordered values");
+    return U(value);
+}
+
+template<class T> struct KumaTupleValue : std::false_type {};
+template<class... T> struct KumaTupleValue<std::tuple<T...>> : std::true_type {};
+template<class A, class B> struct KumaTupleValue<std::pair<A, B>> : std::true_type {};
+
+// Validate nested floating-point values before they participate in an ordering.
+template<class V> V checked_ordered_value(V value) {
+    ::ac_detail::validate_ordered_finite(value);
+    return value;
+}
+
+// Ordered multiset with indexed access; elements and copies are owned.
+template<class T = long long, class K = T>
+class SortedList {
+    static_assert(KumaOrderedValue<T>::value, "SortedList value type is not supported");
+    static_assert(KumaOrderedValue<K>::value, "SortedList key type is not supported");
+    using Key = std::pair<K, unsigned long long>;
+#ifdef KUMA_HAS_PBDS
+    using Tree = __gnu_pbds::tree<Key, T, std::less<Key>,
+        __gnu_pbds::rb_tree_tag, __gnu_pbds::tree_order_statistics_node_update>;
+#else
+    using Tree = SortedListFallbackTree<Key, T>;
+#endif
+    Tree values_;
+    std::function<K(const T&)> key_;
+    unsigned long long next_ = 0;
+    template<class U> static T convert(U value) {
+        if constexpr (std::is_same_v<T, bool>) {
+            static_assert(std::is_same_v<U, bool>, "SortedList requires bool values");
+            return value;
+        } else if constexpr (std::is_integral_v<T>) {
+            static_assert(std::is_integral_v<U> && !std::is_same_v<U, bool>, "SortedList requires integer values");
+            if constexpr (std::is_same_v<T, U>) return value;
+            else {
+                if (!std::in_range<T>(value)) error("SortedList integer out of range");
+                return static_cast<T>(value);
+            }
+        } else if constexpr (std::is_floating_point_v<T>) {
+            static_assert(std::is_arithmetic_v<U> && !std::is_same_v<U, bool>, "SortedList requires numeric values");
+            return checked_ordered_value(static_cast<T>(value));
+        } else if constexpr (std::is_same_v<T, std::string>) {
+            static_assert(std::is_convertible_v<U, std::string>, "SortedList requires string values");
+            return std::string(value);
+        } else {
+            static_assert(std::is_same_v<T, U>, "SortedList tuple types must match");
+            return checked_ordered_value(value);
+        }
+    }
+    template<class U> static long long integer(U value) {
+        static_assert(std::is_integral_v<U> && !std::is_same_v<U, bool>, "SortedList index must be integer");
+        if (!std::in_range<long long>(value)) error("SortedList integer out of range");
+        return static_cast<long long>(value);
+    }
+    std::size_t index(long long i) const {
+        if (i < 0) i += static_cast<long long>(values_.size());
+        if (i < 0 || static_cast<unsigned long long>(i) >= values_.size()) error("SortedList index out of range");
+        return static_cast<std::size_t>(i);
+    }
+public:
+    SortedList() requires std::is_same_v<T, K> : key_([](const T& value) { return value; }) {}
+    template<class U> explicit SortedList(const std::vector<U>& input) requires std::is_same_v<T, K> : SortedList() { for (std::size_t i = 0; i < input.size(); ++i) add(static_cast<U>(input[i])); }
+    template<class U, class F> SortedList(const std::vector<U>& input, F key) : key_(std::move(key)) { for (std::size_t i = 0; i < input.size(); ++i) add(static_cast<U>(input[i])); }
+    std::size_t size() const { return values_.size(); }
+    bool empty() const { return values_.empty(); }
+    std::vector<T> snapshot() const {
+        std::vector<T> result;
+        result.reserve(values_.size());
+        for (const auto& item : values_) result.push_back(item.second);
+        return result;
+    }
+    template<class U> void add(U value) {
+        T x = convert(value);
+        if (next_ == std::numeric_limits<unsigned long long>::max()) error("SortedList insertion counter exhausted");
+        K key = checked_ordered_value(key_(x));
+        values_.insert({{std::move(key), next_++}, x});
+    }
+    template<class U> long long bisect_left(U x) const { return static_cast<long long>(values_.order_of_key({checked_ordered_value(key_(convert(x))), 0})); }
+    template<class U> long long bisect_right(U x) const { return static_cast<long long>(values_.order_of_key({checked_ordered_value(key_(convert(x))), std::numeric_limits<unsigned long long>::max()})); }
+    template<class U> T operator[](U i) const { return values_.find_by_order(index(integer(i)))->second; }
+    template<class U> void remove(U value) {
+        T x = convert(value);
+        K key = checked_ordered_value(key_(x));
+        auto it = values_.lower_bound({key, 0});
+        for (; it != values_.end() && !(key < it->first.first) && !(it->first.first < key); ++it) {
+            if (it->second == x) { values_.erase(it); return; }
+        }
+        error("SortedList value not found");
+    }
+    T pop() { return pop(-1); }
+    template<class U> T pop(U i) {
+        auto it = values_.find_by_order(index(integer(i)));
+        T value = it->second;
+        values_.erase(it);
+        return value;
+    }
+};
+template<class T> SortedList(const std::vector<T>&) -> SortedList<T>;
+template<class T, class F> SortedList(const std::vector<T>&, F) -> SortedList<T, std::remove_cvref_t<std::invoke_result_t<F, const T&>>>;
+
+template<class T, class R, class P>
+auto sorted_named_key(const std::vector<T>& values, R (*function)(P)) {
+    constexpr bool matching = std::is_same_v<T, std::remove_cvref_t<P>>;
+    constexpr bool valid_result = KumaOrderedValue<R>::value;
+    static_assert(matching, "Kuma named key parameter must match the SortedList element type");
+    static_assert(valid_result, "Kuma named key return type must be a supported owning ordered value");
+    if constexpr (matching && valid_result) return SortedList<T, R>(values, function);
+    else return SortedList<T>{};
+}
+
+// Mixed Kuma for-loops snapshot SortedList; other ranges retain C++ semantics.
+template<class T, class K> std::vector<T> mixed_iteration_range(const SortedList<T,K>& values) { return values.snapshot(); }
+template<class T, class K> std::vector<T> mixed_iteration_range(SortedList<T,K>& values) { return values.snapshot(); }
+template<class T, class K> std::vector<T> mixed_iteration_range(SortedList<T,K>&& values) { return values.snapshot(); }
+template<class C> decltype(auto) mixed_iteration_range(C&& values) {
+    if constexpr (std::is_lvalue_reference_v<C>) return (values);
+    else return std::remove_cvref_t<C>(std::forward<C>(values));
 }
 
 inline void init() {
@@ -178,7 +361,8 @@ void write_value_to(const T& value, const PrintOptions& options, std::ostream& o
         for (const auto& item : value) {
             if (!first && !std::is_same_v<E, char>) output << separator;
             first = false;
-            write_value_to(item, options, output);
+            if constexpr (std::is_same_v<U, std::vector<bool>>) write_value_to(static_cast<bool>(item), options, output);
+            else write_value_to(item, options, output);
         }
     } else if constexpr (requires { kuma_fields(value); }) {
         write_value_to(kuma_fields(value), options, output);
@@ -326,6 +510,25 @@ inline Range range(long long begin, long long end, long long step = 1) {
     return {begin, end, step};
 }
 inline Range range(long long end) { return range(0, end); }
+
+inline long long sum(const Range& values) {
+    const __int128 first = values.first, stop = values.last, step = values.step;
+    if (step == 0) error("range step must not be zero");
+    if (step > 0 ? first >= stop : first <= stop) return 0;
+    const __int128 distance = step > 0 ? stop - first : first - stop;
+    const __int128 stride = step > 0 ? step : -step;
+    const __int128 count = (distance - 1) / stride + 1;
+    const __int128 last = first + (count - 1) * step;
+    // A signed-64-bit arithmetic progression's exact sum fits signed 128-bit.
+    const __int128 total = count % 2 == 0 ? (count / 2) * (first + last)
+                                         : count * ((first + last) / 2);
+    if (total < std::numeric_limits<long long>::min() ||
+        total > std::numeric_limits<long long>::max())
+        error("range sum exceeds signed 64-bit range");
+    return static_cast<long long>(total);
+}
+inline long long cpp_sum(const Range& values) { return sum(values); }
+
 template<class T>
 long long range_bound(T value) {
     static_assert(std::is_integral_v<T> && !std::is_same_v<T, bool>,
@@ -530,6 +733,12 @@ C slice(const C& values, std::optional<long long> first,
     return result;
 }
 
+template<class T, class K>
+std::vector<T> slice(const SortedList<T,K>& values, std::optional<long long> first,
+                                    std::optional<long long> last, std::optional<long long> stride) {
+    return slice(values.snapshot(), first, last, stride);
+}
+
 // Braced initialization sequences source and bounds left-to-right. The source
 // reference is used only during this full expression, including temporary input.
 template<class C>
@@ -552,7 +761,7 @@ std::optional<long long> cpp_slice_bound(T value) {
     return static_cast<long long>(value);
 }
 template<class C>
-C cpp_slice(CppSliceRequest<C> request) {
+auto cpp_slice(CppSliceRequest<C> request) {
     return slice(request.values, request.first, request.last, request.stride);
 }
 
@@ -631,24 +840,36 @@ std::map<K, V> dict_from_rows(const C& rows) {
 // They do not claim M1-M5 borrow checking for arbitrary user-defined C++ code.
 namespace kuma_rt {
 template<class R>
-using cpp_item = std::remove_cvref_t<decltype(*std::begin(std::declval<const R&>()))>;
+using cpp_item = std::conditional_t<std::is_same_v<std::remove_cvref_t<R>, std::vector<bool>>,
+    bool, std::remove_cvref_t<decltype(*std::begin(std::declval<const R&>()))>>;
 
 template<class R, class F, class P>
 auto cpp_collect(const R& values, F transform, P predicate) {
-    using Out = std::decay_t<decltype(transform(*std::begin(values)))>;
+    using Out = std::decay_t<decltype(transform(std::declval<const cpp_item<R>&>()))>;
     std::vector<Out> result;
-    for (const auto& item : values)
-        if (predicate(item)) result.push_back(transform(item));
+    for (const auto& raw : values) {
+        if constexpr (std::is_same_v<std::remove_cvref_t<R>, std::vector<bool>>) {
+            const bool item = raw;
+            if (predicate(item)) result.push_back(transform(item));
+        } else if (predicate(raw)) result.push_back(transform(raw));
+    }
     return result;
 }
 template<class R, class F, class P>
 auto cpp_flat_collect(const R& values, F transform, P predicate) {
-    using Inner = std::decay_t<decltype(transform(*std::begin(values)))>;
+    using Inner = std::decay_t<decltype(transform(std::declval<const cpp_item<R>&>()))>;
     using Out = typename Inner::value_type;
     std::vector<Out> result;
-    for (const auto& item : values) if (predicate(item)) {
-        auto inner = transform(item);
-        result.insert(result.end(), std::make_move_iterator(inner.begin()), std::make_move_iterator(inner.end()));
+    for (const auto& raw : values) {
+        if constexpr (std::is_same_v<std::remove_cvref_t<R>, std::vector<bool>>) {
+            const bool item = raw;
+            if (!predicate(item)) continue;
+            auto inner = transform(item);
+            result.insert(result.end(), std::make_move_iterator(inner.begin()), std::make_move_iterator(inner.end()));
+        } else if (predicate(raw)) {
+            auto inner = transform(raw);
+            result.insert(result.end(), std::make_move_iterator(inner.begin()), std::make_move_iterator(inner.end()));
+        }
     }
     return result;
 }

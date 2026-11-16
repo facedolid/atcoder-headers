@@ -5103,6 +5103,37 @@ int mex(const R& values) {
     return limit + 1;
 }
 
+namespace ac_detail {
+// Check declared fields of generated Kuma records, including records nested in
+// tuple/pair. Unmarked C++ types retain their existing ownership semantics.
+template<class T, bool InRecord = false> consteval bool kuma_record_fields_own_values() {
+    if constexpr (InRecord && std::is_reference_v<T>) return false;
+    else {
+        using V = std::remove_cvref_t<T>;
+        if constexpr (io::is_tuple_v<V> || io::is_pair_v<V>) {
+            return []<std::size_t... I>(std::index_sequence<I...>) {
+                return (kuma_record_fields_own_values<std::tuple_element_t<I, V>, InRecord>() && ...);
+            }(std::make_index_sequence<std::tuple_size_v<V>>{});
+        } else if constexpr (requires { typename V::kuma_gen_owned_record; typename V::kuma_gen_value_types; }) {
+            return kuma_record_fields_own_values<typename V::kuma_gen_value_types, true>();
+        } else return true;
+    }
+}
+
+// Only inspect built-in floating values, standard tuple/pair, and generated
+// Kuma records. Unknown C++ types retain their own comparison semantics.
+template<class T> void validate_ordered_finite(const T& value) {
+    using V = std::remove_cvref_t<T>;
+    if constexpr (std::is_floating_point_v<V>) {
+        if (!std::isfinite(value)) throw std::runtime_error("ordered values require finite floating-point numbers");
+    } else if constexpr (io::is_tuple_v<V> || io::is_pair_v<V>) {
+        std::apply([](const auto&... parts) { (::ac_detail::validate_ordered_finite(parts), ...); }, value);
+    } else if constexpr (requires { typename V::kuma_gen_owned_record; typename V::kuma_gen_value_types; value.kuma_gen_value_fields(); }) {
+        std::apply([](const auto&... parts) { (::ac_detail::validate_ordered_finite(parts), ...); }, value.kuma_gen_value_fields());
+    }
+}
+} // namespace ac_detail
+
 // @acf fn frequencies — (range) -> map<T,ll> — 値ごとの出現回数
 
 /// 値ごとの出現回数をmapにまとめる。
@@ -5111,13 +5142,25 @@ int mex(const R& values) {
 ///
 /// 戻り値: `map<T,ll>`。キーは要素型Tで比較順。値はllの個数。空入力には空map。存在しないキーは追加されていません。
 ///
-/// 注意: 入力を変更しません。返されたmapの[]で不在キーを読むと追加されます。追加したくない確認はcontains/find、存在を確認後にat。
+/// 注意: 入力を変更しません。浮動小数点、tuple・pair、Kuma構造体内の非有限値は例外です。Kuma構造体の参照フィールドは未対応です。未知のC++型の内部は検査しません。返されたmapの[]で不在キーを読むと追加されます。
 ///
 /// 呼び分け: 回数だけならfrequencies、位置が必要ならpositions。一つの値を一回だけ数えるならcountでもできます。
 template <std::ranges::input_range R>
 map<std::ranges::range_value_t<R>, ll> frequencies(R&& values) {
-    map<std::ranges::range_value_t<R>, ll> result;
-    for (const auto& value : values) ++result[value];
+    using Key = std::ranges::range_value_t<R>;
+    static_assert(ac_detail::kuma_record_fields_own_values<Key>(),
+                  "frequencies requires owning Kuma record fields");
+    map<Key, ll> result;
+    for (const auto& value : values) {
+        if constexpr (std::is_same_v<std::remove_cvref_t<decltype(value)>, Key>) {
+            ac_detail::validate_ordered_finite(value);
+            ++result[value];
+        } else {
+            Key key = value;
+            ac_detail::validate_ordered_finite(key);
+            ++result[std::move(key)];
+        }
+    }
     return result;
 }
 
@@ -5722,6 +5765,42 @@ vector<T, Allocator> sliced(const vector<T, Allocator>& values,
                                    vector<T, Allocator>(values.get_allocator()));
 }
 
+namespace ac_detail::collection {
+// Detect keys where conversion must precede the finite-value check.
+template<class T> consteval bool ordered_key_has_floating() {
+    using V = std::remove_cvref_t<T>;
+    if constexpr (std::is_floating_point_v<V>) return true;
+    else if constexpr (::ac_detail::io::is_tuple_v<V> || ::ac_detail::io::is_pair_v<V>) {
+        return []<std::size_t... I>(std::index_sequence<I...>) {
+            return (ordered_key_has_floating<std::tuple_element_t<I, V>>() || ... || false);
+        }(std::make_index_sequence<std::tuple_size_v<V>>{});
+    } else if constexpr (requires { typename V::kuma_gen_owned_record; typename V::kuma_gen_value_types; }) {
+        return ordered_key_has_floating<typename V::kuma_gen_value_types>();
+    } else return false;
+}
+
+// Validate the actual stored key before set comparisons. Uninspected custom
+// types retain direct emplacement, including their existing copy semantics.
+template<class Key, class Value>
+bool insert_checked(set<Key>& result, Value&& value) {
+    static_assert(::ac_detail::kuma_record_fields_own_values<Key>(),
+                  "ordered keys require owning Kuma record fields");
+    if constexpr (!ordered_key_has_floating<Key>()) {
+        return result.emplace(std::forward<Value>(value)).second;
+    } else if constexpr (std::is_same_v<std::remove_cvref_t<Value>, Key> &&
+                         !std::is_volatile_v<std::remove_reference_t<Value>>) {
+        ::ac_detail::validate_ordered_finite(value);
+        return result.emplace(std::forward<Value>(value)).second;
+    } else {
+        Key key(std::forward<Value>(value));
+        ::ac_detail::validate_ordered_finite(key);
+        static_assert(std::is_constructible_v<Key, decltype(std::move_if_noexcept(key))>,
+                      "converted ordered keys must be movable or copyable");
+        return result.emplace(std::move_if_noexcept(key)).second;
+    }
+}
+} // namespace ac_detail::collection
+
 // @acf fn to_set — (range) -> set<T> — 重複を除いた昇順の集合にする
 
 /// rangeの要素を値の重複を除く集合へ保存する。
@@ -5730,13 +5809,18 @@ vector<T, Allocator> sliced(const vector<T, Allocator>& values,
 ///
 /// 戻り値: `set<T>`で比較順。要素を<で比較できること。空なら空。tuple/pair内の参照と`vector<bool>`のproxyは値で保存。ただしstring_viewやポインタの参照先は複製しません。
 ///
-/// 注意: 入力自身を変更せず走査。時間O(N log(D+1))、追加メモリO(D)。Dは異なる値の数。要素のコピー・比較の費用は別。
+/// 注意: 入力自身を変更せず走査。標準浮動小数点型の非有限値は、tuple・pair・Kuma構造体のフィールドを再帰的にたどって検出し、挿入前に例外。Kuma構造体の参照フィールドは未対応。vector・array・未知のC++型やproxyの内部は検査せず、ポインタ等の参照先は複製しない。検査のため保存型へ変換するproxyでは保存型のmoveまたはcopyが必要。時間O(N log(D+1))、追加メモリO(D)。Dは異なる値の数。要素のコピー・比較・再帰検査の費用は別。
 ///
 /// 呼び分け: 変換も行うならmap_vec、条件で選ぶならfilter_vec。
 template <ranges::input_range R>
 auto to_set(R&& values) {
-    return ac_detail::collection::collect<true>(
-        std::forward<R>(values), ac_detail::collection::accept_all{}, identity{});
+    using Key = ac_detail::collection::stored_t<
+        invoke_result_t<identity&, ac_detail::collection::visit_arg_t<R>>>;
+    set<Key> result;
+    identity function;
+    for (auto&& value : values)
+        ac_detail::collection::insert_checked(result, std::invoke(function, value));
+    return result;
 }
 
 // @acf fn is_unique — (range) -> bool — 全要素に重複がないか
@@ -5747,7 +5831,7 @@ auto to_set(R&& values) {
 ///
 /// 戻り値: bool。空・1要素はtrue。最初の重複でfalse。判定はsetの比較上の同値関係に従います。
 ///
-/// 注意: 元の列を変更せず、setへコピーして挿入。時間O(N log(D+1))、追加メモリO(D)。
+/// 注意: 元の列を変更せず、setへコピーして挿入。走査した標準浮動小数点型の非有限値は、tuple・pair・Kuma構造体のフィールドを再帰的にたどって検出し、挿入前に例外。重複以降は検査しない。Kuma構造体の参照フィールドは未対応。vector・array・未知のC++型やproxyの内部は検査せず、ポインタ等の参照先は複製しない。検査のため保存型へ変換するproxyでは保存型のmoveまたはcopyが必要。時間O(N log(D+1))、追加メモリO(D)。要素のコピー・比較・再帰検査の費用は別。
 ///
 /// 呼び分け: all_uniqueはis_uniqueの別名。個数を知りたいならfrequencies。
 ///
@@ -5757,7 +5841,7 @@ bool is_unique(R&& values) {
     using T = ac_detail::collection::stored_t<ranges::range_value_t<R>>;
     set<T> seen;
     for (auto&& value : values)
-        if (!seen.emplace(value).second) return false;
+        if (!ac_detail::collection::insert_checked(seen, value)) return false;
     return true;
 }
 
@@ -5769,7 +5853,7 @@ bool is_unique(R&& values) {
 ///
 /// 戻り値: bool。空・1要素はtrue。最初の重複でfalse。判定はsetの比較上の同値関係に従います。
 ///
-/// 注意: 元の列を変更せず、setへコピーして挿入。時間O(N log(D+1))、追加メモリO(D)。
+/// 注意: 元の列を変更せず、setへコピーして挿入。走査した標準浮動小数点型の非有限値は、tuple・pair・Kuma構造体のフィールドを再帰的にたどって検出し、挿入前に例外。重複以降は検査しない。Kuma構造体の参照フィールドは未対応。vector・array・未知のC++型やproxyの内部は検査せず、ポインタ等の参照先は複製しない。検査のため保存型へ変換するproxyでは保存型のmoveまたはcopyが必要。時間O(N log(D+1))、追加メモリO(D)。要素のコピー・比較・再帰検査の費用は別。
 ///
 /// 呼び分け: all_uniqueはis_uniqueの別名。個数を知りたいならfrequencies。
 ///
@@ -6698,9 +6782,9 @@ int rfind_idx(R&& values, const T& target, Proj projection = {}) {
 
 /// projection適用後にpredが真になる最初の要素を探す。
 ///
-/// 引数 `values`: 走査するforward range。Nは要素数。省略時は `None`。
+/// 引数 `values`: 走査するforward range。Nは要素数。省略できません。
 ///
-/// 引数 `pred`: 射影後の要素、targetの順に適用する二項述語。既定はranges::equal_to。省略時は `None`。
+/// 引数 `pred`: 射影後の要素を受け取る単項述語。省略できません。
 ///
 /// 引数 `projection`: 各要素へ適用する射影。既定はidentity。省略時は `{}`。
 ///
@@ -6721,9 +6805,9 @@ int find_if_idx(R&& values, Pred pred, Proj projection = {}) {
 
 /// projection適用後にpredが偽になる最初の要素を探す。
 ///
-/// 引数 `values`: 走査するforward range。Nは要素数。省略時は `None`。
+/// 引数 `values`: 走査するforward range。Nは要素数。省略できません。
 ///
-/// 引数 `pred`: 射影後の要素、targetの順に適用する二項述語。既定はranges::equal_to。省略時は `None`。
+/// 引数 `pred`: 射影後の要素を受け取る単項述語。省略できません。
 ///
 /// 引数 `projection`: 各要素へ適用する射影。既定はidentity。省略時は `{}`。
 ///
@@ -7037,9 +7121,9 @@ pair<int, int> minmax_element_idx(R&& values, Comp comp = {}, Proj projection = 
 
 /// projection適用後のpredが真、偽の順に分割された列で、最初の偽の添字を返す。
 ///
-/// 引数 `values`: 走査するforward range。Nは要素数。省略時は `None`。
+/// 引数 `values`: 走査するforward range。Nは要素数。省略できません。
 ///
-/// 引数 `pred`: 射影後の要素、targetの順に適用する二項述語。既定はranges::equal_to。省略時は `None`。
+/// 引数 `pred`: 射影後の要素を受け取る単項述語。省略できません。
 ///
 /// 引数 `projection`: 各要素へ適用する射影。既定はidentity。省略時は `{}`。
 ///
@@ -7107,9 +7191,9 @@ int find_last_idx(R&& values, const T& target, Proj projection = {}) {
 
 /// 条件を満たす最後の添字を返す。
 ///
-/// 引数 `values`: 走査するforward range。Nは要素数。省略時は `None`。
+/// 引数 `values`: 走査するforward range。Nは要素数。省略できません。
 ///
-/// 引数 `pred`: 射影後の要素、targetの順に適用する二項述語。既定はranges::equal_to。省略時は `None`。
+/// 引数 `pred`: 射影後の要素を受け取る単項述語。省略できません。
 ///
 /// 引数 `projection`: 各要素へ適用する射影。既定はidentity。省略時は `{}`。
 ///
@@ -7130,9 +7214,9 @@ int find_last_if_idx(R&& values, Pred pred, Proj projection = {}) {
 
 /// 条件を満たさない最後の添字を返す。
 ///
-/// 引数 `values`: 走査するforward range。Nは要素数。省略時は `None`。
+/// 引数 `values`: 走査するforward range。Nは要素数。省略できません。
 ///
-/// 引数 `pred`: 射影後の要素、targetの順に適用する二項述語。既定はranges::equal_to。省略時は `None`。
+/// 引数 `pred`: 射影後の要素を受け取る単項述語。省略できません。
 ///
 /// 引数 `projection`: 各要素へ適用する射影。既定はidentity。省略時は `{}`。
 ///
@@ -7357,13 +7441,18 @@ auto sorted_copy(R&& values, Comp comp = {}) {
 
 // @acf fn sorted_by — (range, key) -> vector<T> — キー順に安定ソートしたコピー
 /// 各要素にkeyを1回適用し、キー順に安定ソートしたvectorを返す。
-/// キーには厳密弱順序が必要。比較回数は通常O(N log N)、補助領域が不足する場合はO(N log² N)。入力は変更しない。
+/// キーには厳密弱順序が必要。浮動小数点・tuple・pair・Kuma構造体内の非有限値は例外。未知のC++型は内部を検査しない。Kuma構造体の参照フィールドを含むキーは未対応。比較回数は通常O(N log N)、補助領域が不足する場合はO(N log² N)。入力は変更しない。
 template <ranges::input_range R, class F>
 auto sorted_by(R&& values, F key) {
     using T = ranges::range_value_t<R>;
     using K = std::decay_t<std::invoke_result_t<F&, ranges::range_reference_t<R>>>;
+    static_assert(ac_detail::kuma_record_fields_own_values<K>(), "sorted_by requires owning Kuma record keys");
     vector<pair<K, T>> keyed;
-    for (auto&& value : values) keyed.emplace_back(std::invoke(key, value), value);
+    for (auto&& value : values) {
+        auto&& k = std::invoke(key, value);
+        ::ac_detail::validate_ordered_finite(k);
+        keyed.emplace_back(std::forward<decltype(k)>(k), value);
+    }
     std::stable_sort(keyed.begin(), keyed.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
     vector<T> out;
     out.reserve(keyed.size());
@@ -7373,13 +7462,18 @@ auto sorted_by(R&& values, F key) {
 
 // @acf fn group_by — (range, key) -> map<K,vector<T>> — キーごとに入力順で分類
 /// keyの結果ごとに要素をまとめる。キーはmapの昇順、各グループ内は入力順。
-/// keyは各要素に1回適用。キーの比較には厳密弱順序が必要。時間O(N log N)、追加メモリO(N)。
+/// keyは各要素に1回適用。キーの比較には厳密弱順序が必要。浮動小数点・tuple・pair・Kuma構造体内の非有限値は例外。未知のC++型は内部を検査しない。Kuma構造体の参照フィールドを含むキーは未対応。時間O(N log N)、追加メモリO(N)。
 template <ranges::input_range R, class F>
 auto group_by(R&& values, F key) {
     using T = ranges::range_value_t<R>;
     using K = std::decay_t<std::invoke_result_t<F&, ranges::range_reference_t<R>>>;
+    static_assert(ac_detail::kuma_record_fields_own_values<K>(), "group_by requires owning Kuma record keys");
     map<K, vector<T>> out;
-    for (auto&& value : values) out[std::invoke(key, value)].push_back(value);
+    for (auto&& value : values) {
+        auto&& k = std::invoke(key, value);
+        ::ac_detail::validate_ordered_finite(k);
+        out[std::forward<decltype(k)>(k)].push_back(value);
+    }
     return out;
 }
 
@@ -7394,33 +7488,43 @@ auto get_or(const Map& values, const Key& key, Default&& fallback) -> typename M
 
 // @acf fn unique_by — (range, key) -> vector<T> — キーごとの最初の要素を残す
 /// キーごとの最初の要素を入力順のvectorで返す。keyは各要素に1回適用する。
-/// キーの比較には厳密弱順序が必要。時間O(N log N)、追加メモリO(N)。入力は変更しない。
+/// キーの比較には厳密弱順序が必要。浮動小数点・tuple・pair・Kuma構造体内の非有限値は例外。未知のC++型は内部を検査しない。Kuma構造体の参照フィールドを含むキーは未対応。時間O(N log N)、追加メモリO(N)。入力は変更しない。
 template <ranges::input_range R, class F>
 auto unique_by(R&& values, F key) {
     using T = ranges::range_value_t<R>;
     using K = std::decay_t<std::invoke_result_t<F&, ranges::range_reference_t<R>>>;
+    static_assert(ac_detail::kuma_record_fields_own_values<K>(), "unique_by requires owning Kuma record keys");
     set<K> seen;
     vector<T> out;
-    for (auto&& value : values) if (seen.insert(std::invoke(key, value)).second) out.push_back(value);
+    for (auto&& value : values) {
+        auto&& k = std::invoke(key, value);
+        ::ac_detail::validate_ordered_finite(k);
+        if (seen.insert(std::forward<decltype(k)>(k)).second) out.push_back(value);
+    }
     return out;
 }
 
 // @acf fn unique_stable — (range) -> vector<T> — 最初の出現順で重複除去
 /// 比較順序で同値の要素をまとめ、最初の出現だけを入力順で返す。
-/// 要素には厳密弱順序が必要。時間O(N log N)、追加メモリO(N)。入力は変更しない。
+/// 要素には厳密弱順序が必要。浮動小数点・tuple・pair・Kuma構造体内の非有限値は例外。未知のC++型は内部を検査せず、Kuma構造体の参照フィールドを含む値は未対応。時間O(N log N)、追加メモリO(N)。入力は変更しない。
 template <ranges::input_range R>
 auto unique_stable(R&& values) {
     return unique_by(std::forward<R>(values), [](const auto& value) { return ranges::range_value_t<R>(value); });
 }
 
 // @acf fn count_by — (range, key) -> map<K,ll> — キーごとの個数を数える
-/// keyを各要素に1回適用し、キーごとの個数を返す。キーは厳密弱順序が必要。
+/// keyを各要素に1回適用し、キーごとの個数を返す。キーは厳密弱順序が必要。浮動小数点・tuple・pair・Kuma構造体内の非有限値は例外。未知のC++型は内部を検査しない。Kuma構造体の参照フィールドを含むキーは未対応。
 /// 時間O(N log N)、追加メモリO(K)。Kは異なるキーの数。
 template <ranges::input_range R, class F>
 auto count_by(R&& values, F key) {
     using K = std::decay_t<std::invoke_result_t<F&, ranges::range_reference_t<R>>>;
+    static_assert(ac_detail::kuma_record_fields_own_values<K>(), "count_by requires owning Kuma record keys");
     map<K, ll> out;
-    for (auto&& value : values) ++out[std::invoke(key, value)];
+    for (auto&& value : values) {
+        auto&& k = std::invoke(key, value);
+        ::ac_detail::validate_ordered_finite(k);
+        ++out[std::forward<decltype(k)>(k)];
+    }
     return out;
 }
 
