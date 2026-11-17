@@ -252,6 +252,10 @@ template<class I, class C> struct is_kuma_view<EnumerateView<I, C>> : std::true_
 template<class I, class... Cs> struct is_kuma_view<ZipView<I, Cs...>> : std::true_type {};
 template<class T> struct is_vector : std::false_type {};
 template<class T, class A> struct is_vector<std::vector<T, A>> : std::true_type {};
+// No primary definition: mixed C++ input inference is available only for an
+// actual std::vector, never an arbitrary type with a value_type member.
+template<class T> struct vector_input_element;
+template<class T, class A> struct vector_input_element<std::vector<T, A>> { using type = T; };
 template<class T> struct is_tuple : std::false_type {};
 template<class... Ts> struct is_tuple<std::tuple<Ts...>> : std::true_type {};
 template<class A, class B> struct is_tuple<std::pair<A, B>> : std::true_type {};
