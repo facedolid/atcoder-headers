@@ -1158,4 +1158,27 @@ decltype(auto) cpp_member_every(R&& values, As&&... args) {
     else
         return kuma_rt::cpp_all(std::forward<R>(values), std::forward<As>(args)...);
 }
+template<class R, class... As>
+decltype(auto) cpp_member_zip(bool strict, R&& values, As&&... args) {
+    if constexpr (requires { std::forward<R>(values).zip(std::forward<As>(args)...); })
+        return std::forward<R>(values).zip(std::forward<As>(args)...);
+    else
+        return kuma_rt::cpp_zip(strict, std::forward<R>(values), std::forward<As>(args)...);
+}
+template<class R>
+decltype(auto) cpp_member_enumerate(R&& values) {
+    if constexpr (requires { std::forward<R>(values).enumerate(); })
+        return std::forward<R>(values).enumerate();
+    else
+        return kuma_rt::cpp_enumerate(std::forward<R>(values), 0LL);
+}
+template<class R, class A0, class... Rest>
+decltype(auto) cpp_member_enumerate(R&& values, A0&& a0, Rest&&... rest) {
+    if constexpr (requires { std::forward<R>(values).enumerate(std::forward<A0>(a0), std::forward<Rest>(rest)...); })
+        return std::forward<R>(values).enumerate(std::forward<A0>(a0), std::forward<Rest>(rest)...);
+    else if constexpr (sizeof...(Rest) == 0)
+        return kuma_rt::cpp_enumerate(std::forward<R>(values), std::forward<A0>(a0));
+    else
+        static_assert(sizeof...(Rest) == 0, "Kuma enumerate fallback accepts at most one start value");
+}
 } // namespace kuma_rt
