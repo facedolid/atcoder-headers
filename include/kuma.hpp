@@ -354,9 +354,8 @@ inline std::string read_line() {
     return value;
 }
 
-template<class T>
+template<class T> requires std::is_same_v<T, std::string>
 std::string read_line_as() {
-    static_assert(std::is_same_v<T, std::string>, "line input requires std::string");
     return read_line();
 }
 
