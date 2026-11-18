@@ -254,6 +254,10 @@ template<class T> struct is_vector : std::false_type {};
 template<class T, class A> struct is_vector<std::vector<T, A>> : std::true_type {};
 template<class T> struct is_deque : std::false_type {};
 template<class T, class A> struct is_deque<std::deque<T, A>> : std::true_type {};
+template<class T> struct is_cpp_sequence : std::false_type {};
+template<class T, std::size_t N> struct is_cpp_sequence<std::array<T, N>> : std::true_type {};
+template<class T, class A> struct is_cpp_sequence<std::list<T, A>> : std::true_type {};
+template<class T, class A> struct is_cpp_sequence<std::forward_list<T, A>> : std::true_type {};
 // No primary definition: mixed C++ input inference is available only for an
 // actual std::vector, never an arbitrary type with a value_type member.
 template<class T> struct vector_input_element;
@@ -359,9 +363,9 @@ struct PrintOptions {
 template<class T>
 void write_value_to(const T& value, const PrintOptions& options, std::ostream& output) {
     using U = std::remove_cvref_t<T>;
-    if constexpr (is_vector<U>::value || is_deque<U>::value || is_associative<U>::value || is_kuma_view<U>::value) {
+    if constexpr (is_vector<U>::value || is_deque<U>::value || is_cpp_sequence<U>::value || is_associative<U>::value || is_kuma_view<U>::value) {
         using E = typename U::value_type;
-        const auto& separator = (is_vector<E>::value || is_deque<E>::value || is_tuple<E>::value || requires(const E& v) { kuma_fields(v); })
+        const auto& separator = (is_vector<E>::value || is_deque<E>::value || is_cpp_sequence<E>::value || is_tuple<E>::value || requires(const E& v) { kuma_fields(v); })
             ? options.row_sep : options.sep;
         bool first = true;
         for (const auto& item : value) {
