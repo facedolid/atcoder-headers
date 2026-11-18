@@ -758,6 +758,16 @@ C slice(const C& values, std::optional<long long> first,
     return result;
 }
 
+template<class T, class A>
+std::deque<T, A> slice(const std::deque<T, A>& values, std::optional<long long> first,
+                       std::optional<long long> last, std::optional<long long> stride) {
+    const auto [start, stop, step, count] = slice_bounds(values.size(), first, last, stride);
+    std::deque<T, A> result(values.get_allocator());
+    for (__int128 index = start; step > 0 ? index < stop : index > stop; index += step)
+        result.push_back(values[static_cast<std::size_t>(index)]);
+    return result;
+}
+
 template<class T, std::size_t N>
 std::vector<T> slice(const std::array<T, N>& values, std::optional<long long> first,
                      std::optional<long long> last, std::optional<long long> stride) {
