@@ -354,6 +354,12 @@ inline std::string read_line() {
     return value;
 }
 
+template<class T>
+std::string read_line_as() {
+    static_assert(std::is_same_v<T, std::string>, "line input requires std::string");
+    return read_line();
+}
+
 inline void discard_line() {
     check_input();
     if (!std::cin.eof()) {
