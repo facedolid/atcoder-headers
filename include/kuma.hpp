@@ -1046,6 +1046,17 @@ inline std::string cpp_reversed(std::string_view values) {
     cpp_reverse(result);
     return result;
 }
+template<class... Args>
+std::vector<long long> cpp_sorted(Range values, Args&&... args) {
+    auto vec = cpp_map(values, [](long long x) { return x; });
+    cpp_sort(vec, std::forward<Args>(args)...);
+    return vec;
+}
+inline std::vector<long long> cpp_reversed(Range values) {
+    auto vec = cpp_map(values, [](long long x) { return x; });
+    cpp_reverse(vec);
+    return vec;
+}
 template<class R>
 auto cpp_enumerate(const R& values, long long start) { return enumerate<cpp_item<R>>(values, start); }
 template<class R, class I> requires std::is_integral_v<std::remove_cvref_t<I>>
