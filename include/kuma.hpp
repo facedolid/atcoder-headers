@@ -9,6 +9,7 @@
 #include "ac_io.hpp"
 #include <optional>
 #include <span>
+#include <string_view>
 #if __has_include(<ext/pb_ds/assoc_container.hpp>) && __has_include(<ext/pb_ds/tree_policy.hpp>)
 #include <ext/pb_ds/assoc_container.hpp>
 #include <ext/pb_ds/tree_policy.hpp>
@@ -754,6 +755,16 @@ C slice(const C& values, std::optional<long long> first,
     C result;
     result.reserve(static_cast<std::size_t>(count));
     for (Wide index = start; step > 0 ? index < stop : index > stop; index += step)
+        result.push_back(values[static_cast<std::size_t>(index)]);
+    return result;
+}
+
+inline std::string slice(const std::string_view& values, std::optional<long long> first,
+                         std::optional<long long> last, std::optional<long long> stride) {
+    const auto [start, stop, step, count] = slice_bounds(values.size(), first, last, stride);
+    std::string result;
+    result.reserve(static_cast<std::size_t>(count));
+    for (__int128 index = start; step > 0 ? index < stop : index > stop; index += step)
         result.push_back(values[static_cast<std::size_t>(index)]);
     return result;
 }
