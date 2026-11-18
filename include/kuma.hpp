@@ -596,8 +596,8 @@ decltype(auto) checked_index(C&& container, long long index) {
 template<class Item, class C>
 auto enumerate(const C& values, long long start) {
     std::vector<std::tuple<long long, Item>> result;
-    auto it = values.begin();
-    const auto end = values.end();
+    auto it = std::begin(values);
+    const auto end = std::end(values);
     long long index = start;
     while (it != end) {
         result.emplace_back(index, *it);
@@ -613,8 +613,8 @@ auto enumerate(const C& values, long long start) {
 template<class Item, class... Cs>
 auto zip(bool strict, const Cs&... values) {
     std::vector<Item> result;
-    auto iterators = std::tuple{values.begin()...};
-    auto ends = std::tuple{values.end()...};
+    auto iterators = std::tuple{std::begin(values)...};
+    auto ends = std::tuple{std::end(values)...};
     [&]<std::size_t... I>(std::index_sequence<I...>) {
         while (((std::get<I>(iterators) != std::get<I>(ends)) && ...)) {
             result.emplace_back((*std::get<I>(iterators))...);
