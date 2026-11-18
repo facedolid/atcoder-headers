@@ -267,7 +267,13 @@ template<class... Ts> struct is_tuple<std::tuple<Ts...>> : std::true_type {};
 template<class A, class B> struct is_tuple<std::pair<A, B>> : std::true_type {};
 template<class T> struct is_associative : std::false_type {};
 template<class... Ts> struct is_associative<std::set<Ts...>> : std::true_type {};
+template<class... Ts> struct is_associative<std::multiset<Ts...>> : std::true_type {};
 template<class... Ts> struct is_associative<std::map<Ts...>> : std::true_type {};
+template<class... Ts> struct is_associative<std::multimap<Ts...>> : std::true_type {};
+template<class... Ts> struct is_associative<std::unordered_set<Ts...>> : std::true_type {};
+template<class... Ts> struct is_associative<std::unordered_multiset<Ts...>> : std::true_type {};
+template<class... Ts> struct is_associative<std::unordered_map<Ts...>> : std::true_type {};
+template<class... Ts> struct is_associative<std::unordered_multimap<Ts...>> : std::true_type {};
 
 template<class T>
 T read() {
