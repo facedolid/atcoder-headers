@@ -383,7 +383,14 @@ void write_value_to(const T& value, const PrintOptions& options, std::ostream& o
     } else if constexpr (std::is_same_v<U, bool> || std::is_same_v<U, std::vector<bool>::reference>) {
         output << (static_cast<bool>(value) ? "true" : "false");
     } else if constexpr (std::is_floating_point_v<U>) {
-        output << std::setprecision(std::numeric_limits<U>::max_digits10) << value;
+        const auto previous_precision = output.precision();
+        try {
+            output << std::setprecision(std::numeric_limits<U>::max_digits10) << value;
+        } catch (...) {
+            output.precision(previous_precision);
+            throw;
+        }
+        output.precision(previous_precision);
     } else {
         output << value;
     }
