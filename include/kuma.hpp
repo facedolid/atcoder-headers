@@ -1001,6 +1001,12 @@ template<class R, class... Args>
 void cpp_sort(R& values, Args... args) { std::sort(std::begin(values), std::end(values), std::move(args)...); }
 template<class R, class... Args>
 auto cpp_sorted(R values, Args... args) { cpp_sort(values, std::move(args)...); return values; }
+template<class... Args>
+std::string cpp_sorted(std::string_view values, Args... args) {
+    std::string result(values);
+    cpp_sort(result, std::move(args)...);
+    return result;
+}
 template<class T, class A, class... Args>
 auto cpp_sorted(std::list<T, A> values, Args... args) {
     values.sort(std::move(args)...);
@@ -1017,6 +1023,11 @@ template<class T, class A>
 void cpp_reverse(std::forward_list<T, A>& values) { values.reverse(); }
 template<class R>
 auto cpp_reversed(R values) { cpp_reverse(values); return values; }
+inline std::string cpp_reversed(std::string_view values) {
+    std::string result(values);
+    cpp_reverse(result);
+    return result;
+}
 template<class R>
 auto cpp_enumerate(const R& values, long long start) { return enumerate<cpp_item<R>>(values, start); }
 template<class R, class I> requires std::is_integral_v<std::remove_cvref_t<I>>
