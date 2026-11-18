@@ -1007,6 +1007,20 @@ template<class R>
 auto cpp_reversed(R values) { cpp_reverse(values); return values; }
 template<class R>
 auto cpp_enumerate(const R& values, long long start) { return enumerate<cpp_item<R>>(values, start); }
+template<class R, class I> requires std::is_integral_v<std::remove_cvref_t<I>>
+auto cpp_enumerate(const R& values, I&& start) {
+    if constexpr (std::is_unsigned_v<std::remove_cvref_t<I>>) {
+        const unsigned __int128 wide = start;
+        if (wide > static_cast<unsigned __int128>(std::numeric_limits<long long>::max()))
+            error("enumerate start exceeds signed 64-bit range");
+        return enumerate<cpp_item<R>>(values, static_cast<long long>(wide));
+    } else {
+        const __int128 wide = start;
+        if (wide < std::numeric_limits<long long>::min() || wide > std::numeric_limits<long long>::max())
+            error("enumerate start exceeds signed 64-bit range");
+        return enumerate<cpp_item<R>>(values, static_cast<long long>(wide));
+    }
+}
 template<class... Rs>
 auto cpp_zip(bool strict, const Rs&... values) { return zip<std::tuple<cpp_item<Rs>...>>(strict, values...); }
 } // namespace kuma_rt
