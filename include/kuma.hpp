@@ -372,6 +372,11 @@ inline std::vector<std::string> read_all_lines() {
     return result;
 }
 
+template<class T> requires std::is_same_v<T, std::string>
+std::vector<std::string> read_all_lines_as() {
+    return read_all_lines();
+}
+
 inline void discard_line() {
     check_input();
     if (!std::cin.eof()) {
