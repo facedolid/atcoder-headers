@@ -371,7 +371,7 @@ void write_value_to(const T& value, const PrintOptions& options, std::ostream& o
     using U = std::remove_cvref_t<T>;
     if constexpr (is_vector<U>::value || is_deque<U>::value || is_cpp_sequence<U>::value || is_associative<U>::value || is_kuma_view<U>::value) {
         using E = typename U::value_type;
-        const auto& separator = (is_vector<E>::value || is_deque<E>::value || is_cpp_sequence<E>::value || is_tuple<E>::value || requires(const E& v) { kuma_fields(v); })
+        const auto& separator = (is_vector<E>::value || is_deque<E>::value || is_cpp_sequence<E>::value || is_associative<E>::value || is_tuple<E>::value || requires(const E& v) { kuma_fields(v); })
             ? options.row_sep : options.sep;
         bool first = true;
         for (const auto& item : value) {
