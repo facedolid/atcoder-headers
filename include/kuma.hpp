@@ -1013,6 +1013,8 @@ auto cpp_sorted(std::forward_list<T, A> values, Args... args) {
 }
 template<class R>
 void cpp_reverse(R& values) { std::reverse(std::begin(values), std::end(values)); }
+template<class T, class A>
+void cpp_reverse(std::forward_list<T, A>& values) { values.reverse(); }
 template<class R>
 auto cpp_reversed(R values) { cpp_reverse(values); return values; }
 template<class R>
