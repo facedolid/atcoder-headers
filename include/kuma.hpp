@@ -8,6 +8,7 @@
 #include "ac.hpp"
 #include "ac_io.hpp"
 #include <optional>
+#include <span>
 #if __has_include(<ext/pb_ds/assoc_container.hpp>) && __has_include(<ext/pb_ds/tree_policy.hpp>)
 #include <ext/pb_ds/assoc_container.hpp>
 #include <ext/pb_ds/tree_policy.hpp>
@@ -256,6 +257,7 @@ template<class T> struct is_deque : std::false_type {};
 template<class T, class A> struct is_deque<std::deque<T, A>> : std::true_type {};
 template<class T> struct is_cpp_sequence : std::false_type {};
 template<class T, std::size_t N> struct is_cpp_sequence<std::array<T, N>> : std::true_type {};
+template<class T, std::size_t N> struct is_cpp_sequence<std::span<T, N>> : std::true_type {};
 template<class T, class A> struct is_cpp_sequence<std::list<T, A>> : std::true_type {};
 template<class T, class A> struct is_cpp_sequence<std::forward_list<T, A>> : std::true_type {};
 // No primary definition: mixed C++ input inference is available only for an
