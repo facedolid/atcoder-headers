@@ -252,6 +252,8 @@ template<class I, class C> struct is_kuma_view<EnumerateView<I, C>> : std::true_
 template<class I, class... Cs> struct is_kuma_view<ZipView<I, Cs...>> : std::true_type {};
 template<class T> struct is_vector : std::false_type {};
 template<class T, class A> struct is_vector<std::vector<T, A>> : std::true_type {};
+template<class T> struct is_deque : std::false_type {};
+template<class T, class A> struct is_deque<std::deque<T, A>> : std::true_type {};
 // No primary definition: mixed C++ input inference is available only for an
 // actual std::vector, never an arbitrary type with a value_type member.
 template<class T> struct vector_input_element;
@@ -357,15 +359,15 @@ struct PrintOptions {
 template<class T>
 void write_value_to(const T& value, const PrintOptions& options, std::ostream& output) {
     using U = std::remove_cvref_t<T>;
-    if constexpr (is_vector<U>::value || is_associative<U>::value || is_kuma_view<U>::value) {
+    if constexpr (is_vector<U>::value || is_deque<U>::value || is_associative<U>::value || is_kuma_view<U>::value) {
         using E = typename U::value_type;
-        const auto& separator = (is_vector<E>::value || is_tuple<E>::value || requires(const E& v) { kuma_fields(v); })
+        const auto& separator = (is_vector<E>::value || is_deque<E>::value || is_tuple<E>::value || requires(const E& v) { kuma_fields(v); })
             ? options.row_sep : options.sep;
         bool first = true;
         for (const auto& item : value) {
             if (!first && !std::is_same_v<E, char>) output << separator;
             first = false;
-            if constexpr (std::is_same_v<U, std::vector<bool>>) write_value_to(static_cast<bool>(item), options, output);
+            if constexpr (is_vector<U>::value && std::is_same_v<E, bool>) write_value_to(static_cast<bool>(item), options, output);
             else write_value_to(item, options, output);
         }
     } else if constexpr (requires { kuma_fields(value); }) {
