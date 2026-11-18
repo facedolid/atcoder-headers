@@ -1001,6 +1001,16 @@ template<class R, class... Args>
 void cpp_sort(R& values, Args... args) { std::sort(std::begin(values), std::end(values), std::move(args)...); }
 template<class R, class... Args>
 auto cpp_sorted(R values, Args... args) { cpp_sort(values, std::move(args)...); return values; }
+template<class T, class A, class... Args>
+auto cpp_sorted(std::list<T, A> values, Args... args) {
+    values.sort(std::move(args)...);
+    return values;
+}
+template<class T, class A, class... Args>
+auto cpp_sorted(std::forward_list<T, A> values, Args... args) {
+    values.sort(std::move(args)...);
+    return values;
+}
 template<class R>
 void cpp_reverse(R& values) { std::reverse(std::begin(values), std::end(values)); }
 template<class R>
