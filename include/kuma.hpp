@@ -359,6 +359,19 @@ std::string read_line_as() {
     return read_line();
 }
 
+inline std::vector<std::string> read_all_lines() {
+    std::vector<std::string> result;
+    std::string line;
+    while (std::getline(std::cin, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        check_input();
+        result.push_back(std::move(line));
+    }
+    if (std::cin.bad()) error("input failed");
+    if (!std::cin.eof()) check_input();
+    return result;
+}
+
 inline void discard_line() {
     check_input();
     if (!std::cin.eof()) {
