@@ -288,6 +288,162 @@ std::string string_pad(std::string value, I width, Fill fill, StringPadSide side
     return value;
 }
 
+template<std::integral I>
+requires (!std::same_as<I, bool> && !std::same_as<I, char> && !std::same_as<I, signed char> &&
+          !std::same_as<I, unsigned char> && !std::same_as<I, wchar_t> && !std::same_as<I, char8_t> &&
+          !std::same_as<I, char16_t> && !std::same_as<I, char32_t>)
+std::string string_repeat(const std::string& value, I count) {
+    if constexpr (std::is_signed_v<I>) {
+        if (count <= 0) return {};
+    } else if (count == 0) {
+        return {};
+    }
+    if (value.empty()) return {};
+    if (!std::in_range<std::size_t>(count))
+        throw std::length_error("string repeat count overflows size_t");
+    const std::size_t times = static_cast<std::size_t>(count);
+    const std::size_t piece = value.size();
+    if (times > value.max_size() / piece)
+        throw std::length_error("string repeat exceeds string max_size");
+    std::string result;
+    result.reserve(piece * times);
+    for (std::size_t i = 0; i < times; ++i)
+        result += value;
+    return result;
+}
+
+template<class T>
+inline constexpr bool kuma_arithmetic_scalar = std::is_arithmetic_v<T> &&
+    !std::same_as<T, bool> && !std::same_as<T, char> && !std::same_as<T, signed char> &&
+    !std::same_as<T, unsigned char> && !std::same_as<T, wchar_t> && !std::same_as<T, char8_t> &&
+    !std::same_as<T, char16_t> && !std::same_as<T, char32_t>;
+
+template<class R> struct kuma_numeric_vector : std::false_type {};
+template<class T>
+struct kuma_numeric_vector<std::vector<T>> : std::bool_constant<kuma_arithmetic_scalar<T>> {};
+
+template<class L, class R>
+void kuma_vector_same_size(const L& left, const R& right) {
+    if (left.size() != right.size())
+        throw std::invalid_argument("vector operands must have the same length");
+}
+
+template<class A, class S>
+void kuma_vector_divisor_ok(const std::vector<A>& values, S scalar) {
+    using R = std::common_type_t<A, S>;
+    const auto divisor = static_cast<R>(scalar);
+    if (divisor == R{0}) throw std::domain_error("division by zero");
+    if constexpr (std::signed_integral<R>) {
+        if (divisor == R{-1}) {
+            for (const A& value : values) {
+                if (static_cast<R>(value) == (std::numeric_limits<R>::min)())
+                    throw std::overflow_error("vector division overflows");
+            }
+        }
+    }
+}
+
+template<char Op, class A, class B>
+auto kuma_vector_pair(const std::vector<A>& left, const std::vector<B>& right) {
+    kuma_vector_same_size(left, right);
+    using R = std::common_type_t<A, B>;
+    std::vector<R> out(left.size());
+    for (std::size_t i = 0; i < left.size(); ++i) {
+        if constexpr (Op == '+') out[i] = static_cast<R>(left[i]) + static_cast<R>(right[i]);
+        else out[i] = static_cast<R>(left[i]) - static_cast<R>(right[i]);
+    }
+    return out;
+}
+template<class L, class R>
+auto kuma_vector_add(const L& left, const R& right) { return kuma_vector_pair<'+'>(left, right); }
+template<class L, class R>
+auto kuma_vector_sub(const L& left, const R& right) { return kuma_vector_pair<'-'>(left, right); }
+
+template<char Op, class A, class S>
+auto kuma_vector_scale(const std::vector<A>& values, S scalar) {
+    if constexpr (Op == '/') kuma_vector_divisor_ok(values, scalar);
+    using R = std::common_type_t<A, S>;
+    std::vector<R> out(values.size());
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        if constexpr (Op == '*') out[i] = static_cast<R>(values[i]) * static_cast<R>(scalar);
+        else out[i] = static_cast<R>(values[i]) / static_cast<R>(scalar);
+    }
+    return out;
+}
+template<class V, class S>
+auto kuma_vector_mul(const V& values, S scalar) { return kuma_vector_scale<'*'>(values, scalar); }
+template<class S, class V>
+auto kuma_vector_rmul(S scalar, const V& values) { return kuma_vector_mul(values, scalar); }
+template<class V, class S>
+auto kuma_vector_div(const V& values, S scalar) { return kuma_vector_scale<'/'>(values, scalar); }
+
+template<class L, class R>
+void kuma_vector_iadd(L& left, const R& right) {
+    kuma_vector_same_size(left, right);
+    for (std::size_t i = 0; i < left.size(); ++i) left[i] += right[i];
+}
+template<class L, class R>
+void kuma_vector_isub(L& left, const R& right) {
+    kuma_vector_same_size(left, right);
+    for (std::size_t i = 0; i < left.size(); ++i) left[i] -= right[i];
+}
+template<class L, class S>
+void kuma_vector_imul(L& left, S scalar) {
+    for (auto& value : left) value *= scalar;
+}
+template<class L, class S>
+void kuma_vector_idiv(L& left, S scalar) {
+    kuma_vector_divisor_ok(left, scalar);
+    for (auto& value : left) value /= scalar;
+}
+
+template<class A, class B>
+auto vector_dot(const std::vector<A>& left, const std::vector<B>& right) {
+    kuma_vector_same_size(left, right);
+    using R = std::common_type_t<A, B>;
+    R out{};
+    for (std::size_t i = 0; i < left.size(); ++i)
+        out += static_cast<R>(left[i]) * static_cast<R>(right[i]);
+    return out;
+}
+
+template<class A, class B>
+auto vector_mul_each(const std::vector<A>& left, const std::vector<B>& right) {
+    kuma_vector_same_size(left, right);
+    using R = std::common_type_t<A, B>;
+    std::vector<R> out(left.size());
+    for (std::size_t i = 0; i < left.size(); ++i)
+        out[i] = static_cast<R>(left[i]) * static_cast<R>(right[i]);
+    return out;
+}
+
+template<class T>
+auto vector_concat(const std::vector<T>& left, const std::vector<T>& right) {
+    std::vector<T> out;
+    if (right.size() > out.max_size() - left.size())
+        throw std::length_error("vector concat exceeds max_size");
+    out.reserve(left.size() + right.size());
+    out.insert(out.end(), left.begin(), left.end());
+    out.insert(out.end(), right.begin(), right.end());
+    return out;
+}
+
+template<class T, std::integral I>
+auto vector_repeat(const std::vector<T>& values, I count) {
+    std::vector<T> out;
+    if (count <= 0 || values.empty()) return out;
+    if (!std::in_range<std::size_t>(count) || static_cast<std::size_t>(count) > out.max_size() / values.size())
+        throw std::length_error("vector repeat exceeds max_size");
+    const auto times = static_cast<std::size_t>(count);
+    out.reserve(values.size() * times);
+    for (std::size_t i = 0; i < times; ++i)
+        out.insert(out.end(), values.begin(), values.end());
+    return out;
+}
+
+template<class> inline constexpr bool is_plain_vector = false;
+template<class T> inline constexpr bool is_plain_vector<std::vector<T>> = true;
+
 template<class Item, class C> struct EnumerateView;
 template<class Item, class... Cs> struct ZipView;
 template<class T> struct is_kuma_view : std::false_type {};
