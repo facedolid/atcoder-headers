@@ -9,6 +9,7 @@
 #include "ac_io.hpp"
 #include <bit>
 #include <concepts>
+#include <cstdint>
 #include <iterator>
 #include <optional>
 #include <span>
@@ -48,6 +49,91 @@ template<class T>
 T range_sum(const Prefix2D<T>& prefix, long long r1, long long c1, long long r2, long long c2) {
     return prefix.sum(r1, c1, r2, c2);
 }
+
+class DynamicBitset {
+    std::vector<std::uint64_t> words_;
+    long long width_ = 0;
+
+    static std::size_t word_count(long long width) {
+        if (width < 0) throw std::invalid_argument("dynamic bitset: width must not be negative");
+        const auto need = static_cast<unsigned long long>(width / 64 + (width % 64 != 0));
+        if (need > std::numeric_limits<std::size_t>::max())
+            throw std::length_error("dynamic bitset width exceeds representable storage");
+        return static_cast<std::size_t>(need);
+    }
+
+    static void check_index(long long i, long long width) {
+        if (i < 0 || i >= width) throw std::out_of_range("dynamic bitset: index out of range");
+    }
+
+    void mask_tail() {
+        if (width_ == 0 || words_.empty()) return;
+        const unsigned rem = static_cast<unsigned>(width_ % 64);
+        if (rem == 0) return;
+        words_.back() &= (std::uint64_t{1} << rem) - 1;
+    }
+
+public:
+    explicit DynamicBitset(long long width) : words_(word_count(width), 0), width_(width) {}
+    DynamicBitset(const DynamicBitset&) = default;
+    DynamicBitset& operator=(const DynamicBitset&) = default;
+    DynamicBitset(DynamicBitset&& other) noexcept
+        : words_(std::move(other.words_)), width_(std::exchange(other.width_, 0)) {
+        other.words_.clear();
+    }
+    DynamicBitset& operator=(DynamicBitset&& other) noexcept {
+        if (this != &other) {
+            words_ = std::move(other.words_);
+            width_ = std::exchange(other.width_, 0);
+            other.words_.clear();
+        }
+        return *this;
+    }
+
+    long long size() const { return width_; }
+
+    long long count() const {
+        long long total = 0;
+        for (std::uint64_t word : words_) total += std::popcount(word);
+        return total;
+    }
+
+    void set(long long i, bool value = true) {
+        check_index(i, width_);
+        const std::size_t word = static_cast<std::size_t>(i / 64);
+        const unsigned bit = static_cast<unsigned>(i % 64);
+        const std::uint64_t mask = std::uint64_t{1} << bit;
+        if (value)
+            words_[word] |= mask;
+        else
+            words_[word] &= ~mask;
+    }
+
+    bool test(long long i) const {
+        check_index(i, width_);
+        const std::size_t word = static_cast<std::size_t>(i / 64);
+        const unsigned bit = static_cast<unsigned>(i % 64);
+        return (words_[word] >> bit) & 1;
+    }
+
+    // OR with a left shift of this bitset into itself (bits shifted past the width are dropped).
+    void or_shift_left(long long shift) {
+        if (shift < 0) throw std::invalid_argument("dynamic bitset: shift must not be negative");
+        if (shift == 0 || shift >= width_ || words_.empty()) return;
+
+        const std::size_t n = words_.size();
+        const std::size_t word_shift = static_cast<std::size_t>(shift / 64);
+        const unsigned bit_shift = static_cast<unsigned>(shift % 64);
+        const unsigned bit_carry = 64u - bit_shift;
+
+        for (std::size_t i = n; i-- > word_shift; ) {
+            std::uint64_t part = words_[i - word_shift] << bit_shift;
+            if (bit_shift != 0 && i > word_shift) part |= words_[i - word_shift - 1] >> bit_carry;
+            words_[i] |= part;
+        }
+        mask_tail();
+    }
+};
 
 static_assert(std::numeric_limits<int>::digits == 31, "Kuma needs 32-bit int");
 static_assert(std::numeric_limits<long long>::digits == 63, "Kuma needs 64-bit long long");

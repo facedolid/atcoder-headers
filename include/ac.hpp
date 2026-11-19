@@ -7570,3 +7570,20 @@ auto zip_longest(R&& a, S&& b) {
     }
     return out;
 }
+
+// @acf fn desc — (integral) -> descending_integral_key<T> — sorted_by向けの整数降順キー
+/// 符号付き・符号なしの整数値を、所有する降順比較キーに包む。`sorted_by` のキーに使うと、その成分だけ降順になる。
+/// 比較は値の否定を使わず、逆順の `<` で行う。tuple・pairの他成分は通常の昇順のまま。
+namespace ac {
+template <std::integral T>
+struct descending_integral_key {
+    T value{};
+    friend constexpr bool operator<(descending_integral_key lhs, descending_integral_key rhs) {
+        return rhs.value < lhs.value;
+    }
+};
+template <std::integral T>
+constexpr descending_integral_key<T> desc(T value) {
+    return {value};
+}
+}  // namespace ac
