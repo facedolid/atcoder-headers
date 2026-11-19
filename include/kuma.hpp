@@ -7,7 +7,9 @@
 #endif
 #include "ac.hpp"
 #include "ac_io.hpp"
+#include <bit>
 #include <concepts>
+#include <iterator>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -449,6 +451,10 @@ template<class Item, class... Cs> struct ZipView;
 template<class T> struct is_kuma_view : std::false_type {};
 template<class I, class C> struct is_kuma_view<EnumerateView<I, C>> : std::true_type {};
 template<class I, class... Cs> struct is_kuma_view<ZipView<I, Cs...>> : std::true_type {};
+template<class T> struct SetBitsView;
+template<class T> struct SubmasksView;
+template<class T> struct is_kuma_view<SetBitsView<T>> : std::true_type {};
+template<class T> struct is_kuma_view<SubmasksView<T>> : std::true_type {};
 template<class T> struct is_vector : std::false_type {};
 template<class T, class A> struct is_vector<std::vector<T, A>> : std::true_type {};
 template<class T> struct is_deque : std::false_type {};
@@ -756,6 +762,110 @@ inline Range range(long long begin, long long end, long long step = 1) {
     return {begin, end, step};
 }
 inline Range range(long long end) { return range(0, end); }
+
+template<class T>
+concept kuma_mask_integral = std::integral<T> && !std::is_same_v<T, bool> &&
+    !std::is_same_v<T, char> && !std::is_same_v<T, signed char> && !std::is_same_v<T, unsigned char> &&
+    !std::is_same_v<T, wchar_t> && !std::is_same_v<T, char8_t> && !std::is_same_v<T, char16_t> &&
+    !std::is_same_v<T, char32_t> && sizeof(T) <= 8;
+
+template<class T>
+void mask_reject_negative(T mask) {
+    static_assert(kuma_mask_integral<T>);
+    if constexpr (std::is_signed_v<T>) {
+        if (mask < 0) error("integer mask must not be negative");
+    }
+}
+
+template<kuma_mask_integral T, kuma_mask_integral I>
+bool mask_has_bit(T mask, I index) {
+    mask_reject_negative(mask);
+    using U = std::make_unsigned_t<T>;
+    constexpr int width = std::numeric_limits<U>::digits;
+    // Check before narrowing, including unsigned C++ indices wider than int.
+    if (!std::in_range<int>(index) || index < 0 || index >= width)
+        throw std::out_of_range("has_bit: bit position out of range");
+    return ((static_cast<U>(mask) >> static_cast<int>(index)) & U{1}) != 0;
+}
+
+template<class T>
+int mask_bit_count(T mask) {
+    static_assert(kuma_mask_integral<T>);
+    mask_reject_negative(mask);
+    using U = std::make_unsigned_t<T>;
+    return std::popcount(static_cast<U>(mask));
+}
+
+template<class T>
+struct SetBitsView {
+    static_assert(kuma_mask_integral<T>);
+    using value_type = int;
+    using Sentinel = std::default_sentinel_t;
+    T mask;
+    explicit SetBitsView(T value) : mask(value) { mask_reject_negative(mask); }
+    struct Iterator {
+        using value_type = int;
+        using difference_type = std::ptrdiff_t;
+        using iterator_concept = std::input_iterator_tag;
+        std::make_unsigned_t<T> bits;
+        bool done = false;
+        int operator*() const { return std::countr_zero(bits); }
+        Iterator& operator++() {
+            bits &= bits - 1;
+            done = bits == 0;
+            return *this;
+        }
+        void operator++(int) { ++*this; }
+        bool operator==(Sentinel) const { return done; }
+    };
+    Iterator begin() const {
+        using U = std::make_unsigned_t<T>;
+        const U bits = static_cast<U>(mask);
+        return {bits, bits == 0};
+    }
+    Sentinel end() const { return {}; }
+};
+
+template<class T>
+struct SubmasksView {
+    static_assert(kuma_mask_integral<T>);
+    using value_type = T;
+    using Sentinel = std::default_sentinel_t;
+    T mask;
+    explicit SubmasksView(T value) : mask(value) { mask_reject_negative(mask); }
+    struct Iterator {
+        using value_type = T;
+        using difference_type = std::ptrdiff_t;
+        using iterator_concept = std::input_iterator_tag;
+        T sub;
+        T mask;
+        bool done = false;
+        T operator*() const { return sub; }
+        Iterator& operator++() {
+            if (sub == T{0}) {
+                done = true;
+                return *this;
+            }
+            using U = std::make_unsigned_t<T>;
+            sub = static_cast<T>((static_cast<U>(sub) - 1) & static_cast<U>(mask));
+            return *this;
+        }
+        void operator++(int) { ++*this; }
+        bool operator==(Sentinel) const { return done; }
+    };
+    Iterator begin() const { return {mask, mask, false}; }
+    Sentinel end() const { return {}; }
+};
+
+template<class T>
+SetBitsView<T> mask_set_bits(T mask) {
+    return SetBitsView<T>(mask);
+}
+
+template<class T>
+SubmasksView<T> mask_submasks(T mask) {
+    return SubmasksView<T>(mask);
+}
 
 inline long long sum(const Range& values) {
     const __int128 first = values.first, stop = values.last, step = values.step;
