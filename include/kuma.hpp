@@ -7,6 +7,7 @@
 #endif
 #include "ac.hpp"
 #include "ac_io.hpp"
+#include <concepts>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -245,6 +246,46 @@ T numeric_cast(U value) {
         if (!std::in_range<T>(value)) error("numeric conversion is outside the integer range");
     }
     return static_cast<T>(value);
+}
+
+template<std::integral I>
+int checked_radix(I base) {
+    if (base != 0 && (base < 2 || base > 36))
+        throw std::invalid_argument("stoi/stoll: base must be 0 or 2..36");
+    return static_cast<int>(base);
+}
+
+enum class StringPadSide { Start, End, ZFill };
+
+template<std::integral I, class Fill>
+requires (std::same_as<Fill, char> && !std::same_as<I, bool> && !std::same_as<I, char> &&
+          !std::same_as<I, wchar_t> && !std::same_as<I, char8_t> &&
+          !std::same_as<I, char16_t> && !std::same_as<I, char32_t>)
+std::string string_pad(std::string value, I width, Fill fill, StringPadSide side) {
+    if constexpr (std::is_signed_v<I>) {
+        if (width < 0) return value;
+    }
+    if (!std::in_range<std::size_t>(width))
+        throw std::length_error("string pad width overflows size_t");
+    const std::size_t target = static_cast<std::size_t>(width);
+    const std::size_t current = value.size();
+    if (target <= current) return value;
+    if (target > value.max_size())
+        throw std::length_error("string pad width exceeds string max_size");
+    const std::size_t pad = target - current;
+    if (side == StringPadSide::ZFill) {
+        if (!value.empty() && (value.front() == '+' || value.front() == '-'))
+            value.insert(static_cast<std::size_t>(1), pad, '0');
+        else
+            value.insert(0, pad, '0');
+        return value;
+    }
+    if (side == StringPadSide::Start) {
+        value.insert(0, pad, fill);
+        return value;
+    }
+    value.append(pad, fill);
+    return value;
 }
 
 template<class Item, class C> struct EnumerateView;
