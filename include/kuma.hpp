@@ -231,6 +231,14 @@ class SortedList {
         if (i < 0 || static_cast<unsigned long long>(i) >= values_.size()) error("SortedList index out of range");
         return static_cast<std::size_t>(i);
     }
+    bool erase_first(const T& x) {
+        K key = checked_ordered_value(key_(x));
+        auto it = values_.lower_bound({key, 0});
+        for (; it != values_.end() && !(key < it->first.first) && !(it->first.first < key); ++it) {
+            if (it->second == x) { values_.erase(it); return true; }
+        }
+        return false;
+    }
 public:
     SortedList() requires std::is_same_v<T, K> : key_([](const T& value) { return value; }) {}
     template<class U> explicit SortedList(const std::vector<U>& input) requires std::is_same_v<T, K> : SortedList() { for (std::size_t i = 0; i < input.size(); ++i) add(static_cast<U>(input[i])); }
@@ -252,14 +260,21 @@ public:
     template<class U> long long bisect_left(U x) const { return static_cast<long long>(values_.order_of_key({checked_ordered_value(key_(convert(x))), 0})); }
     template<class U> long long bisect_right(U x) const { return static_cast<long long>(values_.order_of_key({checked_ordered_value(key_(convert(x))), std::numeric_limits<unsigned long long>::max()})); }
     template<class U> T operator[](U i) const { return values_.find_by_order(index(integer(i)))->second; }
+    template<class U> bool discard(U value) { return erase_first(convert(value)); }
     template<class U> void remove(U value) {
-        T x = convert(value);
-        K key = checked_ordered_value(key_(x));
-        auto it = values_.lower_bound({key, 0});
-        for (; it != values_.end() && !(key < it->first.first) && !(it->first.first < key); ++it) {
-            if (it->second == x) { values_.erase(it); return; }
+        if (!erase_first(convert(value))) error("SortedList value not found");
+    }
+    template<std::integral U> requires (!std::same_as<U, bool>)
+    std::optional<T> try_kth(U i) const {
+        if constexpr (std::is_signed_v<U>) {
+            if (i < 0) return std::nullopt;
         }
-        error("SortedList value not found");
+        if constexpr (std::numeric_limits<U>::digits > std::numeric_limits<std::size_t>::digits) {
+            if (i > static_cast<U>(std::numeric_limits<std::size_t>::max())) return std::nullopt;
+        }
+        const auto k = static_cast<std::size_t>(i);
+        if (k >= values_.size()) return std::nullopt;
+        return values_.find_by_order(k)->second;
     }
     T pop() { return pop(-1); }
     template<class U> T pop(U i) {
@@ -307,6 +322,29 @@ inline int dimension(long long n) {
         error("input dimension must be between 0 and INT_MAX");
     }
     return static_cast<int>(n);
+}
+
+// Mixed shaped input validates the original type and width before narrowing.
+template<class I>
+int checked_input_dimension(const I& n) {
+    if constexpr ((!std::integral<I> && !std::same_as<I, __int128>
+                   && !std::same_as<I, unsigned __int128>) || std::same_as<I, bool>) {
+        error("input dimension must have an integer type other than bool");
+    } else {
+        if constexpr (std::numeric_limits<I>::is_signed) {
+            if (n < 0) error("input dimension must be between 0 and INT_MAX");
+        }
+        if constexpr (std::numeric_limits<I>::digits > std::numeric_limits<int>::digits) {
+            if (n > static_cast<I>(std::numeric_limits<int>::max()))
+                error("input dimension must be between 0 and INT_MAX");
+        }
+        return static_cast<int>(n);
+    }
+}
+
+template<class H, class W>
+std::pair<int, int> checked_input_shape(const std::pair<H, W>& shape) {
+    return {checked_input_dimension(shape.first), checked_input_dimension(shape.second)};
 }
 
 template<class T, class U>
@@ -940,6 +978,103 @@ struct SubmasksView {
         bool operator==(Sentinel) const { return done; }
     };
     Iterator begin() const { return {mask, mask, false}; }
+    Sentinel end() const { return {}; }
+};
+
+// Holds only the input length and choice count. Dereferencing yields an
+// independent index row, so saved rows survive advancing the iterator.
+class CombinationIndicesView {
+    long long n_;
+    long long k_;
+public:
+    using value_type = std::vector<long long>;
+    using Sentinel = std::default_sentinel_t;
+    CombinationIndicesView(std::size_t n, long long k) : n_(0), k_(k) {
+        if (k < 0) throw std::invalid_argument("combination_indices: negative k");
+        if (!std::in_range<long long>(n))
+            throw std::length_error("combination_indices: vector length exceeds i64");
+        n_ = static_cast<long long>(n);
+    }
+    struct Iterator {
+        using value_type = std::vector<long long>;
+        using difference_type = std::ptrdiff_t;
+        using iterator_concept = std::input_iterator_tag;
+        long long n;
+        value_type row;
+        bool done;
+        value_type operator*() const { return row; }
+        Iterator& operator++() {
+            for (std::size_t i = row.size(); i != 0; ) {
+                --i;
+                if (row[i] != n - static_cast<long long>(row.size() - i)) {
+                    ++row[i];
+                    for (std::size_t j = i + 1; j < row.size(); ++j)
+                        row[j] = row[j - 1] + 1;
+                    return *this;
+                }
+            }
+            done = true;
+            return *this;
+        }
+        void operator++(int) { ++*this; }
+        bool operator==(Sentinel) const { return done; }
+    };
+    Iterator begin() const {
+        if (k_ > n_) return {n_, {}, true};
+        value_type row(static_cast<std::size_t>(k_));
+        std::iota(row.begin(), row.end(), 0LL);
+        return {n_, std::move(row), false};
+    }
+    Sentinel end() const { return {}; }
+};
+
+// Own the source snapshot, not all combinations. Iterators borrow the view;
+// each emitted row owns its values and may outlive both iterator and view.
+template<class T>
+class CombinationsView {
+    CombinationIndicesView indices_;
+    std::vector<T> values_;
+public:
+    using value_type = std::vector<T>;
+    using Sentinel = std::default_sentinel_t;
+    explicit CombinationsView(const std::vector<T>& values, long long k)
+        : indices_(values.size(), k),
+          values_(k > 0 && std::cmp_less_equal(k, values.size()) ? values : value_type{}) {}
+    explicit CombinationsView(std::vector<T>&& values, long long k)
+        : indices_(values.size(), k),
+          values_(k > 0 && std::cmp_less_equal(k, values.size()) ? std::move(values) : value_type{}) {}
+    CombinationsView(const CombinationsView&) = default;
+    CombinationsView& operator=(const CombinationsView&) = default;
+    // Reset the old index range along with the source values, including when k == 0.
+    CombinationsView(CombinationsView&& other) noexcept
+        : indices_(std::exchange(other.indices_, CombinationIndicesView(0, 1))),
+          values_(std::move(other.values_)) {}
+    CombinationsView& operator=(CombinationsView&& other) noexcept {
+        if (this != &other) {
+            indices_ = std::exchange(other.indices_, CombinationIndicesView(0, 1));
+            values_ = std::move(other.values_);
+        }
+        return *this;
+    }
+    struct Iterator {
+        using value_type = std::vector<T>;
+        using difference_type = std::ptrdiff_t;
+        using iterator_concept = std::input_iterator_tag;
+        CombinationIndicesView::Iterator indices;
+        const std::vector<T>* values;
+        value_type operator*() const {
+            value_type result;
+            result.reserve(indices.row.size());
+            for (const long long i : indices.row)
+                result.push_back((*values)[static_cast<std::size_t>(i)]);
+            return result;
+        }
+        Iterator& operator++() { ++indices; return *this; }
+        void operator++(int) { ++*this; }
+        bool operator==(Sentinel end) const { return indices == end; }
+    };
+    Iterator begin() const & { return {indices_.begin(), &values_}; }
+    Iterator begin() const && = delete;
     Sentinel end() const { return {}; }
 };
 
