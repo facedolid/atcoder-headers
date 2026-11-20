@@ -1431,7 +1431,12 @@ struct ZipView {
 // Wide arithmetic covers the entire signed-i64 range, including LL_MIN starts.
 template<class C> __int128 sequence_length(const C& values) { return values.size(); }
 inline __int128 sequence_length(const Range& values) {
-    return static_cast<__int128>(values.last) - values.first;
+    const __int128 first = values.first, last = values.last, step = values.step;
+    if (step == 0) error("range step must not be zero");
+    const __int128 distance = step > 0 ? last - first : first - last;
+    if (distance <= 0) return 0;
+    const __int128 stride = step > 0 ? step : -step;
+    return (distance - 1) / stride + 1;
 }
 template<class C>
 void check_eager_enumerate(const C& values, long long start) {

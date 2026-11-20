@@ -389,12 +389,16 @@ constexpr ll wrap1(ll x, ll n) {
 }
 
 namespace ac_detail::int128_io {
-inline bool parse_u128(const string& s, size_t begin, u128& value) {
+inline bool parse_u128(const string& s, size_t begin, u128 limit, u128& value) {
     if (begin >= s.size()) return false;
+    const u128 cutoff = limit / 10;
+    const auto last = static_cast<unsigned>(limit % 10);
     u128 x = 0;
     for (size_t i = begin; i < s.size(); ++i) {
         if (s[i] < '0' || s[i] > '9') return false;
-        x = x * 10 + static_cast<u128>(s[i] - '0');
+        const auto digit = static_cast<unsigned>(s[i] - '0');
+        if (x > cutoff || (x == cutoff && digit > last)) return false;
+        x = x * 10 + digit;
     }
     value = x;
     return true;
@@ -428,20 +432,25 @@ inline istream& operator>>(istream& is, __int128& value) {
         negative = s[0] == '-';
         begin = 1;
     }
+    constexpr ::u128 min_magnitude = static_cast<::u128>(1) << 127;
+    const ::u128 limit = negative ? min_magnitude : min_magnitude - 1;
     ::u128 mag = 0;
-    if (!::ac_detail::int128_io::parse_u128(s, begin, mag)) {
+    if (!::ac_detail::int128_io::parse_u128(s, begin, limit, mag)) {
         is.setstate(ios::failbit);
         return is;
     }
-    value = negative ? -static_cast<__int128>(mag) : static_cast<__int128>(mag);
+    // The negative limit has no positive signed representation.
+    value = negative && mag != 0 ? -static_cast<__int128>(mag - 1) - 1
+                                 : static_cast<__int128>(mag);
     return is;
 }
 
 inline istream& operator>>(istream& is, unsigned __int128& value) {
     string s;
     if (!(is >> s)) return is;
-    if (!s.empty() && s[0] == '+') s.erase(s.begin());
-    if (!::ac_detail::int128_io::parse_u128(s, 0, value)) is.setstate(ios::failbit);
+    const size_t begin = !s.empty() && s[0] == '+' ? 1 : 0;
+    constexpr ::u128 limit = ~static_cast<::u128>(0);
+    if (!::ac_detail::int128_io::parse_u128(s, begin, limit, value)) is.setstate(ios::failbit);
     return is;
 }
 
