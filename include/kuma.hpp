@@ -1579,12 +1579,20 @@ CppSliceRequest(const C&, std::optional<long long>, std::optional<long long>,
 
 template<class T>
 std::optional<long long> cpp_slice_bound(T value) {
-    static_assert(std::is_integral_v<T> && !std::is_same_v<T, bool>,
+    static_assert((std::is_integral_v<T> || std::is_same_v<T, __int128> ||
+                   std::is_same_v<T, unsigned __int128>) && !std::is_same_v<T, bool>,
                   "Kuma slice bounds must be integers (not bool)");
-    const __int128 wide = value;
-    if (wide < std::numeric_limits<long long>::min() ||
-        wide > std::numeric_limits<long long>::max())
-        error("slice bound exceeds signed 64-bit range");
+    using Limits = std::numeric_limits<long long>;
+    // Compare in the original type: even signed __int128 cannot represent
+    // every unsigned __int128 bound.
+    if constexpr (std::numeric_limits<T>::digits > Limits::digits) {
+        if (value > static_cast<T>(Limits::max()))
+            error("slice bound exceeds signed 64-bit range");
+        if constexpr (std::numeric_limits<T>::is_signed) {
+            if (value < static_cast<T>(Limits::min()))
+                error("slice bound exceeds signed 64-bit range");
+        }
+    }
     return static_cast<long long>(value);
 }
 template<class C>
