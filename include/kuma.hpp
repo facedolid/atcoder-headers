@@ -1292,11 +1292,19 @@ inline long long cpp_sum(const Range& values) { return sum(values); }
 
 template<class T>
 long long range_bound(T value) {
-    static_assert(std::is_integral_v<T> && !std::is_same_v<T, bool>,
+    // Some strict-dialect standard libraries exclude the compiler's 128-bit types from these traits.
+    static_assert((std::is_integral_v<T> || std::is_same_v<T, __int128>
+                   || std::is_same_v<T, unsigned __int128>) && !std::is_same_v<T, bool>,
                   "Kuma range arguments must be integers (not bool)");
-    const __int128 wide = value;
-    if (wide < std::numeric_limits<long long>::min() || wide > std::numeric_limits<long long>::max())
-        error("range argument exceeds signed 64-bit range");
+    constexpr auto maximum = std::numeric_limits<long long>::max();
+    if constexpr (std::is_signed_v<T> || std::is_same_v<T, __int128>) {
+        const auto wide = static_cast<__int128>(value);
+        if (wide < std::numeric_limits<long long>::min() || wide > maximum)
+            error("range argument exceeds signed 64-bit range");
+    } else {
+        if (static_cast<unsigned __int128>(value) > static_cast<unsigned __int128>(maximum))
+            error("range argument exceeds signed 64-bit range");
+    }
     return static_cast<long long>(value);
 }
 // Braced arguments are evaluated left-to-right, exactly once in mixed code.
