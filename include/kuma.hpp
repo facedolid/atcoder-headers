@@ -11,6 +11,7 @@
 #include <concepts>
 #include <cstdint>
 #include <iterator>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -142,21 +143,204 @@ static_assert(std::numeric_limits<long long>::digits == 63, "Kuma needs 64-bit l
     throw std::runtime_error(message);
 }
 
-// The fallback keeps portability where GNU policy-based data structures are unavailable.
+// A counted AVL tree supplies portable order statistics where PBDS is absent.
 #ifndef KUMA_HAS_PBDS
 template<class Key, class T> class SortedListFallbackTree {
-    std::map<Key, T> values_;
+    using Entry = std::pair<const Key, T>;
+    struct Node {
+        Entry item;
+        Node* parent;
+        std::unique_ptr<Node> left, right;
+        std::size_t size = 1;
+        int height = 1;
+        Node(const Key& key, const T& value, Node* p) : item(key, value), parent(p) {}
+    };
+    using Link = std::unique_ptr<Node>;
+    Link root_;
+
+    static std::size_t size(const Link& node) { return node ? node->size : 0; }
+    static int height(const Link& node) { return node ? node->height : 0; }
+    static void set_parent(const Link& node, Node* parent) {
+        if (node) node->parent = parent;
+    }
+    static void refresh(Node& node) {
+        node.size = 1 + size(node.left) + size(node.right);
+        node.height = 1 + std::max(height(node.left), height(node.right));
+    }
+    static void rotate_left(Link& link) {
+        auto top = std::move(link->right);
+        top->parent = link->parent;
+        link->right = std::move(top->left);
+        set_parent(link->right, link.get());
+        link->parent = top.get();
+        refresh(*link);
+        top->left = std::move(link);
+        refresh(*top);
+        link = std::move(top);
+    }
+    static void rotate_right(Link& link) {
+        auto top = std::move(link->left);
+        top->parent = link->parent;
+        link->left = std::move(top->right);
+        set_parent(link->left, link.get());
+        link->parent = top.get();
+        refresh(*link);
+        top->right = std::move(link);
+        refresh(*top);
+        link = std::move(top);
+    }
+    static void balance(Link& link) {
+        if (!link) return;
+        refresh(*link);
+        if (height(link->left) - height(link->right) > 1) {
+            if (height(link->left->left) < height(link->left->right)) rotate_left(link->left);
+            rotate_right(link);
+        } else if (height(link->right) - height(link->left) > 1) {
+            if (height(link->right->right) < height(link->right->left)) rotate_right(link->right);
+            rotate_left(link);
+        }
+    }
+    static void insert_at(Link& link, Node* parent, const std::pair<Key, T>& item) {
+        if (!link) {
+            link = std::make_unique<Node>(item.first, item.second, parent);
+            return;
+        }
+        auto less = std::less<Key>{};
+        if (less(item.first, link->item.first)) insert_at(link->left, link.get(), item);
+        else if (less(link->item.first, item.first)) insert_at(link->right, link.get(), item);
+        else return;
+        balance(link);
+    }
+    static Link extract_min(Link& link) {
+        if (link->left) {
+            auto min = extract_min(link->left);
+            balance(link);
+            return min;
+        }
+        auto min = std::move(link);
+        link = std::move(min->right);
+        set_parent(link, min->parent);
+        return min;
+    }
+    static void erase_at(Link& link) {
+        auto old = std::move(link);
+        if (!old->left) link = std::move(old->right);
+        else if (!old->right) link = std::move(old->left);
+        else {
+            // Move the successor node itself, never the stored key/value.
+            link = extract_min(old->right);
+            link->left = std::move(old->left);
+            link->right = std::move(old->right);
+            set_parent(link->left, link.get());
+            set_parent(link->right, link.get());
+        }
+        set_parent(link, old->parent);
+        balance(link);
+    }
+    Link& link_of(Node* node) {
+        auto parent = node->parent;
+        if (!parent) return root_;
+        return parent->left.get() == node ? parent->left : parent->right;
+    }
+    static Link clone(const Link& from, Node* parent) {
+        if (!from) return {};
+        auto node = std::make_unique<Node>(from->item.first, from->item.second, parent);
+        node->left = clone(from->left, node.get());
+        node->right = clone(from->right, node.get());
+        refresh(*node);
+        return node;
+    }
+    static Node* first(Node* node) {
+        while (node && node->left) node = node->left.get();
+        return node;
+    }
 public:
-    using const_iterator = typename std::map<Key, T>::const_iterator;
-    auto size() const { return values_.size(); }
-    bool empty() const { return values_.empty(); }
-    auto begin() const { return values_.begin(); }
-    auto end() const { return values_.end(); }
-    auto lower_bound(const Key& key) const { return values_.lower_bound(key); }
-    void insert(const std::pair<Key, T>& item) { values_.insert(item); }
-    void erase(const_iterator it) { values_.erase(it); }
-    std::size_t order_of_key(const Key& key) const { return std::distance(values_.begin(), values_.lower_bound(key)); }
-    const_iterator find_by_order(std::size_t i) const { auto it = values_.begin(); std::advance(it, i); return it; }
+    class const_iterator {
+        Node* node_ = nullptr;
+        friend class SortedListFallbackTree;
+        explicit const_iterator(Node* node) : node_(node) {}
+    public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = Entry;
+        using difference_type = std::ptrdiff_t;
+        using pointer = const Entry*;
+        using reference = const Entry&;
+        const_iterator() = default;
+        bool operator==(const const_iterator&) const = default;
+        reference operator*() const { return node_->item; }
+        pointer operator->() const { return &node_->item; }
+        const_iterator& operator++() {
+            if (node_->right) {
+                node_ = first(node_->right.get());
+            } else {
+                auto node = node_;
+                auto parent = node->parent;
+                while (parent && parent->right.get() == node) {
+                    node = parent;
+                    parent = node->parent;
+                }
+                node_ = parent;
+            }
+            return *this;
+        }
+        const_iterator operator++(int) { auto old = *this; ++*this; return old; }
+    };
+
+    SortedListFallbackTree() = default;
+    SortedListFallbackTree(const SortedListFallbackTree& other) : root_(clone(other.root_, nullptr)) {}
+    SortedListFallbackTree& operator=(const SortedListFallbackTree& other) {
+        if (this != &other) root_ = clone(other.root_, nullptr);
+        return *this;
+    }
+    SortedListFallbackTree(SortedListFallbackTree&&) noexcept = default;
+    SortedListFallbackTree& operator=(SortedListFallbackTree&&) noexcept = default;
+
+    std::size_t size() const { return size(root_); }
+    bool empty() const { return !root_; }
+    const_iterator begin() const { return const_iterator(first(root_.get())); }
+    const_iterator end() const { return const_iterator(nullptr); }
+    const_iterator lower_bound(const Key& key) const {
+        auto node = root_.get();
+        Node* best = nullptr;
+        auto less = std::less<Key>{};
+        while (node) {
+            if (less(node->item.first, key)) node = node->right.get();
+            else { best = node; node = node->left.get(); }
+        }
+        return const_iterator(best);
+    }
+    void insert(const std::pair<Key, T>& item) { insert_at(root_, nullptr, item); }
+    void erase(const_iterator it) {
+        auto parent = it.node_->parent;
+        erase_at(link_of(it.node_));
+        while (parent) {
+            auto upper = parent->parent;
+            balance(link_of(parent));
+            parent = upper;
+        }
+    }
+    std::size_t order_of_key(const Key& key) const {
+        std::size_t rank = 0;
+        auto node = root_.get();
+        auto less = std::less<Key>{};
+        while (node) {
+            if (less(node->item.first, key)) {
+                rank += 1 + size(node->left);
+                node = node->right.get();
+            } else node = node->left.get();
+        }
+        return rank;
+    }
+    const_iterator find_by_order(std::size_t i) const {
+        auto node = root_.get();
+        while (node) {
+            const auto partial = size(node->left);
+            if (i == partial) return const_iterator(node);
+            if (i < partial) node = node->left.get();
+            else { i -= partial + 1; node = node->right.get(); }
+        }
+        return end();
+    }
 };
 #endif
 
