@@ -1503,6 +1503,29 @@ auto cpp_flat_collect(const R& values, F transform, P predicate) {
     }
     return result;
 }
+// Immediate opt-in pipeline: own a source snapshot, allocate only final output,
+// and do not advance past the last accepted item.
+template<class T>
+concept IterOwnedScalar = std::same_as<T, int> || std::same_as<T, long long>
+    || std::same_as<T, double> || std::same_as<T, bool>
+    || std::same_as<T, char> || std::same_as<T, std::string>;
+
+template<IterOwnedScalar T, class P, class F, class K>
+    requires ((std::same_as<K, int> || std::same_as<K, long long>)
+              && IterOwnedScalar<std::remove_cvref_t<std::invoke_result_t<F&, const T&>>>)
+auto cpp_iter_filter_map_take_collect(std::vector<T> source, P&& pred, F&& map, K count) {
+    using Result = std::remove_cvref_t<std::invoke_result_t<F&, const T&>>;
+    std::vector<Result> collected;
+    if (count < 0) throw std::invalid_argument("iter.take: negative count");
+    if (count == 0) return collected;
+    for (const T& item : source) {
+        if (!std::invoke(pred, item)) continue;
+        collected.emplace_back(std::invoke(map, item));
+        if (--count == 0) break;
+    }
+    return collected;
+}
+
 template<class R, class F>
 auto cpp_map(const R& values, F callback) {
     return cpp_collect(values, std::move(callback), [](const auto&) { return true; });
