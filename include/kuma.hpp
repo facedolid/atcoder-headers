@@ -35,6 +35,13 @@ public:
             if (row.size() != width) throw std::invalid_argument("prefix2d: rows must have equal length");
         table_ = ::prefix_sum2d(grid);
     }
+    // Report the input shape, not the padded prefix table.
+    friend std::ostream& operator<<(std::ostream& output, const Prefix2D& prefix) {
+        const auto& table = prefix.table_;
+        const auto rows = table.empty() ? 0 : table.size() - 1;
+        const auto cols = table.empty() || table.front().empty() ? 0 : table.front().size() - 1;
+        return output << "Prefix2D(rows=" << rows << ", cols=" << cols << ')';
+    }
     T sum(long long r1, long long c1, long long r2, long long c2) const {
         if (table_.empty() || table_.front().empty() || r1 < 0 || c1 < 0 || r1 > r2 || c1 > c2 ||
             static_cast<unsigned long long>(r2) >= table_.size() ||
@@ -938,6 +945,48 @@ inline void discard_line() {
     }
 }
 
+// Match the generated declaration itself, not C++ classes that inherit it.
+template<class T>
+concept GeneratedRecord = requires(const T& value) {
+    requires std::same_as<typename T::kuma_gen_owned_record, void>;
+    typename T::kuma_gen_value_types;
+    { &T::kuma_gen_value_fields } ->
+        std::same_as<decltype(value.kuma_gen_value_fields()) (T::*)() const>;
+};
+
+// One conversion puts this fallback below native insertion overloads,
+// including user-defined operator templates with exact stream parameters.
+struct RecordOutputFallback {
+    std::ostream& stream;
+    RecordOutputFallback(std::ostream& output) : stream(output) {}
+};
+
+template<class T> struct RecordOptional : std::false_type {};
+template<class T> struct RecordOptional<std::optional<T>> : std::true_type {};
+
+// Native range/adaptor insertion templates do not constrain their elements.
+// Check the formatter's leaves before advertising an ostream overload.
+template<class T, class... Seen>
+consteval bool record_output_supported() {
+    using U = std::remove_cvref_t<T>;
+    if constexpr ((std::same_as<U, Seen> || ...)) {
+        return false;
+    } else if constexpr (GeneratedRecord<U>) {
+        return record_output_supported<decltype(std::declval<const U&>().kuma_gen_value_fields()), Seen..., U>();
+    } else if constexpr (is_tuple<U>::value) {
+        return []<std::size_t... I>(std::index_sequence<I...>) {
+            return (record_output_supported<std::tuple_element_t<I, U>, Seen..., U>() && ...);
+        }(std::make_index_sequence<std::tuple_size_v<U>>{});
+    } else if constexpr (::ac_detail::io::is_range_v<U>) {
+        return record_output_supported<decltype(*std::begin(std::declval<const U&>())), Seen..., U>();
+    } else if constexpr (RecordOptional<U>::value || requires { typename U::container_type; typename U::value_type; }) {
+        return record_output_supported<typename U::value_type, Seen..., U>() &&
+            requires(std::ostream& out, const U& leaf) { out << leaf; };
+    } else {
+        return requires(std::ostream& out, const U& leaf) { out << leaf; };
+    }
+}
+
 struct PrintOptions {
     std::string sep = " ";
     std::string row_sep = "\n";
@@ -1027,13 +1076,52 @@ void print(const PrintOptions& options, const Ts&... values) {
     if (options.flush) std::cout.flush();
 }
 
+struct Range;
+class CombinationIndicesView;
+template<class T> class CombinationsView;
+
+// Only preview exact Kuma ranges that can be restarted without consuming input.
+template<class T> inline constexpr bool debug_preview_range = false;
+template<> inline constexpr bool debug_preview_range<Range> = true;
+template<> inline constexpr bool debug_preview_range<CombinationIndicesView> = true;
+template<class T> inline constexpr bool debug_preview_range<CombinationsView<T>> = true;
+template<class T> inline constexpr bool debug_preview_range<SubmasksView<T>> = true;
+
+template<class T>
+void debug_write_value(const T& value, const PrintOptions& options) {
+    if constexpr (debug_preview_range<T>) {
+        constexpr std::size_t max_elements = 100; // Same element limit as trace.
+        auto it = value.begin();
+        const auto end = value.end();
+        using Item = std::remove_cvref_t<decltype(*it)>;
+        // Match the existing Kuma writer for submasks and stock streaming for
+        // the other exact views (including the formatting of combination rows).
+        auto separate = [&] {
+            if constexpr (is_kuma_view<T>::value) std::cerr << options.sep;
+            else std::cerr << ac_detail::io::natural_range_sep_v<Item>;
+        };
+        std::size_t count = 0;
+        for (; it != end && count < max_elements; ++it, ++count) {
+            if (count != 0) separate();
+            if constexpr (is_kuma_view<T>::value) write_value_to(*it, options, std::cerr);
+            else ac_detail::output::write_item(std::cerr, *it);
+        }
+        if (it != end) {
+            separate();
+            std::cerr << "...";
+        }
+    } else {
+        write_value_to(value, options, std::cerr);
+    }
+}
+
 template<class... Ts>
 void debug_print(const PrintOptions& options, const Ts&... values) {
     bool first = true;
     auto emit = [&](const auto& value) {
         if (!first) std::cerr << options.sep;
         first = false;
-        write_value_to(value, options, std::cerr);
+        debug_write_value(value, options);
     };
     (emit(values), ...);
     std::cerr << options.end;
@@ -1113,8 +1201,9 @@ std::vector<T> reversed(std::vector<T> values) {
 
 struct Range {
     struct Iterator {
-        long long value, stop, step;
-        bool done;
+        using difference_type = std::ptrdiff_t;
+        long long value = 0, stop = 0, step = 1;
+        bool done = true;
         long long operator*() const { return value; }
         Iterator& operator++() {
             const __int128 next = static_cast<__int128>(value) + step;
@@ -1122,7 +1211,16 @@ struct Range {
             if (!done) value = static_cast<long long>(next);
             return *this;
         }
-        bool operator!=(const Iterator&) const { return !done; }
+        Iterator operator++(int) {
+            auto previous = *this;
+            ++*this;
+            return previous;
+        }
+        bool operator==(const Iterator& other) const {
+            if (done || other.done) return done && other.done;
+            return value == other.value && stop == other.stop && step == other.step;
+        }
+        bool operator!=(const Iterator& other) const { return !(*this == other); }
     };
     long long first, last, step = 1;
     Iterator begin() const { return {first, last, step, step > 0 ? first >= last : first <= last}; }
@@ -1436,6 +1534,7 @@ struct EnumerateView {
     long long start;
     struct Sentinel {};
     struct Iterator {
+        using difference_type = std::ptrdiff_t;
         decltype(std::declval<const C&>().begin()) it;
         decltype(std::declval<const C&>().end()) end;
         long long index;
@@ -1448,7 +1547,11 @@ struct EnumerateView {
             }
             return *this;
         }
+        void operator++(int) { ++*this; }
         bool operator!=(Sentinel) const { return it != end; }
+        bool operator==(Sentinel sentinel) const { return !operator!=(sentinel); }
+        friend bool operator==(Sentinel sentinel, const Iterator& it) { return it.operator==(sentinel); }
+        friend bool operator!=(Sentinel sentinel, const Iterator& it) { return it.operator!=(sentinel); }
     };
     Iterator begin() const { return {values.begin(), values.end(), start}; }
     Sentinel end() const { return {}; }
@@ -1462,6 +1565,7 @@ struct ZipView {
     ZipView(bool check, Cs... inputs) : strict(check), values(std::move(inputs)...) {}
     struct Sentinel {};
     struct Iterator {
+        using difference_type = std::ptrdiff_t;
         bool strict;
         std::tuple<decltype(std::declval<const Cs&>().begin())...> iterators;
         std::tuple<decltype(std::declval<const Cs&>().end())...> ends;
@@ -1474,6 +1578,7 @@ struct ZipView {
             std::apply([](auto&... it) { (++it, ...); }, iterators);
             return *this;
         }
+        void operator++(int) { ++*this; }
         bool operator!=(Sentinel) const {
             return [&]<std::size_t... I>(std::index_sequence<I...>) {
                 const bool all = ((std::get<I>(iterators) != std::get<I>(ends)) && ...);
@@ -1482,6 +1587,9 @@ struct ZipView {
                 return all;
             }(std::index_sequence_for<Cs...>{});
         }
+        bool operator==(Sentinel sentinel) const { return !operator!=(sentinel); }
+        friend bool operator==(Sentinel sentinel, const Iterator& it) { return it.operator==(sentinel); }
+        friend bool operator!=(Sentinel sentinel, const Iterator& it) { return it.operator!=(sentinel); }
     };
     Iterator begin() const {
         return std::apply([&](const auto&... inputs) {
@@ -1732,6 +1840,14 @@ std::map<K, V> dict_from_rows(const C& rows) {
     return result;
 }
 }  // namespace kuma_rt
+
+// Generated records are emitted in the global namespace. ADL also finds
+// this when the native range writer or trace visits a nested record.
+template<kuma_rt::GeneratedRecord T> requires (kuma_rt::record_output_supported<T>())
+std::ostream& operator<<(kuma_rt::RecordOutputFallback output, const T& value) {
+    kuma_rt::write_value_to(value.kuma_gen_value_fields(), kuma_rt::PrintOptions{}, output.stream);
+    return output.stream;
+}
 
 #define KUMA_CPP_INTEROP_ABI 1
 
