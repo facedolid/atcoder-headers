@@ -1966,3 +1966,88 @@ decltype(auto) cpp_member_enumerate(R&& values, A0&& a0, Rest&&... rest) {
         static_assert(sizeof...(Rest) == 0, "Kuma enumerate fallback accepts at most one start value");
 }
 } // namespace kuma_rt
+
+namespace kuma_rt {
+template <class Rank>
+concept kth_rank = std::integral<Rank> && !std::same_as<Rank, bool>;
+
+template <kth_rank Rank>
+std::size_t kth_offset(std::size_t size, Rank k) {
+    if (k <= 0 || static_cast<std::make_unsigned_t<Rank>>(k) > size)
+        throw std::out_of_range("kth selection: rank must be in [1, size]");
+    return static_cast<std::size_t>(k) - 1;
+}
+
+template <class K>
+consteval bool kth_owned_key() {
+    if constexpr (std::is_reference_v<K>) return false;
+    else if constexpr (std::is_arithmetic_v<K> || std::same_as<std::remove_cv_t<K>, std::string>) return true;
+    else if constexpr (::ac_detail::io::is_tuple_v<K> || ::ac_detail::io::is_pair_v<K>) {
+        return []<std::size_t... I>(std::index_sequence<I...>) {
+            return (kth_owned_key<std::tuple_element_t<I, K>>() && ...);
+        }(std::make_index_sequence<std::tuple_size_v<K>>{});
+    } else return false;
+}
+
+template <bool Largest, class T, class Alloc, kth_rank Rank, class Key>
+T kth_by(const std::vector<T, Alloc>& values, Rank k, Key&& key) {
+    const auto offset = ::kuma_rt::kth_offset(values.size(), k);
+    using K = std::decay_t<std::invoke_result_t<Key&, const T&>>;
+    static_assert(kth_owned_key<K>(), "kth selection requires scalar or owning tuple/pair keys");
+    std::vector<K> keys;
+    std::vector<std::size_t> order;
+    keys.reserve(values.size());
+    order.reserve(values.size());
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        const T& row = values[i];
+        auto&& projected = std::invoke(key, row);
+        ::ac_detail::validate_ordered_finite(projected);
+        keys.emplace_back(std::forward<decltype(projected)>(projected));
+        order.push_back(i);
+    }
+    const auto nth = order.begin() + offset;
+    // Reorder only indices: owned keys can have const components, and
+    // moving a large compound key is unnecessary during selection.
+    std::nth_element(order.begin(), nth, order.end(), [&](std::size_t a, std::size_t b) {
+        const auto& lhs = std::as_const(keys)[a];
+        const auto& rhs = std::as_const(keys)[b];
+        if constexpr (Largest) {
+            if (rhs < lhs) return true;
+            if (lhs < rhs) return false;
+        } else {
+            if (lhs < rhs) return true;
+            if (rhs < lhs) return false;
+        }
+        return a < b;
+    });
+    return values[*nth];
+}
+
+// kth_smallest — (vector, k) -> T — 1始まりで k 番目に小さい要素
+/// 重複を数え、元の配列を変更しない。平均O(N)時間、追加O(N)領域。範囲外は out_of_range。
+template <class T, class Alloc, kth_rank Rank>
+T kth_smallest(const std::vector<T, Alloc>& values, Rank k) {
+    return ::kuma_rt::kth_by<false>(values, k, std::identity{});
+}
+
+// kth_largest — (vector, k) -> T — 1始まりで k 番目に大きい要素
+/// 重複を数え、元の配列を変更しない。平均O(N)時間、追加O(N)領域。範囲外は out_of_range。
+template <class T, class Alloc, kth_rank Rank>
+T kth_largest(const std::vector<T, Alloc>& values, Rank k) {
+    return ::kuma_rt::kth_by<true>(values, k, std::identity{});
+}
+
+// kth_smallest_by — (vector, k, key) -> T — キー昇順で k 番目の元要素
+/// keyは入力順に1回ずつ。キーが等しい場合も入力順。平均O(N)時間、追加O(N)領域。
+template <class T, class Alloc, kth_rank Rank, class Key>
+T kth_smallest_by(const std::vector<T, Alloc>& values, Rank k, Key&& key) {
+    return ::kuma_rt::kth_by<false>(values, k, std::forward<Key>(key));
+}
+
+// kth_largest_by — (vector, k, key) -> T — キー降順で k 番目の元要素
+/// keyは入力順に1回ずつ。キーが等しい場合も入力順。平均O(N)時間、追加O(N)領域。
+template <class T, class Alloc, kth_rank Rank, class Key>
+T kth_largest_by(const std::vector<T, Alloc>& values, Rank k, Key&& key) {
+    return ::kuma_rt::kth_by<true>(values, k, std::forward<Key>(key));
+}
+} // namespace kuma_rt
