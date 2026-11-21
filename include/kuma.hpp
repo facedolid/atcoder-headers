@@ -501,6 +501,23 @@ inline void check_input() {
     }
 }
 
+template<class T>
+void read_index1_into(T& target) {
+    constexpr bool supported = std::same_as<T, int> || std::same_as<T, long long>;
+    static_assert(supported, "read : index1 requires a writable int or long long");
+    if constexpr (supported) {
+        long long raw = 0;
+        std::cin >> raw;
+        check_input();
+        if (raw <= 0) error("read : index1 requires a positive integer");
+        const long long value = raw - 1;
+        if (value > std::numeric_limits<T>::max()) {
+            error("read : index1 result is out of range for the target");
+        }
+        target = static_cast<T>(value);
+    }
+}
+
 inline int dimension(long long n) {
     if (n < 0 || n > std::numeric_limits<int>::max()) {
         error("input dimension must be between 0 and INT_MAX");
