@@ -2725,3 +2725,36 @@ void graphical_print(int width, int height, const Graph<Cost>& graph) {
     ac_graph_detail::graphical_render_graph(graph, width, height, cerr);
 }
 #endif
+
+namespace ac {
+
+/// 標準入力から未重み辺 m 本を読み、0 始まりの端点の組を入力順に返す。
+/// index_base は 1（既定）または 0。逆向きの辺は追加せず、重複・自己ループを保持する。
+/// 頂点数は受け取らず、隣接リストも作らない。m=0 では標準入力を消費しない。
+/// 端点は変換後に 0..INT_MAX。整数は std::cin の通常の書式で 2m 個読む。
+/// 不正な辺数・起点は invalid_argument、容量超過は length_error、
+/// 変換後の範囲外は out_of_range、読み取り失敗は runtime_error。
+inline vector<pii> read_edges(ll m, ll index_base = 1) {
+    if (m < 0 || (index_base != 0 && index_base != 1))
+        throw std::invalid_argument("read_edges: invalid count or index base");
+
+    vector<pii> edges;
+    if (std::cmp_greater(m, edges.max_size()))
+        throw std::length_error("read_edges: edge count too large");
+    edges.reserve(static_cast<size_t>(m));
+    const auto normalize = [index_base](ll endpoint) {
+        // Reject negative input before subtraction, then check narrowing.
+        if (endpoint < index_base || endpoint - index_base > std::numeric_limits<int>::max())
+            throw std::out_of_range("read_edges: endpoint outside int range after normalization");
+        return static_cast<int>(endpoint - index_base);
+    };
+    for (ll i = 0; i < m; ++i) {
+        ll from, to;
+        if (!(std::cin >> from >> to))
+            throw std::runtime_error("read_edges: expected two integer endpoints");
+        edges.emplace_back(normalize(from), normalize(to));
+    }
+    return edges;
+}
+
+}  // namespace ac
