@@ -117,6 +117,16 @@ public:
         return (words_[word] >> bit) & 1;
     }
 
+    // Display the logical width and the low 64 bits, most significant first.
+    friend std::ostream& operator<<(std::ostream& output, const DynamicBitset& bits) {
+        const auto shown = std::min(bits.width_, 64LL);
+        output << "DynamicBitset(" << bits.width_ << ", 0b";
+        if (shown < bits.width_) output << "...";
+        for (auto i = shown; i > 0; --i)
+            output.put(bits.test(i - 1) ? '1' : '0');
+        return output << ')';
+    }
+
     // OR with a left shift of this bitset into itself (bits shifted past the width are dropped).
     void or_shift_left(long long shift) {
         if (shift < 0) throw std::invalid_argument("dynamic bitset: shift must not be negative");
@@ -368,6 +378,9 @@ template<class V> V checked_ordered_value(V value) {
     return value;
 }
 
+template<class T>
+void write_sorted_list_item(std::ostream& output, const T& value);
+
 // Ordered multiset with indexed access; elements and copies are owned.
 template<class T = long long, class K = T>
 class SortedList {
@@ -434,6 +447,18 @@ public:
         result.reserve(values_.size());
         for (const auto& item : values_) result.push_back(item.second);
         return result;
+    }
+    // Preview stored values in index order without calling the key or copying values.
+    friend std::ostream& operator<<(std::ostream& output, const SortedList& list) {
+        const auto shown = std::min<std::size_t>(list.size(), 100);
+        auto it = list.values_.begin();
+        output.put('[');
+        for (std::size_t i = 0; i < shown; ++i, ++it) {
+            if (i > 0) output << ", ";
+            write_sorted_list_item(output, it->second);
+        }
+        if (shown < list.size()) output << ", ...";
+        return output << ']';
     }
     template<class U> void add(U value) {
         T x = convert(value);
@@ -959,6 +984,28 @@ void write_value_to(const T& value, const PrintOptions& options, std::ostream& o
         output.precision(previous_precision);
     } else {
         output << value;
+    }
+}
+
+// Keep each composite element distinct; the regular writer flattens tuples.
+template<class T>
+void write_sorted_list_item(std::ostream& output, const T& value) {
+    if constexpr (requires { value.kuma_gen_value_fields(); }) {
+        write_sorted_list_item(output, value.kuma_gen_value_fields());
+    } else if constexpr (KumaTupleValue<std::remove_cvref_t<T>>::value) {
+        output.put('(');
+        bool first = true;
+        std::apply([&](const auto&... fields) {
+            auto emit = [&](const auto& field) {
+                if (!first) output << ", ";
+                first = false;
+                write_sorted_list_item(output, field);
+            };
+            (emit(fields), ...);
+        }, value);
+        output.put(')');
+    } else {
+        write_value_to(value, PrintOptions{}, output);
     }
 }
 
@@ -2090,6 +2137,18 @@ public:
         const auto value = peek();
         remove();
         return value;
+    }
+    friend std::ostream& operator<<(std::ostream& os, const MixedAdaptor& adaptor) {
+        // Match the stock trace display limit without depending on its macros.
+        constexpr std::size_t limit = 100;
+        const auto n = adaptor.storage_.size();
+        os << (Stack ? "stack[" : "queue[");
+        for (std::size_t i = 0; i < n && i < limit; ++i) {
+            if (i != 0) os << ", ";
+            os << adaptor.storage_[Stack ? n - 1 - i : i];
+        }
+        if (n > limit) os << ", ...";
+        return os << ']';
     }
 };
 using MixedQueue = MixedAdaptor<false>;
