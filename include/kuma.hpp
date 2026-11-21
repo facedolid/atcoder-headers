@@ -2051,3 +2051,48 @@ T kth_largest_by(const std::vector<T, Alloc>& values, Rank k, Key&& key) {
     return ::kuma_rt::kth_by<true>(values, k, std::forward<Key>(key));
 }
 } // namespace kuma_rt
+
+// Included only for a source with a checked adaptor declaration, so ordinary
+// C++ source macros cannot interfere with these new names.
+#ifdef kuma_gen_enable_mixed_adaptors
+namespace kuma_rt {
+// Explicit standard queue and stack types are not changed.
+template <bool Stack>
+class MixedAdaptor {
+    std::deque<long long> storage_;
+    void check_nonempty() const {
+        if (storage_.empty()) throw std::out_of_range(Stack ? "stack: empty" : "queue: empty");
+    }
+    long long peek() const {
+        check_nonempty();
+        if constexpr (Stack) return storage_.back();
+        else return storage_.front();
+    }
+    void remove() {
+        if constexpr (Stack) storage_.pop_back();
+        else storage_.pop_front();
+    }
+public:
+    bool empty() const { return storage_.empty(); }
+    long long size() const {
+        if (std::cmp_greater(storage_.size(), std::numeric_limits<long long>::max()))
+            throw std::length_error(Stack ? "stack: size too large" : "queue: size too large");
+        return static_cast<long long>(storage_.size());
+    }
+    void push(long long value) { storage_.push_back(value); }
+    long long front() const requires (!Stack) { return peek(); }
+    long long top() const requires Stack { return peek(); }
+    void pop() {
+        check_nonempty();
+        remove();
+    }
+    long long popv() {
+        const auto value = peek();
+        remove();
+        return value;
+    }
+};
+using MixedQueue = MixedAdaptor<false>;
+using MixedStack = MixedAdaptor<true>;
+} // namespace kuma_rt
+#endif
