@@ -1795,6 +1795,17 @@ public:
         return result;
     }
 
+    template<class F, class Acc>
+    Acc reduce_rows(F callback, Acc initial) const {
+        using Result = std::invoke_result_t<F&, Acc&&, const Row&>;
+        static_assert(implicit_fold_assignment<Result, Acc>,
+                      "windows.reduce: callback result must match the seed type or widen implicitly");
+        if constexpr (implicit_fold_assignment<Result, Acc>)
+            for (const auto& row : *this)
+                initial = static_cast<Acc>(std::invoke(callback, std::move(initial), row));
+        return initial;
+    }
+
     template<std::size_t Arity>
     void validate_binding_count() const {
         if (!std::cmp_equal(Arity, width_)) error("windows: width must match binding count");
@@ -2497,7 +2508,20 @@ decltype(auto) cpp_member_sorted(R&& values, As&&... args) {
     else
         return kuma_rt::cpp_sorted(std::forward<R>(values), std::forward<As>(args)...);
 }
-template<class R, class... As>
+template<bool IntegerLiteral = false, class R, class F, class Acc>
+decltype(auto) cpp_member_reduce(R&& values, F&& callback, Acc&& initial) {
+    if constexpr (requires { std::forward<R>(values).reduce(std::forward<F>(callback), std::forward<Acc>(initial)); })
+        return std::forward<R>(values).reduce(std::forward<F>(callback), std::forward<Acc>(initial));
+    else if constexpr (is_stock_windows_view<std::remove_cvref_t<R>>) {
+        if constexpr (IntegerLiteral)
+            return values.reduce_rows(std::forward<F>(callback), static_cast<long long>(initial));
+        else
+            return values.reduce_rows(std::forward<F>(callback), std::forward<Acc>(initial));
+    } else
+        return kuma_rt::cpp_reduce(std::forward<R>(values), std::forward<F>(callback), std::forward<Acc>(initial));
+}
+
+template<class R, class... As> requires (sizeof...(As) != 2)
 decltype(auto) cpp_member_reduce(R&& values, As&&... args) {
     if constexpr (requires { std::forward<R>(values).reduce(std::forward<As>(args)...); })
         return std::forward<R>(values).reduce(std::forward<As>(args)...);
