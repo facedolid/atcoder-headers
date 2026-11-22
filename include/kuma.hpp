@@ -859,6 +859,75 @@ T read() {
     }
 }
 
+template<class I>
+std::size_t checked_vector_index(I index, std::size_t size, bool allow_end) {
+    if constexpr ((!std::integral<I> && !std::same_as<I, __int128>
+                   && !std::same_as<I, unsigned __int128>) || std::same_as<I, bool>) {
+        throw std::invalid_argument("vector index must have an integer type other than bool");
+    } else {
+        if constexpr (std::numeric_limits<I>::is_signed) {
+            if (index < 0) throw std::out_of_range("vector index out of range");
+        }
+        if constexpr (std::numeric_limits<I>::digits > std::numeric_limits<std::size_t>::digits) {
+            if (index > static_cast<I>(std::numeric_limits<std::size_t>::max()))
+                throw std::out_of_range("vector index out of range");
+        }
+        const auto offset = static_cast<std::size_t>(index);
+        if (offset > size || (!allow_end && offset == size))
+            throw std::out_of_range("vector index out of range");
+        return offset;
+    }
+}
+
+template<class T, class I>
+void vector_insert_at(std::vector<T>& values, I index, T&& item) {
+    const auto offset = checked_vector_index(index, values.size(), true);
+    values.insert(values.begin() + static_cast<typename std::vector<T>::difference_type>(offset),
+                  std::move(item));
+}
+
+template<class T, class I>
+void vector_erase_at(std::vector<T>& values, I index) {
+    const auto offset = checked_vector_index(index, values.size(), false);
+    values.erase(values.begin() + static_cast<typename std::vector<T>::difference_type>(offset));
+}
+
+template<class T, class L, class R>
+void vector_erase_range(std::vector<T>& values, L left, R right) {
+    const auto size = values.size();
+    const auto first = checked_vector_index(left, size, true);
+    const auto last = checked_vector_index(right, size, true);
+    if (first > last) throw std::out_of_range("vector erase_range endpoints are reversed");
+    if (first == last) return;
+    using Difference = typename std::vector<T>::difference_type;
+    values.erase(values.begin() + static_cast<Difference>(first),
+                 values.begin() + static_cast<Difference>(last));
+}
+
+template<class T, class I>
+T vector_pop_at(std::vector<T>& values, I index) {
+    const auto offset = checked_vector_index(index, values.size(), false);
+    T item = values[offset];
+    values.erase(values.begin() + static_cast<typename std::vector<T>::difference_type>(offset));
+    return item;
+}
+
+template<class T>
+std::set<T> read_set(int size) {
+    std::set<T> result;
+    for (int i = 0; i < size; ++i)
+        ::ac_detail::collection::insert_checked(result, read<T>());
+    return result;
+}
+
+template<class T>
+std::set<T> set_from_vector(const std::vector<T>& values) {
+    std::set<T> result;
+    for (const auto& item : values)
+        ::ac_detail::collection::insert_checked(result, item);
+    return result;
+}
+
 template<class T>
 std::vector<T> read_vec(long long n) {
     const int size = dimension(n);
