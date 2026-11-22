@@ -27,6 +27,7 @@
 #include <cmath>
 #include <cctype>
 #include <cstdint>
+#include <concepts>
 #include <deque>
 #include <forward_list>
 #include <functional>
@@ -3449,6 +3450,32 @@ vector<T> prefix_sum(const vector<T>& a) {
     return sum;
 }
 
+namespace ac_detail {
+template <class T>
+concept PrefixScanScalar = std::same_as<T, int> || std::same_as<T, long long>
+    || std::same_as<T, double> || std::same_as<T, bool>;
+}  // namespace ac_detail
+
+// @acf fn prefix_scan — (const vector<T>& a, A initial, F&& op) -> vector<A> — 初期値と各要素の処理後の累積値を返す
+
+/// 初期値に先頭から順に演算を適用し、途中の累積値をすべて返す。
+/// `prefix_scan(vll{2, 3}, 0LL, [](ll acc, ll x) { return acc * 10 + x; })` は `{0, 2, 23}`。
+/// `T` と `A` は `int`、`long long`、`double`、`bool`。演算 `op(acc, x)` は `A` 型の値を返す。
+/// 結果は入力と独立した長さN+1の配列。空入力でも初期値を1個返す。
+/// 演算は各要素に対して左から1回ずつ呼ぶ。演算内では元配列を変更しない。
+template <ac_detail::PrefixScanScalar T, ac_detail::PrefixScanScalar A, class F>
+requires std::same_as<std::invoke_result_t<F&, A, T>, A>
+vector<A> prefix_scan(const vector<T>& a, A initial, F&& op) {
+    vector<A> result;
+    result.reserve(a.size() + 1);
+    result.push_back(initial);
+    for (const T value : a) {
+        initial = std::invoke(op, A(initial), T(value));
+        result.push_back(initial);
+    }
+    return result;
+}
+
 // @acf fn prefix_sum2d — (const vector<vector<T>>& a) -> vector<vector<T>> — 2次元累積和。返り値は (H+1)×(W+1)
 
 /// 2次元配列の各左上矩形の累積和を作る。
@@ -4759,6 +4786,48 @@ ll binsearch(ll ok, ll ng, Pred check) {
         (check(mid) ? ok : ng) = mid;
     }
     return ok;
+}
+
+namespace ac_detail {
+template <class T>
+concept boundary_endpoint = std::signed_integral<T> && (std::numeric_limits<T>::digits <= 63);
+
+template <class Pred>
+concept boundary_predicate = requires(Pred& pred, ll x) {
+    { std::invoke(pred, ll{x}) } -> std::same_as<bool>;
+};
+}  // namespace ac_detail
+
+// @acf fn first_true — (ll l, ll r, Pred pred) -> ll — 偽→真の最初の値
+/// 半開区間 [l,r) で、偽から真に切り替わる最初の値を返します。
+/// 真がなければ r。l > r は invalid_argument。r は判定しません。
+template <ac_detail::boundary_endpoint L, ac_detail::boundary_endpoint R,
+          ac_detail::boundary_predicate Pred>
+ll first_true(L l, R r, Pred&& pred) {
+    ll lo = l, hi = r;
+    if (lo > hi) throw std::invalid_argument("first_true: l must be <= r");
+    while (lo < hi) {
+        const ll mid = std::midpoint(lo, hi);
+        if (std::invoke(pred, ll{mid})) hi = mid;
+        else lo = mid + 1;
+    }
+    return lo;
+}
+
+// @acf fn last_true — (ll l, ll r, Pred pred) -> ll — 真→偽の最後の値
+/// 半開区間 [l,r) で、真から偽に切り替わる直前の値を返します。
+/// 真がなければ r。l > r は invalid_argument。r は判定しません。
+template <ac_detail::boundary_endpoint L, ac_detail::boundary_endpoint R,
+          ac_detail::boundary_predicate Pred>
+ll last_true(L l, R r, Pred&& pred) {
+    ll lo = l, hi = r;
+    if (lo > hi) throw std::invalid_argument("last_true: l must be <= r");
+    while (lo < hi) {
+        const ll mid = std::midpoint(lo, hi);
+        if (std::invoke(pred, ll{mid})) lo = mid + 1;
+        else hi = mid;
+    }
+    return lo == l ? static_cast<ll>(r) : lo - 1;
 }
 
 // @acf fn ceil_div — (ll a, ll b) -> ll — 負数対応の切り上げ除算
@@ -7533,6 +7602,38 @@ auto count_by(R&& values, F key) {
         auto&& k = std::invoke(key, value);
         ::ac_detail::validate_ordered_finite(k);
         ++out[std::forward<decltype(k)>(k)];
+    }
+    return out;
+}
+
+// @acf fn sum_by_key — (const range&, key, value) -> map<K,V> — キーごとに変換した値を足す
+/// 各要素にキー関数、値関数の順で1回ずつ適用し、キーごとの合計を返す。空入力では空のmapを返す。
+/// 値関数はbool以外の整数型・浮動小数点型を返すこと。合計は同じ型で保持し、途中の整数の合計が型の範囲を超えたらoverflow_error。
+/// キーに含まれる浮動小数点の非有限値は値関数を呼ぶ前に例外。検査対象はcount_byと同じ。
+/// N個の要素とK種類のキーについて、比較・コピー・関数呼び出しの費用を除き時間O(N log(K+1)+N+1)、追加メモリO(K+1)。
+template <class R, class Key, class Value>
+    requires ranges::input_range<const R>
+auto sum_by_key(const R& values, Key key, Value project) {
+    using Ref = ranges::range_reference_t<const R>;
+    using K = std::decay_t<std::invoke_result_t<Key&, Ref>>;
+    using V = std::decay_t<std::invoke_result_t<Value&, Ref>>;
+    static_assert(ac_detail::kuma_record_fields_own_values<K>(), "sum_by_key requires owning Kuma record keys");
+    static_assert(std::is_arithmetic_v<V> && !std::is_same_v<V, bool>, "sum_by_key requires numeric values other than bool");
+    map<K, V> out;
+    for (auto&& element : values) {
+        auto&& k = std::invoke(key, std::forward<decltype(element)>(element));
+        ::ac_detail::validate_ordered_finite(k);
+        auto& total = out[std::forward<decltype(k)>(k)];
+        const V value = std::invoke(project, std::forward<decltype(element)>(element));
+        if constexpr (std::is_integral_v<V>) {
+            V next;
+            if (__builtin_add_overflow(total, value, &next)) {
+                throw std::overflow_error("sum_by_key: integer overflow");
+            }
+            total = next;
+        } else {
+            total += value;
+        }
     }
     return out;
 }

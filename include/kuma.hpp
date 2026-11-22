@@ -8,13 +8,16 @@
 #include "ac.hpp"
 #include "ac_io.hpp"
 #include <bit>
+#include <cmath>
 #include <concepts>
 #include <cstdint>
+#include <functional>
 #include <iterator>
 #include <memory>
 #include <optional>
 #include <span>
 #include <string_view>
+#include <utility>
 #if __has_include(<ext/pb_ds/assoc_container.hpp>) && __has_include(<ext/pb_ds/tree_policy.hpp>)
 #include <ext/pb_ds/assoc_container.hpp>
 #include <ext/pb_ds/tree_policy.hpp>
@@ -803,6 +806,63 @@ auto vector_repeat(const std::vector<T>& values, I count) {
 template<class> inline constexpr bool is_plain_vector = false;
 template<class T> inline constexpr bool is_plain_vector<std::vector<T>> = true;
 
+// Numeric key projections keep a single owned key; never sort or copy the range.
+template<class T>
+concept ExtremaNumber = std::same_as<std::remove_cvref_t<T>, int>
+    || std::same_as<std::remove_cvref_t<T>, long long>
+    || std::same_as<std::remove_cvref_t<T>, double>;
+
+template<class T>
+concept ExtremaScalar = std::same_as<T, std::remove_cvref_t<T>>
+    && (ExtremaNumber<T> || std::same_as<T, bool>
+        || std::same_as<T, char> || std::same_as<T, std::string>);
+
+template<class T> inline constexpr bool is_extrema_pair = false;
+template<ExtremaScalar T, ExtremaScalar U>
+inline constexpr bool is_extrema_pair<std::pair<T, U>> = true;
+
+template<class Key, class T>
+concept ExtremaProjection = requires(Key& key, const T& item) {
+    requires ExtremaNumber<decltype(std::invoke(key, item))>;
+};
+
+// Precondition: nonempty. The public-facing wrappers define their own empty behavior.
+template<bool Max, class T, ExtremaProjection<T> Key>
+std::size_t projected_extreme_position(const std::vector<T>& values, Key& key, const char* nan_error) {
+    auto project = [&](const T& item) {
+        auto value = std::invoke(key, item);
+        if constexpr (std::same_as<decltype(value), double>) {
+            if (std::isnan(value)) throw std::domain_error(nan_error);
+        }
+        return value;
+    };
+    auto best_key = project(values.front());
+    std::size_t best = 0;
+    for (std::size_t i = 1; i < values.size(); ++i) {
+        const auto candidate = project(values[i]);
+        if (Max ? best_key < candidate : candidate < best_key) {
+            best_key = candidate;
+            best = i;
+        }
+    }
+    return best;
+}
+
+template<bool Max, ExtremaNumber T, ExtremaProjection<T> Key>
+int projected_extreme_index(const std::vector<T>& values, Key&& key) {
+    if (values.empty()) return 0;
+    if (!std::in_range<int>(values.size() - 1))
+        throw std::length_error("argmin/argmax: index does not fit i32");
+    return static_cast<int>(projected_extreme_position<Max>(values, key, "argmin/argmax: key must not be NaN"));
+}
+
+template<bool Max, class T, ExtremaProjection<T> Key>
+requires (ExtremaScalar<T> || is_extrema_pair<T>)
+T projected_extreme_value(const std::vector<T>& values, Key&& key) {
+    if (values.empty()) throw std::out_of_range("min_by/max_by: empty array");
+    return values[projected_extreme_position<Max>(values, key, "min_by/max_by: key must not be NaN")];
+}
+
 template<class Item, class C> struct EnumerateView;
 template<class Item, class... Cs> struct ZipView;
 template<class T> struct is_kuma_view : std::false_type {};
@@ -860,21 +920,22 @@ T read() {
 }
 
 template<class I>
-std::size_t checked_vector_index(I index, std::size_t size, bool allow_end) {
+std::size_t checked_vector_index(I index, std::size_t size, bool allow_end,
+                                 const char* bounds_error = "vector index out of range") {
     if constexpr ((!std::integral<I> && !std::same_as<I, __int128>
                    && !std::same_as<I, unsigned __int128>) || std::same_as<I, bool>) {
         throw std::invalid_argument("vector index must have an integer type other than bool");
     } else {
         if constexpr (std::numeric_limits<I>::is_signed) {
-            if (index < 0) throw std::out_of_range("vector index out of range");
+            if (index < 0) throw std::out_of_range(bounds_error);
         }
         if constexpr (std::numeric_limits<I>::digits > std::numeric_limits<std::size_t>::digits) {
             if (index > static_cast<I>(std::numeric_limits<std::size_t>::max()))
-                throw std::out_of_range("vector index out of range");
+                throw std::out_of_range(bounds_error);
         }
         const auto offset = static_cast<std::size_t>(index);
         if (offset > size || (!allow_end && offset == size))
-            throw std::out_of_range("vector index out of range");
+            throw std::out_of_range(bounds_error);
         return offset;
     }
 }
@@ -1562,6 +1623,187 @@ decltype(auto) checked_index(C&& container, long long index) {
 }
 // Eager adapters preserve left-to-right snapshot semantics in the compiler.
 // Explicit element types materialize vector<bool> proxies and map const keys.
+template<class C> requires (is_vector<C>::value || std::same_as<C, std::string>)
+auto pairwise_copy(const C& values) {
+    using Item = typename C::value_type;
+    std::vector<std::tuple<Item, Item>> result;
+    const auto n = values.size();
+    if (n < 2) return result;
+    result.reserve(n - 1);
+    for (std::size_t i = 1; i < n; ++i)
+        result.emplace_back(values[i - 1], values[i]);
+    return result;
+}
+
+template<class C, class K>
+    requires ((is_vector<C>::value || std::same_as<C, std::string>)
+              && (std::same_as<K, int> || std::same_as<K, long long>))
+auto chunks_copy(const C& values, K width) {
+    using Chunk = std::conditional_t<std::same_as<C, std::string>,
+                                     std::string, std::vector<typename C::value_type>>;
+    if (width <= 0) error("chunks: width must be positive");
+    std::vector<Chunk> result;
+    const auto n = values.size();
+    if (n == 0) return result;
+    const auto k = std::cmp_greater_equal(width, n) ? n : static_cast<std::size_t>(width);
+    result.reserve(n / k + (n % k != 0));
+    for (std::size_t i = 0; i < n;) {
+        const auto next = i + std::min(k, n - i);
+        result.emplace_back(values.begin() + i, values.begin() + next);
+        i = next;
+    }
+    return result;
+}
+
+// One immutable snapshot for all windows. A row owns its share independently
+// of the outer view; iterators borrow their respective view or row.
+template<class C>
+class WindowsView {
+    std::shared_ptr<const C> values_;
+    long long width_ = 0;
+    std::optional<std::vector<std::size_t>> selected_;
+
+    WindowsView(std::shared_ptr<const C> values, long long width)
+        : values_(std::move(values)), width_(width), selected_(std::in_place) {}
+    std::size_t offset(std::size_t i) const { return selected_ ? (*selected_)[i] : i; }
+
+public:
+    class Row {
+        friend class WindowsView;
+        std::shared_ptr<const C> values_;
+        std::size_t first_;
+        std::size_t width_;
+        Row(const std::shared_ptr<const C>& values, std::size_t first, std::size_t width)
+            : values_(values), first_(first), width_(width) {}
+    public:
+        using value_type = typename C::value_type;
+        using kuma_window_source = C;
+        std::size_t size() const { return values_ ? width_ : 0; }
+        // A const std::vector<bool> returns bool rather than a proxy here.
+        typename C::const_reference operator[](std::size_t i) const & {
+            return (*values_)[first_ + i];
+        }
+        value_type operator[](std::size_t i) const && {
+            return (*values_)[first_ + i];
+        }
+        typename C::const_iterator begin() const & {
+            return values_ ? values_->cbegin() + first_ : typename C::const_iterator{};
+        }
+        auto begin() const && = delete;
+        typename C::const_iterator end() const & {
+            return values_ ? values_->cbegin() + first_ + width_ : typename C::const_iterator{};
+        }
+        auto end() const && = delete;
+    };
+
+    using value_type = Row;
+
+    template<class R, class K>
+        requires (std::same_as<std::remove_cvref_t<R>, C>
+                  && (std::same_as<K, int> || std::same_as<K, long long>))
+    explicit WindowsView(R&& values, K width) {
+        if (width <= 0) error("windows: width must be positive");
+        width_ = width;
+        if (std::cmp_greater(width, values.size())) return;
+        values_ = std::make_shared<const C>(std::forward<R>(values));
+    }
+
+    std::size_t size() const {
+        if (selected_) return selected_->size();
+        return values_ ? values_->size() - static_cast<std::size_t>(width_) + 1 : 0;
+    }
+    Row operator[](std::size_t i) const {
+        return Row(values_, offset(i), static_cast<std::size_t>(width_));
+    }
+
+    struct Iterator {
+        using value_type = Row;
+        using difference_type = std::ptrdiff_t;
+        using iterator_concept = std::input_iterator_tag;
+        const WindowsView* view;
+        std::size_t index;
+        Row operator*() const { return (*view)[index]; }
+        Iterator& operator++() { ++index; return *this; }
+        void operator++(int) { ++*this; }
+        bool operator==(std::default_sentinel_t) const { return index == view->size(); }
+    };
+    Iterator begin() const & { return {this, 0}; }
+    Iterator begin() const && = delete;
+    std::default_sentinel_t end() const { return {}; }
+
+    template<class F>
+    auto map(F&& callback) const {
+        using Out = std::remove_cvref_t<std::invoke_result_t<F&, const Row&>>;
+        std::vector<Out> result;
+        result.reserve(size());
+        for (const auto& row : *this) result.emplace_back(std::invoke(callback, row));
+        return result;
+    }
+
+    template<class F>
+    WindowsView filter(F&& callback) const {
+        WindowsView result(values_, width_);
+        for (std::size_t i = 0; i < size(); ++i) {
+            if (const auto row = (*this)[i]; std::invoke(callback, row))
+                result.selected_->push_back(offset(i));
+        }
+        return result;
+    }
+
+    template<std::size_t Arity, bool Filter, class F>
+    auto row_fields(F&& callback) const {
+        if (!std::cmp_equal(Arity, width_)) error("windows: width must match callback arity");
+        auto expand = [&callback](const Row& row) {
+            return [&]<std::size_t... I>(std::index_sequence<I...>) {
+                return std::invoke(callback, row[I]...);
+            }(std::make_index_sequence<Arity>{});
+        };
+        if constexpr (Filter) return filter(expand);
+        else return map(expand);
+    }
+};
+
+template<class T> inline constexpr bool is_stock_windows_view = false;
+template<class C> inline constexpr bool is_stock_windows_view<WindowsView<C>> = true;
+
+template<class Row>
+concept StockWindowRow = requires { typename Row::kuma_window_source; }
+    && std::same_as<Row, typename WindowsView<typename Row::kuma_window_source>::Row>;
+
+template<std::size_t Arity, class K>
+K checked_window_binding_width(K width) {
+    if (width <= 0) error("windows: width must be positive");
+    if (!std::cmp_equal(width, Arity)) error("windows: width must match binding count");
+    return width;
+}
+
+template<std::size_t Arity, class Row>
+void check_window_binding(const Row& row) {
+    if constexpr (StockWindowRow<Row>) {
+        if (row.size() != Arity) error("windows: width must match binding count");
+    }
+}
+
+template<std::size_t Arity, class Row>
+decltype(auto) window_binding_values(Row&& row) {
+    if constexpr (StockWindowRow<std::remove_cvref_t<Row>>) {
+        check_window_binding<Arity>(row);
+        return [&]<std::size_t... I>(std::index_sequence<I...>) {
+            return std::tuple<std::remove_cvref_t<decltype(row[I])>...>{row[I]...};
+        }(std::make_index_sequence<Arity>{});
+    } else {
+        // Native rows keep normal C++ structured binding, including
+        // aggregate or tuple-like types that do not use std::get.
+        return std::forward<Row>(row);
+    }
+}
+
+template<std::size_t I, class Row>
+decltype(auto) window_binding_element(Row& row) {
+    if constexpr (StockWindowRow<std::remove_cvref_t<Row>>) return row[I];
+    else return std::get<I>(row);
+}
+
 template<class Item, class C>
 auto enumerate(const C& values, long long start) {
     std::vector<std::tuple<long long, Item>> result;
@@ -1711,6 +1953,31 @@ template<class K, class V>
 V dict_get(const std::map<K, V>& values, const K& key, const V& fallback) {
     const auto it = values.find(key);
     return it == values.end() ? fallback : it->second;
+}
+
+template<class> inline constexpr bool is_std_map = false;
+template<class K, class V, class Compare, class Allocator>
+inline constexpr bool is_std_map<std::map<K, V, Compare, Allocator>> = true;
+
+template<class Map>
+struct DictGetReceiver {
+    const Map& values;
+
+    template<class Key, class Default>
+    auto (get)(const Key& key, Default&& fallback) const -> typename Map::mapped_type {
+        return ::get_or<Map, Key, Default>(values, key, std::forward<Default>(fallback));
+    }
+};
+
+// Adapt only actual std::map specializations, not derived or map-like types.
+// For native members, leave the arguments in the caller's full expression.
+template<class Receiver>
+constexpr decltype(auto) dict_get_receiver(Receiver&& receiver) noexcept {
+    using Map = std::remove_cvref_t<Receiver>;
+    if constexpr (is_std_map<Map> && !std::is_volatile_v<std::remove_reference_t<Receiver>>)
+        return DictGetReceiver<Map>{receiver};
+    else
+        return std::forward<Receiver>(receiver);
 }
 
 // Slices always own their result. Wide arithmetic handles LL_MIN steps/bounds
@@ -2180,6 +2447,148 @@ decltype(auto) cpp_member_zip(bool strict, R&& values, As&&... args) {
         return std::forward<R>(values).zip(std::forward<As>(args)...);
     else
         return kuma_rt::cpp_zip(strict, std::forward<R>(values), std::forward<As>(args)...);
+}
+template<class C>
+struct ChunksReceiver {
+    const C& values;
+
+    template<class K> requires (std::same_as<K, int> || std::same_as<K, long long>)
+    auto chunks(K width) const { return kuma_rt::chunks_copy(values, width); }
+};
+
+// Leave native member arguments in the caller's full expression.
+template<class Receiver>
+constexpr decltype(auto) chunks_receiver(Receiver&& receiver) noexcept {
+    using C = std::remove_cvref_t<Receiver>;
+    if constexpr ((is_vector<C>::value || std::same_as<C, std::string>)
+                  && !std::is_volatile_v<std::remove_reference_t<Receiver>>)
+        return ChunksReceiver<C>{receiver};
+    else
+        return std::forward<Receiver>(receiver);
+}
+
+template<class Receiver, std::size_t Arity = 0>
+struct WindowsReceiver {
+    Receiver&& values;
+
+    template<class K> requires (std::same_as<K, int> || std::same_as<K, long long>)
+    auto windows(K width) const {
+        if constexpr (Arity != 0) width = checked_window_binding_width<Arity>(width);
+        return WindowsView<std::remove_cvref_t<Receiver>>(std::forward<Receiver>(values), width);
+    }
+};
+
+template<class Receiver>
+constexpr decltype(auto) windows_receiver(Receiver&& receiver) noexcept {
+    using C = std::remove_cvref_t<Receiver>;
+    // An allocator tied to an external resource cannot guarantee row ownership.
+    constexpr bool owning_vector = is_vector<C>::value && requires {
+        requires std::same_as<C, std::vector<typename C::value_type>>;
+    };
+    if constexpr ((owning_vector || std::same_as<C, std::string>)
+                  && !std::is_volatile_v<std::remove_reference_t<Receiver>>)
+        return WindowsReceiver<Receiver>{std::forward<Receiver>(receiver)};
+    else
+        return std::forward<Receiver>(receiver);
+}
+
+template<std::size_t Arity, long long Width, class Receiver>
+constexpr decltype(auto) windows_binding_receiver(Receiver&& receiver) noexcept {
+    if constexpr (std::same_as<
+            decltype(windows_receiver(std::forward<Receiver>(receiver))), WindowsReceiver<Receiver>>) {
+        if constexpr (Width > 0) {
+            static_assert(std::cmp_equal(Arity, Width), "windows: width must match binding count");
+            return windows_receiver(std::forward<Receiver>(receiver));
+        } else {
+            return WindowsReceiver<Receiver, Arity>{std::forward<Receiver>(receiver)};
+        }
+    } else {
+        return std::forward<Receiver>(receiver);
+    }
+}
+
+template<class T> inline constexpr bool is_stock_tuple_or_pair = false;
+template<class... T> inline constexpr bool is_stock_tuple_or_pair<std::tuple<T...>> = true;
+template<class T, class U> inline constexpr bool is_stock_tuple_or_pair<std::pair<T, U>> = true;
+
+template<long long I, class Receiver>
+struct TupleGetReceiver {
+    Receiver&& value;
+
+    template<class Key>
+    constexpr decltype(auto) (get)(Key&& key) const {
+        using Tuple = std::remove_cvref_t<Receiver>;
+        if constexpr (requires { (std::forward<Receiver>(value).get)(std::forward<Key>(key)); }) {
+            return (std::forward<Receiver>(value).get)(std::forward<Key>(key));
+        } else if constexpr (I < 0) {
+            static_assert(I >= 0, "tuple/pair get: expected a nonnegative integer literal");
+        } else if constexpr (!std::cmp_less(I, std::tuple_size_v<Tuple>)) {
+            static_assert(std::cmp_less(I, std::tuple_size_v<Tuple>), "tuple/pair get: index out of range");
+        } else if constexpr (std::is_lvalue_reference_v<Receiver>) {
+            return std::get<I>(value);
+        } else {
+            using Element = std::remove_cvref_t<decltype(std::get<I>(std::forward<Receiver>(value)))>;
+            return Element(std::get<I>(std::forward<Receiver>(value)));
+        }
+    }
+};
+
+template<long long I, class Receiver>
+constexpr decltype(auto) tuple_get_receiver(Receiver&& value) noexcept {
+    if constexpr (is_stock_tuple_or_pair<std::remove_cvref_t<Receiver>>
+                  && !std::is_volatile_v<std::remove_reference_t<Receiver>>) {
+        return TupleGetReceiver<I, Receiver>{std::forward<Receiver>(value)};
+    } else {
+        return std::forward<Receiver>(value);
+    }
+}
+
+template<std::size_t Arity, class T>
+constexpr bool arrow_tuple_arity() {
+    if constexpr (is_stock_tuple_or_pair<T>) return std::tuple_size_v<T> == Arity;
+    return false;
+}
+
+template<std::size_t Arity, bool Filter, bool Member, class R, class F>
+decltype(auto) cpp_map_filter_tuple_arrow(R&& values, F&& callback) {
+    if constexpr (Member && is_stock_windows_view<std::remove_cvref_t<R>>)
+        return values.template row_fields<Arity, Filter>(std::forward<F>(callback));
+    else if constexpr (Member && Filter && requires { std::forward<R>(values).filter(std::forward<F>(callback)); })
+        return std::forward<R>(values).filter(std::forward<F>(callback));
+    else if constexpr (Member && !Filter && requires { std::forward<R>(values).map(std::forward<F>(callback)); })
+        return std::forward<R>(values).map(std::forward<F>(callback));
+    else if constexpr (is_plain_vector<std::remove_cvref_t<R>>) {
+        using Elem = typename std::remove_cvref_t<R>::value_type;
+        if constexpr (arrow_tuple_arity<Arity, Elem>()) {
+            auto apply = [&callback](const Elem& row) { return std::apply(callback, row); };
+            if constexpr (Filter) return cpp_filter(values, apply);
+            else return cpp_map(values, apply);
+        } else {
+            static_assert(arrow_tuple_arity<Arity, Elem>(), "map/filter arrow: expected a pair or tuple with matching arity");
+        }
+    } else if constexpr (Filter) {
+        return cpp_filter(values, std::forward<F>(callback));
+    } else {
+        return cpp_map(values, std::forward<F>(callback));
+    }
+}
+
+template<class T> inline constexpr bool is_two_tuple = false;
+template<class A, class B> inline constexpr bool is_two_tuple<std::tuple<A, B>> = true;
+
+template<std::size_t I, class T>
+decltype(auto) tuple_alias(T& value) {
+    if constexpr (I == 0 && requires { value.first; }) return (value.first);
+    else if constexpr (I == 1 && requires { value.second; }) return (value.second);
+    else return std::get<I>(value);
+}
+
+template<class R>
+constexpr decltype(auto) cpp_member_pairwise(R&& values) {
+    if constexpr (requires { std::forward<R>(values).pairwise(); })
+        return std::forward<R>(values).pairwise();
+    else
+        return kuma_rt::pairwise_copy(std::forward<R>(values));
 }
 template<class R>
 decltype(auto) cpp_member_enumerate(R&& values) {
