@@ -817,6 +817,12 @@ concept ExtremaScalar = std::same_as<T, std::remove_cvref_t<T>>
     && (ExtremaNumber<T> || std::same_as<T, bool>
         || std::same_as<T, char> || std::same_as<T, std::string>);
 
+// Implicit assignment for a result that is not a compile-time constant.
+template<class Result, class Acc>
+inline constexpr bool implicit_fold_assignment = std::same_as<Result, Acc>
+    || (std::same_as<Result, int> && std::same_as<Acc, long long>)
+    || ((std::same_as<Result, int> || std::same_as<Result, long long>) && std::same_as<Acc, double>);
+
 template<class T> inline constexpr bool is_extrema_pair = false;
 template<ExtremaScalar T, ExtremaScalar U>
 inline constexpr bool is_extrema_pair<std::pair<T, U>> = true;
@@ -1621,6 +1627,45 @@ decltype(auto) checked_index(C&& container, long long index) {
     if (position < 0 || position >= length) error("index out of range");
     return std::forward<C>(container)[static_cast<std::size_t>(position)];
 }
+// Used only within a loop that holds the source alive.
+template<class C, bool PairRow = false>
+class BorrowedPairwiseView {
+    const C* values_;
+public:
+    explicit BorrowedPairwiseView(const C& values) : values_(&values) {}
+    struct Iterator {
+        const C* values;
+        std::size_t index;
+        auto operator*() const {
+            using Ref = typename C::const_reference;
+            using Row = std::conditional_t<PairRow, std::pair<Ref, Ref>, std::tuple<Ref, Ref>>;
+            return Row((*values)[index], (*values)[index + 1]);
+        }
+        Iterator& operator++() { ++index; return *this; }
+        bool operator==(const Iterator&) const = default;
+    };
+    Iterator begin() const { return {values_, 0}; }
+    Iterator end() const { return {values_, values_->empty() ? 0 : values_->size() - 1}; }
+};
+
+template<class T> inline constexpr bool is_borrowed_pairwise_view = false;
+template<class C, bool PairRow>
+inline constexpr bool is_borrowed_pairwise_view<BorrowedPairwiseView<C, PairRow>> = true;
+
+template<bool FlatPair, bool PairRow = false, class R>
+decltype(auto) cpp_member_pairwise_view(R&& values) {
+    using C = std::remove_cvref_t<R>;
+    if constexpr (requires { std::forward<R>(values).pairwise_view(); }) {
+        return std::forward<R>(values).pairwise_view();
+    } else if constexpr ((is_plain_vector<C> || std::same_as<C, std::string>)
+                         && !std::is_volatile_v<std::remove_reference_t<R>>) {
+        static_assert(FlatPair, "pairwise_view: use for (x, y) in a.pairwise_view()");
+        return BorrowedPairwiseView<C, PairRow>{values};
+    } else {
+        return std::forward<R>(values).pairwise_view();
+    }
+}
+
 // Eager adapters preserve left-to-right snapshot semantics in the compiler.
 // Explicit element types materialize vector<bool> proxies and map const keys.
 template<class C> requires (is_vector<C>::value || std::same_as<C, std::string>)
@@ -1750,6 +1795,26 @@ public:
         return result;
     }
 
+    template<std::size_t Arity>
+    void validate_binding_count() const {
+        if (!std::cmp_equal(Arity, width_)) error("windows: width must match binding count");
+    }
+
+    template<std::size_t Arity, class F, class Acc>
+    Acc reduce_fields(F&& callback, Acc initial) const {
+        if (!std::cmp_equal(Arity, width_)) error("windows: width must match callback arity");
+        for (const auto& row : *this) {
+            [&]<std::size_t... I>(std::index_sequence<I...>) {
+                using Result = decltype(std::invoke(callback, std::move(initial), row[I]...));
+                static_assert(implicit_fold_assignment<Result, Acc>,
+                              "windows.reduce: callback result must match the seed type or widen implicitly");
+                if constexpr (implicit_fold_assignment<Result, Acc>)
+                    initial = static_cast<Acc>(std::invoke(callback, std::move(initial), row[I]...));
+            }(std::make_index_sequence<Arity>{});
+        }
+        return initial;
+    }
+
     template<std::size_t Arity, bool Filter, class F>
     auto row_fields(F&& callback) const {
         if (!std::cmp_equal(Arity, width_)) error("windows: width must match callback arity");
@@ -1765,6 +1830,13 @@ public:
 
 template<class T> inline constexpr bool is_stock_windows_view = false;
 template<class C> inline constexpr bool is_stock_windows_view<WindowsView<C>> = true;
+
+template<std::size_t Arity, class R>
+decltype(auto) validate_window_binding_range(R&& range) {
+    if constexpr (is_stock_windows_view<std::remove_cvref_t<R>>)
+        range.template validate_binding_count<Arity>();
+    return std::forward<R>(range);
+}
 
 template<class Row>
 concept StockWindowRow = requires { typename Row::kuma_window_source; }
@@ -2194,6 +2266,46 @@ template<class R>
 using cpp_item = std::conditional_t<std::is_same_v<std::remove_cvref_t<R>, std::vector<bool>>,
     bool, std::remove_cvref_t<decltype(*std::begin(std::declval<const R&>()))>>;
 
+template<class F, class T>
+auto mixed_lazy_map_value(F& callback, const T& value) {
+    using Result = std::remove_cvref_t<std::invoke_result_t<F&, const T&>>;
+    if constexpr (ExtremaScalar<Result>) {
+        return std::invoke(callback, value);
+    } else {
+        static_assert(ExtremaScalar<Result>,
+                      "mixed lazy.map: expected int, long long, double, bool, char or std::string");
+        return 0;  // Avoid cascading invalid variable/array declarations.
+    }
+}
+
+template<class Acc, class F, class T>
+void mixed_lazy_fold_step(Acc& acc, F& callback, const T& value) {
+    static_assert(ExtremaScalar<Acc>,
+                  "mixed lazy.fold: expected int, long long, double, bool, char or std::string seed");
+    if constexpr (ExtremaScalar<Acc>) {
+        using Result = std::invoke_result_t<F&, const Acc&, const T&>;
+        static_assert(implicit_fold_assignment<Result, Acc>,
+                      "mixed lazy.fold: callback result must match the seed type or widen implicitly");
+        if constexpr (implicit_fold_assignment<Result, Acc>)
+            acc = static_cast<Acc>(std::invoke(callback, std::as_const(acc), value));
+    }
+}
+
+template<class F, class T>
+auto mixed_lazy_extreme_key(F& project, const char* nan_error, const T& item) {
+    if constexpr (ExtremaProjection<F, T>) {
+        auto key = std::invoke(project, item);
+        if constexpr (std::same_as<decltype(key), double>) {
+            if (std::isnan(key)) throw std::domain_error(nan_error);
+        }
+        return key;
+    } else {
+        static_assert(ExtremaProjection<F, T>,
+                      "mixed lazy.min_by/max_by: expected int, long long or double key");
+        return 0;
+    }
+}
+
 template<class R, class F, class P>
 auto cpp_collect(const R& values, F transform, P predicate) {
     using Out = std::decay_t<decltype(transform(std::declval<const cpp_item<R>&>()))>;
@@ -2467,6 +2579,26 @@ constexpr decltype(auto) chunks_receiver(Receiver&& receiver) noexcept {
         return std::forward<Receiver>(receiver);
 }
 
+template<std::size_t Arity, bool IntegerLiteral, class R>
+struct WindowsReduceReceiver {
+    R&& values;
+    template<class F, class Acc>
+    auto reduce(F&& callback, Acc&& initial) const {
+        if constexpr (IntegerLiteral)
+            return values.template reduce_fields<Arity>(std::forward<F>(callback), static_cast<long long>(initial));
+        else
+            return values.template reduce_fields<Arity>(std::forward<F>(callback), std::forward<Acc>(initial));
+    }
+};
+
+template<std::size_t Arity, bool IntegerLiteral, class R>
+constexpr decltype(auto) windows_reduce_receiver(R&& values) noexcept {
+    if constexpr (is_stock_windows_view<std::remove_cvref_t<R>>)
+        return WindowsReduceReceiver<Arity, IntegerLiteral, R>{std::forward<R>(values)};
+    else
+        return std::forward<R>(values);  // Native member receives the original callback.
+}
+
 template<class Receiver, std::size_t Arity = 0>
 struct WindowsReceiver {
     Receiver&& values;
@@ -2547,6 +2679,20 @@ template<std::size_t Arity, class T>
 constexpr bool arrow_tuple_arity() {
     if constexpr (is_stock_tuple_or_pair<T>) return std::tuple_size_v<T> == Arity;
     return false;
+}
+
+template<class Row>
+auto copy_lazy_adjacent_row(const Row& row) {
+    static_assert(arrow_tuple_arity<2, Row>(), "mixed lazy pairwise: expected an adjacent pair");
+    if constexpr (arrow_tuple_arity<2, Row>()) {
+        using A = std::remove_cvref_t<decltype(std::get<0>(row))>;
+        using B = std::remove_cvref_t<decltype(std::get<1>(row))>;
+        static_assert(ExtremaScalar<A> && ExtremaScalar<B>,
+                      "mixed lazy pairwise: expected two owning scalar values");
+        if constexpr (ExtremaScalar<A> && ExtremaScalar<B>)
+            return std::tuple<A, B>{std::get<0>(row), std::get<1>(row)};
+        else return std::tuple<int, int>{};
+    } else return std::tuple<int, int>{};  // Keep diagnostics on the assertions above.
 }
 
 template<std::size_t Arity, bool Filter, bool Member, class R, class F>
