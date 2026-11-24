@@ -2758,3 +2758,429 @@ inline vector<pii> read_edges(ll m, ll index_base = 1) {
 }
 
 }  // namespace ac
+
+/// Heavy-light decomposition of a nonempty undirected tree.
+/// Subtrees are contiguous; paths are ordered half-open intervals.
+/// Build O(N) time and space, path/lca O(log N), position/subtree O(1).
+class HeavyLightDecomposition {
+public:
+    /// Read [l, r) in descending index order when reversed is true.
+    struct Segment {
+        int l;
+        int r;
+        bool reversed;
+    };
+
+private:
+    vi parent_, depth_, size_, head_, position_, vertex_;
+
+    void check_vertex(int v) const {
+        if (v < 0 || std::cmp_greater_equal(v, parent_.size()))
+            throw std::out_of_range("HeavyLightDecomposition: vertex out of range");
+    }
+
+public:
+    /// Edge weights are ignored. The tree is not retained.
+    template <class Cost>
+    explicit HeavyLightDecomposition(const Graph<Cost>& tree, int root = 0) {
+        const int n = tree.n;
+        if (n < 1 || tree.directed || std::cmp_not_equal(tree.adj.size(), n) ||
+            std::cmp_not_equal(tree.edges.size(), n - 1))
+            throw std::invalid_argument("HeavyLightDecomposition: expected a nonempty undirected tree");
+        if (root < 0 || root >= n)
+            throw std::out_of_range("HeavyLightDecomposition: root out of range");
+
+        parent_.assign(n, -1);
+        depth_.assign(n, -1);
+        size_.assign(n, 1);
+        head_.resize(n);
+        position_.resize(n);
+        vertex_.reserve(n);
+        vi order{root}, heavy(n, -1);
+        order.reserve(n);
+        depth_[root] = 0;
+        for (std::size_t i = 0; i < order.size(); ++i) {
+            const int v = order[i];
+            bool saw_parent = false;
+            for (const auto& e : tree[v]) {
+                const int u = e.to;
+                if (v != root && u == parent_[v] && !saw_parent) {
+                    saw_parent = true;
+                    continue;
+                }
+                if (u < 0 || u >= n || depth_[u] >= 0)
+                    throw std::invalid_argument("HeavyLightDecomposition: invalid tree edges");
+                parent_[u] = v;
+                depth_[u] = depth_[v] + 1;
+                order.push_back(u);
+            }
+            if (v != root && !saw_parent)
+                throw std::invalid_argument("HeavyLightDecomposition: missing reverse edge");
+        }
+        if (std::cmp_not_equal(order.size(), n))
+            throw std::invalid_argument("HeavyLightDecomposition: disconnected tree");
+        for (auto it = order.rbegin(); it != order.rend(); ++it) {
+            const int v = *it, p = parent_[v];
+            if (p < 0) continue;
+            size_[p] += size_[v];
+            if (heavy[p] < 0 || size_[heavy[p]] < size_[v]) heavy[p] = v;
+        }
+
+        vi pending{root};
+        while (!pending.empty()) {
+            const int top = pending.back();
+            pending.pop_back();
+            for (int v = top; v != -1; v = heavy[v]) {
+                head_[v] = top;
+                position_[v] = static_cast<int>(vertex_.size());
+                vertex_.push_back(v);
+                for (const auto& e : tree[v])
+                    if (parent_[e.to] == v && e.to != heavy[v]) pending.push_back(e.to);
+            }
+        }
+    }
+
+    int position(int v) const {
+        check_vertex(v);
+        return position_[v];
+    }
+
+    int vertex_at(int i) const {
+        if (i < 0 || std::cmp_greater_equal(i, vertex_.size()))
+            throw std::out_of_range("HeavyLightDecomposition: position out of range");
+        return vertex_[i];
+    }
+
+    std::pair<int, int> subtree(int v) const {
+        check_vertex(v);
+        return {position_[v], position_[v] + size_[v]};
+    }
+
+    int lca(int u, int v) const {
+        check_vertex(u);
+        check_vertex(v);
+        while (head_[u] != head_[v]) {
+            if (depth_[head_[u]] < depth_[head_[v]]) std::swap(u, v);
+            u = parent_[head_[u]];
+        }
+        return depth_[u] < depth_[v] ? u : v;
+    }
+
+    /// Path from u to v. In edge mode an edge is stored at its deeper endpoint.
+    std::vector<Segment> path(int u, int v, bool edges = false) const {
+        check_vertex(u);
+        check_vertex(v);
+        std::vector<Segment> left, right;
+        while (head_[u] != head_[v]) {
+            if (depth_[head_[u]] >= depth_[head_[v]]) {
+                left.push_back({position_[head_[u]], position_[u] + 1, true});
+                u = parent_[head_[u]];
+            } else {
+                right.push_back({position_[head_[v]], position_[v] + 1, false});
+                v = parent_[head_[v]];
+            }
+        }
+        const int l = std::min(position_[u], position_[v]) + static_cast<int>(edges);
+        const int r = std::max(position_[u], position_[v]) + 1;
+        if (l < r) left.push_back({l, r, position_[u] > position_[v]});
+        left.insert(left.end(), right.rbegin(), right.rend());
+        return left;
+    }
+};
+
+namespace ac_graph_detail {
+inline int checked_heavy_light_index(long long value) {
+    if (value < 0 || value > std::numeric_limits<int>::max())
+        throw std::out_of_range("heavy_light: index out of range");
+    return static_cast<int>(value);
+}
+
+// An owning bridge from Kuma's 0-based, reciprocal integer adjacency lists.
+// Reject malformed input before narrowing any endpoint. Keep the native Graph
+// constructor's behavior unchanged and avoid to_graph's assertion-only checks.
+template<class Vertex>
+Graph<> checked_adjacency_tree(const std::vector<std::vector<Vertex>>& adjacency,
+                               long long root, const char* operation, bool preserve_order) {
+    if (adjacency.empty() || std::cmp_greater(adjacency.size(), std::numeric_limits<int>::max()))
+        throw std::length_error(std::string(operation) + ": invalid vertex count");
+    const int n = static_cast<int>(adjacency.size());
+    if (root < 0 || root >= n)
+        throw std::out_of_range(std::string(operation) + ": root out of range");
+
+    std::size_t entries = 0;
+    const auto expected = 2 * static_cast<std::size_t>(n - 1);
+    for (const auto& row : adjacency) {
+        if (row.size() > expected - entries)
+            throw std::invalid_argument(std::string(operation) + ": expected a tree");
+        entries += row.size();
+    }
+    if (entries != expected)
+        throw std::invalid_argument(std::string(operation) + ": expected a tree");
+
+    Graph<> tree(n);
+    std::vector<int> seen(n, -1);
+    for (int from = 0; from < n; ++from) {
+        for (const auto endpoint : adjacency[from]) {
+            if (endpoint < 0 || endpoint >= n)
+                throw std::out_of_range(std::string(operation) + ": invalid neighbor");
+            const int to = static_cast<int>(endpoint);
+            if (to == from || seen[to] == from)
+                throw std::invalid_argument(std::string(operation) + ": self-loop or repeated neighbor");
+            seen[to] = from;
+            if (from < to) {
+                if (std::cmp_greater_equal(tree.edges.size(), n - 1))
+                    throw std::invalid_argument(std::string(operation) + ": adjacency must be reciprocal");
+                tree.add_edge(from, to);
+            }
+        }
+    }
+    std::fill(seen.begin(), seen.end(), -1);
+    std::vector<std::size_t> slot(preserve_order ? n : 0);
+    for (int from = 0; from < n; ++from) {
+        if (tree[from].size() != adjacency[from].size())
+            throw std::invalid_argument(std::string(operation) + ": adjacency must be reciprocal");
+        for (const auto endpoint : adjacency[from])
+            seen[static_cast<int>(endpoint)] = from;
+        auto& row = tree[from];
+        for (std::size_t i = 0; i < row.size(); ++i) {
+            const int to = row[i].to;
+            if (seen[to] != from)
+                throw std::invalid_argument(std::string(operation) + ": adjacency must be reciprocal");
+            if (preserve_order) slot[to] = i;
+        }
+        // add_edge inserts both directions, which may order these differently
+        // from the input row. Reorder without changing the reciprocal edge IDs.
+        if (preserve_order) {
+            for (std::size_t i = 0; i < row.size(); ++i) {
+                const int to = static_cast<int>(adjacency[from][i]);
+                const int previous = row[i].to;
+                const auto j = slot[to];
+                std::swap(row[i], row[j]);
+                slot[previous] = j;
+            }
+        }
+    }
+    return tree;
+}
+
+template<class Vertex>
+HeavyLightDecomposition checked_heavy_light(
+        const std::vector<std::vector<Vertex>>& adjacency, long long root) {
+    auto tree = checked_adjacency_tree(adjacency, root, "heavy_light", false);
+    return HeavyLightDecomposition(tree, static_cast<int>(root));
+}
+}  // namespace ac_graph_detail
+
+/// Compute one state for every root of a nonempty undirected tree, without recursion.
+/// merge(left, right) is associative with the supplied identity. finish(merged, v)
+/// adds vertex v. lift(state, edge) sends a finished state from edge.from to edge.to.
+/// Neighbor states are always merged in original adjacency order. O(N) callback
+/// calls and O(N) states, excluding the cost of storing or operating on each state.
+template<class Cost, class State, class Merge, class Lift, class Finish>
+std::vector<State> rerooting(const Graph<Cost>& tree, State identity, Merge merge,
+                             Lift lift, Finish finish, int root = 0) {
+    const int n = tree.n;
+    if (n < 1 || tree.directed || std::cmp_not_equal(tree.adj.size(), n)
+            || std::cmp_not_equal(tree.edges.size(), n - 1))
+        throw std::invalid_argument("rerooting: expected a nonempty undirected tree");
+    if (root < 0 || root >= n) throw std::out_of_range("rerooting: root out of range");
+
+    const std::size_t no_slot = std::numeric_limits<std::size_t>::max();
+    std::vector<int> parent(n, -1), edge_id(n);
+    std::vector<std::size_t> parent_slot(n, no_slot);
+    std::vector<int> order{root};
+    order.reserve(n);
+    parent[root] = root;
+    for (std::size_t i = 0; i < order.size(); ++i) {
+        const int v = order[i];
+        for (std::size_t j = 0; j < tree[v].size(); ++j) {
+            const auto& edge = tree[v][j];
+            const int u = edge.to;
+            if (edge.from != v || u < 0 || u >= n)
+                throw std::invalid_argument("rerooting: invalid edge endpoint");
+            if (v != root && u == parent[v] && parent_slot[v] == no_slot && edge.id == edge_id[v]) {
+                parent_slot[v] = j;
+                continue;
+            }
+            if (parent[u] != -1) throw std::invalid_argument("rerooting: repeated tree edge");
+            parent[u] = v;
+            edge_id[u] = edge.id;
+            order.push_back(u);
+        }
+        if (v != root && parent_slot[v] == no_slot)
+            throw std::invalid_argument("rerooting: missing reverse edge");
+    }
+    if (std::cmp_not_equal(order.size(), n))
+        throw std::invalid_argument("rerooting: disconnected tree");
+
+    std::vector<State> up(n, identity), down(n, identity), result(n, identity);
+    for (auto it = order.rbegin(); it != order.rend(); ++it) {
+        const int v = *it;
+        if (v == root) continue;
+        State merged = identity;
+        for (const auto& edge : tree[v])
+            if (edge.to != parent[v])
+                merged = std::invoke(merge, std::as_const(merged), std::as_const(up)[edge.to]);
+        State vertex = std::invoke(finish, std::as_const(merged), v);
+        up[v] = std::invoke(lift, std::as_const(vertex), tree[v][parent_slot[v]]);
+    }
+
+    std::vector<State> suffix;
+    for (int v : order) {
+        const std::size_t degree = tree[v].size();
+        auto incoming = [&](std::size_t i) -> decltype(auto) {
+            return i == parent_slot[v] ? std::as_const(down)[v] : std::as_const(up)[tree[v][i].to];
+        };
+        suffix.resize(degree + 1, identity);
+        suffix[degree] = identity;
+        for (std::size_t i = degree; i-- > 0;)
+            suffix[i] = std::invoke(merge, incoming(i), std::as_const(suffix)[i + 1]);
+        result[v] = std::invoke(finish, std::as_const(suffix)[0], v);
+        State prefix = identity;
+        for (std::size_t i = 0; i < degree; ++i) {
+            if (i != parent_slot[v]) {
+                const auto& edge = tree[v][i];
+                State merged = std::invoke(merge, std::as_const(prefix), std::as_const(suffix)[i + 1]);
+                State vertex = std::invoke(finish, std::as_const(merged), v);
+                down[edge.to] = std::invoke(lift, std::as_const(vertex), edge);
+            }
+            prefix = std::invoke(merge, std::as_const(prefix), incoming(i));
+        }
+    }
+    return result;
+}
+
+namespace ac_graph_detail {
+template<class Vertex, class State, class Merge, class Lift, class Finish>
+std::vector<State> checked_rerooting(const std::vector<std::vector<Vertex>>& adjacency,
+                                    State identity, Merge merge, Lift lift, Finish finish,
+                                    long long root) {
+    auto tree = checked_adjacency_tree(adjacency, root, "rerooting", true);
+    return ::rerooting(tree, std::move(identity), std::move(merge),
+                       [&](const State& state, const Graph<>::edge_type& edge) {
+                           return std::invoke(lift, state, edge.from, edge.to);
+                       },
+                       std::move(finish), static_cast<int>(root));
+}
+}  // namespace ac_graph_detail
+
+#ifdef AC_HAS_ACL
+// Checked directed flow using ACL's residual graph.
+class CheckedMaxFlow {
+    int vertices_;
+    int edges_ = 0;
+    // ACL exposes get_edge and min_cut as non-const, though both only read this graph.
+    mutable atcoder::mf_graph<long long> graph_;
+
+    static int checked_vertices(long long n) {
+        if (n < 0 || n > std::numeric_limits<int>::max())
+            throw std::length_error("max_flow: invalid vertex count");
+        return static_cast<int>(n);
+    }
+
+    int vertex(long long v) const {
+        if (v < 0 || v >= vertices_) throw std::out_of_range("max_flow: invalid vertex");
+        return static_cast<int>(v);
+    }
+
+public:
+    explicit CheckedMaxFlow(long long n) : vertices_(checked_vertices(n)), graph_(vertices_) {}
+
+    int add_edge(long long from, long long to, long long capacity) {
+        const int u = vertex(from), v = vertex(to);
+        if (capacity < 0) throw std::invalid_argument("max_flow: negative capacity");
+        // ACL stores indexes into its adjacency vectors in int; a self-loop
+        // contributes two entries to one vector.
+        if (edges_ == std::numeric_limits<int>::max() / 2)
+            throw std::length_error("max_flow: too many edges");
+        const int id = graph_.add_edge(u, v, capacity);
+        ++edges_;
+        return id;
+    }
+
+    long long flow(long long source, long long sink,
+                   long long limit = std::numeric_limits<long long>::max()) {
+        const int s = vertex(source), t = vertex(sink);
+        if (s == t) throw std::invalid_argument("max_flow: source and sink must differ");
+        if (limit < 0) throw std::invalid_argument("max_flow: negative flow limit");
+        return limit == 0 ? 0 : graph_.flow(s, t, limit);
+    }
+
+    long long edge_flow(long long id) const {
+        if (id < 0 || id >= edges_) throw std::out_of_range("max_flow: invalid edge ID");
+        return graph_.get_edge(static_cast<int>(id)).flow;
+    }
+
+    std::vector<bool> min_cut(long long source) const {
+        return graph_.min_cut(vertex(source));
+    }
+};
+#endif // AC_HAS_ACL
+
+#ifdef AC_HAS_ACL
+// Checked, single-use min-cost maximum flow with explicit capacity limit.
+class CheckedMinCostFlow {
+    int vertices_;
+    int edges_ = 0;
+    long long max_cost_ = 0;
+    bool solved_ = false;
+    mutable atcoder::mcf_graph<long long, long long> graph_;
+
+    static int checked_vertices(long long n) {
+        // Honor ACL's vertex bound; its CSR also needs n + 1 to fit in int.
+        if (n < 0 || n > 100'000'000LL)
+            throw std::length_error("min_cost_flow: invalid vertex count");
+        return static_cast<int>(n);
+    }
+
+    int vertex(long long v) const {
+        if (v < 0 || v >= vertices_) throw std::out_of_range("min_cost_flow: invalid vertex");
+        return static_cast<int>(v);
+    }
+
+    void check_unsolved() const {
+        if (solved_) throw std::logic_error("min_cost_flow: flow already called");
+    }
+
+public:
+    explicit CheckedMinCostFlow(long long n) : vertices_(checked_vertices(n)), graph_(vertices_) {}
+
+    int add_edge(long long from, long long to, long long capacity, long long cost) {
+        check_unsolved();
+        const int u = vertex(from), v = vertex(to);
+        if (capacity < 0) throw std::invalid_argument("min_cost_flow: negative capacity");
+        if (cost < 0) throw std::invalid_argument("min_cost_flow: negative cost");
+        // The CSR graph uses int offsets for both residual directions.
+        if (edges_ == std::numeric_limits<int>::max() / 2)
+            throw std::length_error("min_cost_flow: too many edges");
+        const int id = graph_.add_edge(u, v, capacity, cost);
+        ++edges_;
+        max_cost_ = std::max(max_cost_, cost);
+        return id;
+    }
+
+    std::pair<long long, long long> flow(long long source, long long sink, long long limit) {
+        check_unsolved();
+        const int s = vertex(source), t = vertex(sink);
+        if (s == t) throw std::invalid_argument("min_cost_flow: source and sink must differ");
+        if (limit < 0) throw std::invalid_argument("min_cost_flow: negative flow limit");
+        if (limit != 0) {
+            // A conservative version of ACL's n*C bound protects distance arithmetic.
+            // Each unit then costs at most (n-1)*C; bound the total before solving.
+            if (max_cost_ > 8'000'000'000'000'000'000LL / vertices_)
+                throw std::overflow_error("min_cost_flow: vertex count times maximum cost exceeds ACL bound");
+            const long long path_cost = (vertices_ - 1) * max_cost_;
+            if (path_cost != 0 && limit > std::numeric_limits<long long>::max() / path_cost)
+                throw std::overflow_error("min_cost_flow: total cost bound exceeds i64");
+        }
+        solved_ = true;
+        return limit == 0 ? std::pair{0LL, 0LL} : graph_.flow(s, t, limit);
+    }
+
+    long long edge_flow(long long id) const {
+        if (id < 0 || id >= edges_) throw std::out_of_range("min_cost_flow: invalid edge ID");
+        // ACL's non-const get_edge only reads and returns a copy.
+        return graph_.get_edge(static_cast<int>(id)).flow;
+    }
+};
+#endif // AC_HAS_ACL

@@ -3823,4 +3823,475 @@ requires (is_integral_v<T> && is_signed_v<T> && sizeof(T) >= sizeof(int))
 auto make_range_add_max_segtree(const vector<T>& values) {
     return ac_detail::algorithm::range_add_tree<T, 2>(values);
 }
+// Checked i64 interface over ACL's range-add/range-sum preset.
+class RangeAddRangeSum {
+    using Wide = __int128;
+    using Tree = ac_detail::algorithm::range_add_tree<Wide, 0>;
+    // ACL stores 2 * bit_ceil(n) in int.
+    static constexpr int max_size = 1 << 29;
+    // Every stored sum or delta * len has magnitude at most 2^(96+29).
+    // Reserve 2^63 for the magnitude of any initial i64 element.
+    static constexpr Wide max_update_budget = (Wide{1} << 96) - (Wide{1} << 63);
+    mutable Tree tree_;
+    Wide used_update_budget_ = 0;
+
+    static int checked_size(long long n) {
+        if (n < 0 || n > max_size) throw std::length_error("range_add_range_sum: invalid size");
+        return static_cast<int>(n);
+    }
+    template <class T>
+    static vector<Wide> widen(const vector<T>& values) {
+        if (values.size() > static_cast<size_t>(max_size))
+            throw std::length_error("range_add_range_sum: invalid size");
+        return vector<Wide>(values.begin(), values.end());
+    }
+    void check_interval(long long l, long long r) const {
+        if (l < 0 || r < l || r > size())
+            throw std::out_of_range("range_add_range_sum: invalid interval");
+    }
+public:
+    explicit RangeAddRangeSum(long long n) : tree_(vector<Wide>(checked_size(n))) {}
+    template <class T>
+    requires (std::same_as<T, int> || std::same_as<T, long long>)
+    explicit RangeAddRangeSum(const vector<T>& values) : tree_(widen(values)) {}
+
+    int size() const { return tree_.size(); }
+    void add(long long l, long long r, long long delta) {
+        check_interval(l, r);
+        if (l == r) return;
+        const Wide d = delta;
+        const Wide cost = d < 0 ? -d : d;
+        if (cost > max_update_budget - used_update_budget_)
+            throw std::overflow_error("range_add_range_sum: cumulative addition magnitude too large");
+        used_update_budget_ += cost;
+        tree_.apply(static_cast<int>(l), static_cast<int>(r), d);
+    }
+    long long sum(long long l, long long r) const {
+        check_interval(l, r);
+        const Wide value = tree_.prod(static_cast<int>(l), static_cast<int>(r));
+        if (value < std::numeric_limits<long long>::min() || value > std::numeric_limits<long long>::max())
+            throw std::overflow_error("range_add_range_sum: sum does not fit i64");
+        return static_cast<long long>(value);
+    }
+};
+
+// Checked i64 interface for assigning intervals and querying their minimum.
+class RangeAssignRangeMin {
+    using Cell = std::optional<long long>;
+    static constexpr int max_size = 1 << 29; // ACL stores 2 * bit_ceil(n) in int.
+
+    static Cell combine(Cell a, Cell b) {
+        if (!a) return b;
+        if (!b) return a;
+        return std::min(*a, *b);
+    }
+    static Cell empty() { return std::nullopt; }
+    static Cell apply_assignment(Cell assignment, Cell current) {
+        return assignment && current ? assignment : current;
+    }
+    static Cell newer_assignment(Cell newer, Cell older) {
+        return newer ? newer : older;
+    }
+    using Tree = atcoder::lazy_segtree<Cell, combine, empty, Cell,
+                                       apply_assignment, newer_assignment, empty>;
+    int size_;
+    mutable Tree tree_;
+
+    static int checked_size(long long n) {
+        if (n < 0 || n > max_size) throw std::length_error("range_assign_range_min: invalid size");
+        return static_cast<int>(n);
+    }
+    static int checked_vector_size(std::size_t n) {
+        if (n > static_cast<std::size_t>(max_size))
+            throw std::length_error("range_assign_range_min: invalid size");
+        return static_cast<int>(n);
+    }
+    template <class T>
+    static vector<Cell> initial(const vector<T>& values) {
+        return vector<Cell>(values.begin(), values.end());
+    }
+    void check_interval(long long l, long long r) const {
+        if (l < 0 || r < l || r > size_)
+            throw std::out_of_range("range_assign_range_min: invalid interval");
+    }
+public:
+    explicit RangeAssignRangeMin(long long n)
+        : size_(checked_size(n)), tree_(vector<Cell>(size_, 0LL)) {}
+    template <class T>
+    requires (std::same_as<T, int> || std::same_as<T, long long>)
+    explicit RangeAssignRangeMin(const vector<T>& values)
+        : size_(checked_vector_size(values.size())), tree_(initial(values)) {}
+
+    int size() const { return size_; }
+    void assign(long long l, long long r, long long value) {
+        check_interval(l, r);
+        tree_.apply(static_cast<int>(l), static_cast<int>(r), value);
+    }
+    long long min(long long l, long long r) const {
+        check_interval(l, r);
+        if (l == r) throw std::out_of_range("range_assign_range_min: empty interval");
+        return *tree_.prod(static_cast<int>(l), static_cast<int>(r));
+    }
+};
+
+#endif // AC_HAS_ACL
+
+// Checked Kuma adapter; preserve the native WeightedUnionFind<T> API.
+class CheckedWeightedUnionFind {
+    // A forest path has at most INT_MAX - 1 constraint edges. Even two
+    // such paths and another signed 64-bit weight fit in a signed 128-bit value.
+    WeightedUnionFind<__int128> groups_;
+
+    static int checked_size(long long n) {
+        if (n < 0 || n > std::numeric_limits<int>::max())
+            throw std::length_error("weighted_union_find: invalid element count");
+        return static_cast<int>(n);
+    }
+
+    int index(long long x) const {
+        if (x < 0 || x >= groups_.size())
+            throw std::out_of_range("weighted_union_find: invalid index");
+        return static_cast<int>(x);
+    }
+
+public:
+    CheckedWeightedUnionFind() = default;
+    explicit CheckedWeightedUnionFind(long long n) : groups_(checked_size(n)) {}
+
+    bool unite(long long x, long long y, long long difference) {
+        const int a = index(x), b = index(y);
+        return groups_.unite(a, b, static_cast<__int128>(difference));
+    }
+
+    long long diff(long long x, long long y) {
+        const int a = index(x), b = index(y);
+        if (!groups_.same(a, b))
+            throw std::invalid_argument("weighted_union_find: elements are not connected");
+        const __int128 difference = groups_.diff(a, b);
+        if (difference < std::numeric_limits<long long>::min()
+                || difference > std::numeric_limits<long long>::max())
+            throw std::overflow_error("weighted_union_find: difference does not fit i64");
+        return static_cast<long long>(difference);
+    }
+
+    bool same(long long x, long long y) {
+        const int a = index(x), b = index(y);
+        return groups_.same(a, b);
+    }
+
+    int find(long long x) { return groups_.find(index(x)); }
+    int component_size(long long x) { return groups_.component_size(index(x)); }
+    int count() const { return groups_.count(); }
+    int size() const { return groups_.size(); }
+};
+
+// Immutable checked minimum queries for the pure Kuma preset.
+template<class T>
+requires (std::same_as<T, int> || std::same_as<T, long long>)
+class RangeMinStatic {
+    SparseTable<T> table_;
+
+    static const std::vector<T>& checked_values(const std::vector<T>& values) {
+        // The stock table computes its levels with signed int shifts.
+        if (values.size() >= (std::size_t{1} << 30))
+            throw std::length_error("range_min_static: too many elements");
+        return values;
+    }
+
+public:
+    explicit RangeMinStatic(const std::vector<T>& values) : table_(checked_values(values)) {}
+
+    int size() const { return table_.size(); }
+
+    T min(long long l, long long r) const {
+        if (l < 0 || l >= r || r > size())
+            throw std::out_of_range("range_min_static: expected 0 <= l < r <= size");
+        return table_.idempotent_query(static_cast<int>(l), static_cast<int>(r));
+    }
+};
+
+#ifdef AC_HAS_ACL
+// Checked i64 results for interval assignment and sum.
+class RangeAssignRangeSum {
+    using Wide = __int128;
+    struct Cell {
+        Wide sum;
+        int len;
+    };
+    using Tag = std::optional<long long>;
+
+    static Cell combine(Cell a, Cell b) { return {a.sum + b.sum, a.len + b.len}; }
+    static Cell empty() { return {0, 0}; }
+    static Cell apply_assignment(Tag assignment, Cell current) {
+        // There are at most 2^29 real elements, each in i64. Widen before multiplying.
+        return assignment ? Cell{static_cast<Wide>(*assignment) * current.len, current.len} : current;
+    }
+    static Tag newer_assignment(Tag newer, Tag older) { return newer ? newer : older; }
+    static Tag no_assignment() { return std::nullopt; }
+    using Tree = atcoder::lazy_segtree<Cell, combine, empty, Tag,
+                                       apply_assignment, newer_assignment, no_assignment>;
+
+    static constexpr int max_size = 1 << 29; // ACL stores 2 * bit_ceil(n) in int.
+    int size_;
+    // prod propagates pending tags without changing the represented array.
+    mutable Tree tree_;
+
+    static int checked_size(long long n) {
+        if (n < 0 || n > max_size) throw std::length_error("range_assign_range_sum: invalid size");
+        return static_cast<int>(n);
+    }
+    static int checked_vector_size(std::size_t n) {
+        if (n > static_cast<std::size_t>(max_size))
+            throw std::length_error("range_assign_range_sum: invalid size");
+        return static_cast<int>(n);
+    }
+    template <class T>
+    static std::vector<Cell> initial(const std::vector<T>& values) {
+        std::vector<Cell> cells;
+        cells.reserve(values.size());
+        for (T value : values) cells.push_back({value, 1});
+        return cells;
+    }
+    void check_interval(long long l, long long r) const {
+        if (l < 0 || r < l || r > size_)
+            throw std::out_of_range("range_assign_range_sum: invalid interval");
+    }
+public:
+    explicit RangeAssignRangeSum(long long n)
+        : size_(checked_size(n)), tree_(std::vector<Cell>(size_, Cell{0, 1})) {}
+    template <class T>
+    requires (std::same_as<T, int> || std::same_as<T, long long>)
+    explicit RangeAssignRangeSum(const std::vector<T>& values)
+        : size_(checked_vector_size(values.size())), tree_(initial(values)) {}
+
+    int size() const { return size_; }
+    void assign(long long l, long long r, long long value) {
+        check_interval(l, r);
+        tree_.apply(static_cast<int>(l), static_cast<int>(r), value);
+    }
+    long long sum(long long l, long long r) const {
+        check_interval(l, r);
+        const Wide result = tree_.prod(static_cast<int>(l), static_cast<int>(r)).sum;
+        if (result < std::numeric_limits<long long>::min() || result > std::numeric_limits<long long>::max())
+            throw std::overflow_error("range_assign_range_sum: sum does not fit i64");
+        return static_cast<long long>(result);
+    }
+};
+#endif // AC_HAS_ACL
+
+// Immutable snapshot for zero-based order statistics in a half-open range.
+template<class T, bool Weighted = false>
+requires (std::same_as<T, int> || std::same_as<T, long long>)
+class WaveletMatrix {
+    using Wide = __int128;
+    struct NoSums {};
+    int size_;
+    std::vector<T> values_;
+    std::vector<std::vector<int>> zero_prefix_;
+    [[no_unique_address]] std::conditional_t<Weighted, std::vector<std::vector<Wide>>, NoSums> zero_sums_;
+
+    template<class I>
+    static constexpr bool is_index = std::same_as<I, int> || std::same_as<I, long long>;
+
+    static int checked_size(std::size_t size) {
+        if (size >= (std::size_t{1} << 30))
+            throw std::length_error(Weighted ? "weighted_wavelet_matrix: too many elements"
+                                             : "wavelet_matrix: too many elements");
+        return static_cast<int>(size);
+    }
+
+public:
+    explicit WaveletMatrix(const std::vector<T>& values)
+        : size_(checked_size(values.size())), values_(values) {
+        std::sort(values_.begin(), values_.end());
+        values_.erase(std::unique(values_.begin(), values_.end()), values_.end());
+        if (values_.size() < 2) return;
+
+        const int levels = std::bit_width(static_cast<unsigned>(values_.size() - 1));
+        zero_prefix_.reserve(levels);
+        if constexpr (Weighted) zero_sums_.reserve(levels);
+        std::vector<int> ranks(size_), next(size_);
+        for (int i = 0; i < size_; ++i)
+            ranks[i] = static_cast<int>(std::lower_bound(values_.begin(), values_.end(), values[i]) - values_.begin());
+
+        for (int bit = levels - 1; bit >= 0; --bit) {
+            const int mask = 1 << bit;
+            auto& prefix = zero_prefix_.emplace_back(size_ + 1, 0);
+            for (int i = 0; i < size_; ++i)
+                prefix[i + 1] = prefix[i] + ((ranks[i] & mask) == 0);
+            if constexpr (Weighted) {
+                auto& sums = zero_sums_.emplace_back(size_ + 1, 0);
+                for (int i = 0; i < size_; ++i)
+                    sums[i + 1] = sums[i] + ((ranks[i] & mask) ? Wide{0} : values_[ranks[i]]);
+            }
+            int zero = 0, one = prefix.back();
+            for (int rank : ranks)
+                next[(rank & mask) ? one++ : zero++] = rank;
+            ranks.swap(next);
+        }
+    }
+
+    int size() const { return size_; }
+
+    template<class L, class R, class K>
+    requires (is_index<L> && is_index<R> && is_index<K>)
+    T kth(L l, R r, K k) const {
+        if (l < 0 || l > r || r > size_)
+            throw std::out_of_range(Weighted ? "weighted_wavelet_matrix: invalid interval"
+                                             : "wavelet_matrix: invalid interval");
+        if (k < 0 || k >= r - l)
+            throw std::out_of_range(Weighted ? "weighted_wavelet_matrix: invalid rank"
+                                             : "wavelet_matrix: invalid rank");
+
+        int left = static_cast<int>(l), right = static_cast<int>(r);
+        int remaining = static_cast<int>(k), rank = 0;
+        for (const auto& prefix : zero_prefix_) {
+            const int zl = prefix[left], zr = prefix[right];
+            rank <<= 1;
+            if (remaining < zr - zl) {
+                left = zl;
+                right = zr;
+            } else {
+                remaining -= zr - zl;
+                rank |= 1;
+                left = prefix.back() + (left - zl);
+                right = prefix.back() + (right - zr);
+            }
+        }
+        return values_[rank];
+    }
+
+    template<class L, class R, class X>
+    requires (Weighted && is_index<L> && is_index<R> && is_index<X>)
+    long long sum_le(L l, R r, X x) const {
+        if (l < 0 || l > r || r > size_)
+            throw std::out_of_range("weighted_wavelet_matrix: invalid interval");
+        if (l == r) return 0;
+
+        const auto upper = std::upper_bound(values_.begin(), values_.end(), x);
+        if (upper == values_.begin()) return 0;
+        const int rank = static_cast<int>(upper - values_.begin() - 1);
+
+        int left = static_cast<int>(l), right = static_cast<int>(r);
+        Wide sum = 0;
+        const int levels = static_cast<int>(zero_prefix_.size());
+        for (int level = 0; level < levels; ++level) {
+            const auto& prefix = zero_prefix_[level];
+            const int zl = prefix[left], zr = prefix[right];
+            if (rank & (1 << (levels - level - 1))) {
+                sum += zero_sums_[level][right] - zero_sums_[level][left];
+                left = prefix.back() + (left - zl);
+                right = prefix.back() + (right - zr);
+            } else {
+                left = zl;
+                right = zr;
+            }
+        }
+        sum += static_cast<Wide>(values_[rank]) * (right - left);
+        if (sum < std::numeric_limits<long long>::min()
+                || sum > std::numeric_limits<long long>::max())
+            throw std::overflow_error("weighted_wavelet_matrix: sum does not fit i64");
+        return static_cast<long long>(sum);
+    }
+};
+
+template<class T>
+using WeightedWaveletMatrix = WaveletMatrix<T, true>;
+
+#ifdef AC_HAS_ACL
+namespace ac_detail::algorithm {
+template <class I>
+concept lazy_segment_index = std::integral<I> && !std::same_as<I, bool>
+                             && (sizeof(I) <= sizeof(long long));
+
+template <class Predicate, class S>
+concept lazy_segment_predicate = requires(Predicate& predicate, S value) {
+    { predicate(std::move(value)) } -> std::same_as<bool>;
+};
+
+template <class S, class F, auto op, auto e, auto mapping, auto composition, auto id>
+class checked_lazy_segment_tree {
+    static constexpr int max_size = 1 << 29; // ACL stores 2 * bit_ceil(n) in int.
+    int size_;
+    mutable atcoder::lazy_segtree<S, op, e, F, mapping, composition, id> tree_;
+
+    static int checked_size(std::size_t n) {
+        if (n > static_cast<std::size_t>(max_size))
+            throw std::length_error("lazy_segment_tree: too many elements");
+        return static_cast<int>(n);
+    }
+    // Widen before comparing: negative signed values become larger than any valid endpoint.
+    template <lazy_segment_index I>
+    static unsigned long long endpoint(I i) { return static_cast<unsigned long long>(i); }
+
+    template <lazy_segment_index I>
+    int checked_index(I i) const {
+        if (endpoint(i) >= endpoint(size_))
+            throw std::out_of_range("lazy_segment_tree: expected 0 <= i < size");
+        return static_cast<int>(i);
+    }
+    template <lazy_segment_index L, lazy_segment_index R>
+    void check_interval(L l, R r) const {
+        if (endpoint(l) > endpoint(r) || endpoint(r) > endpoint(size_))
+            throw std::out_of_range("lazy_segment_tree: expected 0 <= l <= r <= size");
+    }
+
+    template <lazy_segment_index I, lazy_segment_predicate<S> Predicate>
+    int checked_boundary(I i, Predicate& predicate) const {
+        if (endpoint(i) > endpoint(size_))
+            throw std::out_of_range("lazy_segment_tree: expected 0 <= endpoint <= size");
+        if (!predicate(e()))
+            throw std::invalid_argument("lazy_segment_tree: predicate must accept identity");
+        return static_cast<int>(i);
+    }
+
+public:
+    explicit checked_lazy_segment_tree(const std::vector<S>& values)
+        : size_(checked_size(values.size())), tree_(values) {}
+
+    int size() const { return size_; }
+    template <lazy_segment_index I>
+    void set(I i, const S& value) { tree_.set(checked_index(i), value); }
+    template <lazy_segment_index I>
+    S get(I i) const { return tree_.get(checked_index(i)); }
+    template <lazy_segment_index L, lazy_segment_index R>
+    void apply(L l, R r, const F& tag) {
+        check_interval(l, r);
+        tree_.apply(static_cast<int>(l), static_cast<int>(r), tag);
+    }
+    template <lazy_segment_index L, lazy_segment_index R>
+    S prod(L l, R r) const {
+        check_interval(l, r);
+        return tree_.prod(static_cast<int>(l), static_cast<int>(r));
+    }
+    S all_prod() const { return tree_.all_prod(); }
+
+    // As in ACL, the predicate must be deterministic, side-effect-free and monotone.
+    template <lazy_segment_index I, lazy_segment_predicate<S> Predicate>
+    int max_right(I l, Predicate&& predicate) const {
+        return tree_.max_right(checked_boundary(l, predicate), std::ref(predicate));
+    }
+    template <lazy_segment_index I, lazy_segment_predicate<S> Predicate>
+    int min_left(I r, Predicate&& predicate) const {
+        return tree_.min_left(checked_boundary(r, predicate), std::ref(predicate));
+    }
+};
+} // namespace ac_detail::algorithm
+
+// ACL callbacks keep their original order: composition(new_tag, old_tag).
+// Indices must be non-bool integers no wider than long long.
+// Only assign to or destroy a moved-from tree.
+template <auto op, auto e, auto mapping, auto composition, auto id, class S>
+requires requires(S value, std::invoke_result_t<decltype(id)> tag) {
+    requires std::is_object_v<decltype(tag)>;
+    requires std::same_as<decltype(tag), std::remove_cvref_t<decltype(tag)>>;
+    { op(std::move(value), std::move(value)) } -> std::same_as<S>;
+    { e() } -> std::same_as<S>;
+    { mapping(std::move(tag), std::move(value)) } -> std::same_as<S>;
+    { composition(std::move(tag), std::move(tag)) } -> std::same_as<decltype(tag)>;
+}
+auto lazy_segment_tree(const std::vector<S>& values) {
+    using F = std::invoke_result_t<decltype(id)>;
+    return ac_detail::algorithm::checked_lazy_segment_tree<S, F, op, e, mapping, composition, id>(values);
+}
 #endif // AC_HAS_ACL

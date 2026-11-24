@@ -25,6 +25,158 @@
 #endif
 
 namespace kuma_rt {
+// These helpers deliberately do not change the raw ACL overloads.
+template<class Acl = void>
+inline std::vector<int> (suffix_array_bytes)(const std::string& text) {
+#ifdef AC_HAS_ACL
+    // ACL's SA-IS allocates an index map of size n + 1 using int arithmetic.
+    if (text.size() >= static_cast<std::size_t>(std::numeric_limits<int>::max()))
+        throw std::length_error("suffix_array_bytes: input too large");
+    std::vector<int> bytes;
+    bytes.reserve(text.size());
+    for (unsigned char byte : text) bytes.push_back(byte);
+    return atcoder::suffix_array(bytes, 255);
+#else
+    static_assert(!std::is_same_v<Acl, Acl>, "Kuma suffix_array_bytes requires AtCoder Library (ACL)");
+    return {};
+#endif
+}
+
+template<class Acl = void>
+inline std::vector<int> (z_algorithm_bytes)(const std::string& text) {
+#ifdef AC_HAS_ACL
+    if (text.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+        throw std::length_error("z_algorithm_bytes: input too large");
+    // Z only checks equality, so signed and unsigned bytes give the same matches.
+    return atcoder::z_algorithm(text);
+#else
+    static_assert(!std::is_same_v<Acl, Acl>, "Kuma z_algorithm_bytes requires AtCoder Library (ACL)");
+    return {};
+#endif
+}
+
+template<class Acl = void>
+inline std::vector<int> (lcp_array_bytes)(const std::string& text, const std::vector<int>& suffixes) {
+#ifdef AC_HAS_ACL
+    if (text.size() >= static_cast<std::size_t>(std::numeric_limits<int>::max()))
+        throw std::length_error("lcp_array_bytes: input too large");
+    if (suffixes.size() != text.size())
+        throw std::invalid_argument("lcp_array_bytes: suffix array size differs from string length");
+    if (text.empty()) return {};
+    const int n = static_cast<int>(text.size());
+    {
+        std::vector<int> rank(n, -1);
+        for (int i = 0; i < n; ++i) {
+            const int offset = suffixes[i];
+            if (offset < 0 || offset >= n || rank[offset] != -1)
+                throw std::invalid_argument("lcp_array_bytes: suffix array must be a permutation of byte offsets");
+            rank[offset] = i;
+        }
+        // After the first byte ties, lexicographic order is the order of the
+        // shorter suffixes. Their ranks must agree with every adjacent pair.
+        const auto key = [&](int i) {
+            return std::pair{static_cast<unsigned char>(text[i]), i + 1 < n ? rank[i + 1] : -1};
+        };
+        for (int i = 1; i < n; ++i)
+            if (!(key(suffixes[i - 1]) < key(suffixes[i])))
+                throw std::invalid_argument("lcp_array_bytes: suffix array is not sorted for this string");
+    }
+    // ACL compares bytes only for equality and does not need unsigned rank values.
+    return atcoder::lcp_array(text, suffixes);
+#else
+    static_assert(!std::is_same_v<Acl, Acl>, "Kuma lcp_array_bytes requires AtCoder Library (ACL)");
+    return {};
+#endif
+}
+
+template<class A, class B>
+    requires ((std::same_as<A, int> || std::same_as<A, long long>) &&
+              (std::same_as<B, int> || std::same_as<B, long long>))
+inline std::vector<long long> checked_convolution_ll(const std::vector<A>& a, const std::vector<B>& b) {
+#ifdef AC_HAS_ACL
+    if (a.empty() || b.empty()) return {};
+    constexpr std::size_t max_length = std::size_t{1} << 24;
+    if (a.size() > max_length || b.size() > max_length + 1 - a.size())
+        throw std::length_error("convolution_ll: output length must be at most 2^24");
+
+    using Wide = unsigned __int128;
+    using U64 = unsigned long long;
+    const auto magnitudes = [](const auto& values) {
+        Wide sum = 0;  // at most 2^24 terms, each at most 2^63
+        U64 maximum = 0;
+        for (auto x : values) {
+            const U64 bits = static_cast<U64>(x);
+            const U64 magnitude = x < 0 ? U64{0} - bits : bits;
+            sum += magnitude;
+            maximum = std::max(maximum, magnitude);
+        }
+        return std::pair{sum, maximum};
+    };
+    const auto [sum_a, max_a] = magnitudes(a);
+    const auto [sum_b, max_b] = magnitudes(b);
+    if (max_a == 0 || max_b == 0) return std::vector<long long>(a.size() + b.size() - 1, 0);
+    constexpr U64 limit = std::numeric_limits<long long>::max();
+    // Both sum(A)*max(B) and sum(B)*max(A) bound each coefficient's magnitude.
+    // Divide before comparing so the bound itself cannot overflow.
+    if (sum_a > limit / max_b && sum_b > limit / max_a)
+        throw std::overflow_error("convolution_ll: cannot certify i64 coefficients");
+
+    const auto coefficients = []<class T>(const std::vector<T>& values) -> decltype(auto) {
+        if constexpr (std::same_as<T, long long>) return (values);
+        else return std::vector<long long>(values.begin(), values.end());
+    };
+    return ::atcoder::convolution_ll(coefficients(a), coefficients(b));
+#else
+    static_assert(!std::is_same_v<A, A>, "Kuma convolution_ll requires AtCoder Library (ACL)");
+    return {};
+#endif
+}
+
+#ifdef AC_HAS_ACL
+class CheckedTwoSat {
+    int variables_;
+    mutable atcoder::two_sat solver_;  // The read-only ACL answer() is not const-qualified.
+    int clauses_ = 0;
+    bool answer_ready_ = false;
+    bool intact_ = true;
+
+    static int checked_size(long long n) {
+        // The ACL implication graph has 2*n vertices and a CSR start array of size 2*n+1.
+        if (n < 0 || n > (std::numeric_limits<int>::max() - 1) / 2)
+            throw std::out_of_range("two_sat: invalid variable count");
+        return static_cast<int>(n);
+    }
+    void require_intact() const {
+        if (!intact_) throw std::logic_error("two_sat: previous clause insertion failed");
+    }
+
+public:
+    explicit CheckedTwoSat(long long n) : variables_(checked_size(n)), solver_(variables_) {}
+    void add_clause(long long i, bool f, long long j, bool g) {
+        require_intact();
+        if (i < 0 || i >= variables_ || j < 0 || j >= variables_)
+            throw std::out_of_range("two_sat: variable index out of range");
+        // Each clause creates two edges, counted by int CSR offsets.
+        if (clauses_ == std::numeric_limits<int>::max() / 2)
+            throw std::length_error("two_sat: too many clauses");
+        answer_ready_ = false;
+        intact_ = false;  // An allocation error can interrupt ACL after only one of two edge insertions.
+        solver_.add_clause(static_cast<int>(i), f, static_cast<int>(j), g);
+        ++clauses_;
+        intact_ = true;
+    }
+    bool satisfiable() {
+        require_intact();
+        answer_ready_ = false;
+        return answer_ready_ = solver_.satisfiable();
+    }
+    std::vector<bool> answer() const {
+        if (!answer_ready_) throw std::logic_error("two_sat: answer requires a current satisfiable result");
+        return solver_.answer();
+    }
+};
+#endif
+
 template<class T>
 class Prefix2D {
     static_assert(std::is_same_v<T, int> || std::is_same_v<T, long long> || std::is_same_v<T, double>,
@@ -1627,6 +1779,29 @@ decltype(auto) checked_index(C&& container, long long index) {
     if (position < 0 || position >= length) error("index out of range");
     return std::forward<C>(container)[static_cast<std::size_t>(position)];
 }
+template<class R>
+struct AtWrapReceiver {
+    R&& source;
+    using Item = typename std::remove_cvref_t<R>::value_type;
+
+    template<class I> requires (std::same_as<I, int> || std::same_as<I, long long>)
+    Item at_wrap(I index) const {
+        static_assert(ExtremaScalar<Item> || is_extrema_pair<Item>,
+                      "at_wrap: expected an owning scalar or flat pair element");
+        return static_cast<Item>(checked_index(source, index));
+    }
+};
+
+template<class R>
+constexpr decltype(auto) at_wrap_receiver(R&& source) noexcept {
+    using C = std::remove_cvref_t<R>;
+    if constexpr ((is_plain_vector<C> || is_deque<C>::value || std::same_as<C, std::string>)
+                  && !std::is_volatile_v<std::remove_reference_t<R>>)
+        return AtWrapReceiver<R>{std::forward<R>(source)};
+    else
+        return std::forward<R>(source);  // Native member keeps its exact signature and return type.
+}
+
 // Used only within a loop that holds the source alive.
 template<class C, bool PairRow = false>
 class BorrowedPairwiseView {
@@ -1932,12 +2107,17 @@ struct EnumerateView {
         decltype(std::declval<const C&>().begin()) it;
         decltype(std::declval<const C&>().end()) end;
         long long index;
-        auto operator*() const { return std::tuple<long long, decltype(*it)>{index, *it}; }
+        bool index_overflow = false;
+        auto operator*() const {
+            // An enclosing zip may advance to a row it never reads.
+            if (index_overflow) error("enumerate index overflows i64");
+            return std::tuple<long long, decltype(*it)>{index, *it};
+        }
         Iterator& operator++() {
             ++it;
             if (it != end) {
-                if (index == std::numeric_limits<long long>::max()) error("enumerate index overflows i64");
-                ++index;
+                if (index == std::numeric_limits<long long>::max()) index_overflow = true;
+                else ++index;
             }
             return *this;
         }
@@ -2277,6 +2457,68 @@ template<class R>
 using cpp_item = std::conditional_t<std::is_same_v<std::remove_cvref_t<R>, std::vector<bool>>,
     bool, std::remove_cvref_t<decltype(*std::begin(std::declval<const R&>()))>>;
 
+template<class T> inline constexpr bool is_owned_iteration_view = false;
+template<class Item, class... Cs>
+inline constexpr bool is_owned_iteration_view<ZipView<Item, Cs...>> = true;
+template<class Item, class C>
+inline constexpr bool is_owned_iteration_view<EnumerateView<Item, C>> = true;
+
+// Check nested values as well as the outer range. A vector of string_views
+// or a tuple containing a reference is not an owning snapshot.
+template<class T> struct CppViewOwns : std::bool_constant<std::is_arithmetic_v<T>> {};
+template<> struct CppViewOwns<std::string> : std::true_type {};
+template<> struct CppViewOwns<Range> : std::true_type {};
+template<class T> struct CppViewOwns<const T> : CppViewOwns<T> {};
+template<class T> struct CppViewOwns<std::vector<T>> : CppViewOwns<T> {};
+template<class T, std::size_t N> struct CppViewOwns<std::array<T, N>> : CppViewOwns<T> {};
+template<class K> struct CppViewOwns<std::set<K>> : CppViewOwns<K> {};
+template<class K, class V>
+struct CppViewOwns<std::map<K, V>> : std::conjunction<CppViewOwns<K>, CppViewOwns<V>> {};
+template<class A, class B>
+struct CppViewOwns<std::pair<A, B>> : std::conjunction<CppViewOwns<A>, CppViewOwns<B>> {};
+template<class... Ts>
+struct CppViewOwns<std::tuple<Ts...>> : std::conjunction<CppViewOwns<Ts>...> {};
+template<class Item, class... Cs>
+struct CppViewOwns<ZipView<Item, Cs...>> : std::conjunction<CppViewOwns<Cs>...> {};
+template<class Item, class C> struct CppViewOwns<EnumerateView<Item, C>> : CppViewOwns<C> {};
+
+template<class R>
+concept CppViewSource = CppViewOwns<R>::value && requires (const R& r) { r.begin(); r.end(); };
+
+// Dereference may produce tuples of references (including nested tuples from
+// nested views). Preserve these while reading, but never let an eager Kuma
+// collection store reference-bearing rows from a temporary/saved view.
+template<class T> struct CppViewValue;
+template<class T> using cpp_view_value_t = typename CppViewValue<std::remove_cvref_t<T>>::type;
+template<class R, class T> using cpp_view_result_t = std::conditional_t<
+    is_owned_iteration_view<std::remove_cvref_t<R>>, cpp_view_value_t<T>, T>;
+template<class T> struct CppViewValue { using type = T; };
+template<class... Ts>
+struct CppViewValue<std::tuple<Ts...>> { using type = std::tuple<cpp_view_value_t<Ts>...>; };
+template<class A, class B>
+struct CppViewValue<std::pair<A, B>> { using type = std::pair<cpp_view_value_t<A>, cpp_view_value_t<B>>; };
+template<class T>
+struct CppViewValue<std::vector<T>> { using type = std::vector<cpp_view_value_t<T>>; };
+
+template<class R, class T>
+decltype(auto) cpp_materialize_view_result(T&& value) {
+    using Input = std::remove_cvref_t<T>;
+    using Output = cpp_view_value_t<T>;
+    if constexpr (!is_owned_iteration_view<std::remove_cvref_t<R>> || std::is_same_v<Input, Output>) {
+        return std::forward<T>(value);
+    } else if constexpr (is_plain_vector<Input>) {
+        Output result;
+        result.reserve(value.size());
+        for (auto&& item : value)
+            result.emplace_back(cpp_materialize_view_result<R>(std::forward<decltype(item)>(item)));
+        return result;
+    } else {
+        return std::apply([](auto&&... item) {
+            return Output{cpp_materialize_view_result<R>(std::forward<decltype(item)>(item))...};
+        }, std::forward<T>(value));
+    }
+}
+
 template<class F, class T>
 auto mixed_lazy_map_value(F& callback, const T& value) {
     using Result = std::remove_cvref_t<std::invoke_result_t<F&, const T&>>;
@@ -2319,20 +2561,25 @@ auto mixed_lazy_extreme_key(F& project, const char* nan_error, const T& item) {
 
 template<class R, class F, class P>
 auto cpp_collect(const R& values, F transform, P predicate) {
-    using Out = std::decay_t<decltype(transform(std::declval<const cpp_item<R>&>()))>;
+    using Mapped = std::decay_t<decltype(transform(std::declval<const cpp_item<R>&>()))>;
+    using Out = cpp_view_result_t<R, Mapped>;
+    static_assert(!is_owned_iteration_view<R> || CppViewOwns<Out>::value,
+                  "mixed owned view collection: expected owning result values");
     std::vector<Out> result;
     for (const auto& raw : values) {
         if constexpr (std::is_same_v<std::remove_cvref_t<R>, std::vector<bool>>) {
             const bool item = raw;
             if (predicate(item)) result.push_back(transform(item));
-        } else if (predicate(raw)) result.push_back(transform(raw));
+        } else if (predicate(raw)) result.emplace_back(cpp_materialize_view_result<R>(transform(raw)));
     }
     return result;
 }
 template<class R, class F, class P>
 auto cpp_flat_collect(const R& values, F transform, P predicate) {
     using Inner = std::decay_t<decltype(transform(std::declval<const cpp_item<R>&>()))>;
-    using Out = typename Inner::value_type;
+    using Out = cpp_view_result_t<R, typename Inner::value_type>;
+    static_assert(!is_owned_iteration_view<R> || CppViewOwns<Out>::value,
+                  "mixed owned view collection: expected owning result values");
     std::vector<Out> result;
     for (const auto& raw : values) {
         if constexpr (std::is_same_v<std::remove_cvref_t<R>, std::vector<bool>>) {
@@ -2342,7 +2589,10 @@ auto cpp_flat_collect(const R& values, F transform, P predicate) {
             result.insert(result.end(), std::make_move_iterator(inner.begin()), std::make_move_iterator(inner.end()));
         } else if (predicate(raw)) {
             auto inner = transform(raw);
-            result.insert(result.end(), std::make_move_iterator(inner.begin()), std::make_move_iterator(inner.end()));
+            if constexpr (!std::is_same_v<Out, typename Inner::value_type>) {
+                for (auto&& item : inner)
+                    result.emplace_back(cpp_materialize_view_result<R>(std::move(item)));
+            } else result.insert(result.end(), std::make_move_iterator(inner.begin()), std::make_move_iterator(inner.end()));
         }
     }
     return result;
@@ -2453,23 +2703,74 @@ inline std::vector<long long> cpp_reversed(Range values) {
     return vec;
 }
 template<class R>
-auto cpp_enumerate(const R& values, long long start) { return enumerate<cpp_item<R>>(values, start); }
+auto cpp_enumerate(const R& values, long long start) { return enumerate<cpp_view_result_t<R, cpp_item<R>>>(values, start); }
 template<class R, class I> requires std::is_integral_v<std::remove_cvref_t<I>>
 auto cpp_enumerate(const R& values, I&& start) {
     if constexpr (std::is_unsigned_v<std::remove_cvref_t<I>>) {
         const unsigned __int128 wide = start;
         if (wide > static_cast<unsigned __int128>(std::numeric_limits<long long>::max()))
             error("enumerate start exceeds signed 64-bit range");
-        return enumerate<cpp_item<R>>(values, static_cast<long long>(wide));
+        return enumerate<cpp_view_result_t<R, cpp_item<R>>>(values, static_cast<long long>(wide));
     } else {
         const __int128 wide = start;
         if (wide < std::numeric_limits<long long>::min() || wide > std::numeric_limits<long long>::max())
             error("enumerate start exceeds signed 64-bit range");
-        return enumerate<cpp_item<R>>(values, static_cast<long long>(wide));
+        return enumerate<cpp_view_result_t<R, cpp_item<R>>>(values, static_cast<long long>(wide));
     }
 }
 template<class... Rs>
-auto cpp_zip(bool strict, const Rs&... values) { return zip<std::tuple<cpp_item<Rs>...>>(strict, values...); }
+auto cpp_zip(bool strict, const Rs&... values) { return zip<std::tuple<cpp_view_result_t<Rs, cpp_item<Rs>>...>>(strict, values...); }
+
+template<class R>
+auto cpp_view_snapshot(R&& source) {
+    using RangeType = std::remove_cvref_t<R>;
+    static_assert(CppViewSource<RangeType>,
+                  "mixed owned view: expected a stock range of owning values (vector, array, string, set, map, Kuma range or owned view)");
+    if constexpr (CppViewSource<RangeType>)
+        return RangeType(std::forward<R>(source));
+    else return Range{};  // Avoid secondary diagnostics for an invalid range.
+}
+
+template<class T>
+bool cpp_view_strict(T value) {
+    static_assert(std::is_same_v<T, bool>, "zip_view strict must be bool");
+    if constexpr (std::is_same_v<T, bool>) return value;
+    else return false;
+}
+
+template<class T>
+long long cpp_view_start(T value) {
+    static_assert(std::is_integral_v<T> && !std::is_same_v<T, bool>,
+                  "enumerate_view start must be an integer, not bool");
+    if constexpr (std::is_integral_v<T>) {
+        if constexpr (std::is_unsigned_v<T>) {
+            if (static_cast<unsigned __int128>(value) >
+                static_cast<unsigned __int128>(std::numeric_limits<long long>::max()))
+                error("enumerate start exceeds signed 64-bit range");
+        } else if (static_cast<__int128>(value) < std::numeric_limits<long long>::min()
+                   || static_cast<__int128>(value) > std::numeric_limits<long long>::max()) {
+            error("enumerate start exceeds signed 64-bit range");
+        }
+        return static_cast<long long>(value);
+    } else return 0;
+}
+
+template<class... Rs>
+struct CppZipViewRequest { std::tuple<Rs...> sources; bool strict; };
+template<class... Rs>
+auto cpp_zip_view(CppZipViewRequest<Rs...>&& request) {
+    using Row = std::tuple<cpp_view_value_t<cpp_item<Rs>>...>;
+    return std::apply([&](auto&&... source) {
+        return ZipView<Row, Rs...>{request.strict, std::move(source)...};
+    }, std::move(request.sources));
+}
+
+template<class R>
+struct CppEnumerateViewRequest { R source; long long start; };
+template<class R>
+auto cpp_enumerate_view(CppEnumerateViewRequest<R>&& request) {
+    return EnumerateView<cpp_view_value_t<cpp_item<R>>, R>{std::move(request.source), request.start};
+}
 } // namespace kuma_rt
 
 namespace kuma_rt {
@@ -2666,6 +2967,14 @@ constexpr decltype(auto) windows_binding_receiver(Receiver&& receiver) noexcept 
 template<class T> inline constexpr bool is_stock_tuple_or_pair = false;
 template<class... T> inline constexpr bool is_stock_tuple_or_pair<std::tuple<T...>> = true;
 template<class T, class U> inline constexpr bool is_stock_tuple_or_pair<std::pair<T, U>> = true;
+
+template<std::size_t I, class T, class Index>
+decltype(auto) cpp_lazy_view_index(T&& value, Index index) {
+    if constexpr (is_stock_tuple_or_pair<std::remove_cvref_t<T>>)
+        return std::get<I>(std::forward<T>(value));
+    else return std::forward<T>(value)[index];
+}
+
 
 template<long long I, class Receiver>
 struct TupleGetReceiver {

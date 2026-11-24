@@ -2403,3 +2403,27 @@ inline ostream& operator<<(ostream& os, const Comb& comb) {
               << ", fac=" << comb.fac
               << ", ifac=" << comb.ifac << '}';
 }
+
+#ifdef AC_HAS_ACL
+/// Polynomial multiplication modulo 998244353. Empty input gives an empty result.
+/// Signed coefficients are reduced modulo the prime; the input is not modified.
+/// The output length is n+m-1 and must not exceed 2^23.
+template<class A, class B>
+    requires ((std::same_as<A, int> || std::same_as<A, long long>) &&
+              (std::same_as<B, int> || std::same_as<B, long long>))
+std::vector<long long> convolution998(const std::vector<A>& a, const std::vector<B>& b) {
+    if (a.empty() || b.empty()) return {};
+    constexpr std::size_t max_length = std::size_t{1} << 23;
+    if (a.size() > max_length || b.size() > max_length + 1 - a.size())
+        throw std::length_error("convolution998: output length must be at most 2^23");
+    if constexpr (std::same_as<A, long long> && std::same_as<B, long long>) {
+        return ::atcoder::convolution<998244353>(a, b);
+    } else {
+        auto coefficients = []<class T>(const std::vector<T>& values) -> decltype(auto) {
+            if constexpr (std::same_as<T, long long>) return (values);
+            else return std::vector<long long>(values.begin(), values.end());
+        };
+        return ::atcoder::convolution<998244353>(coefficients(a), coefficients(b));
+    }
+}
+#endif
