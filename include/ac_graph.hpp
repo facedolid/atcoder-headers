@@ -3083,6 +3083,11 @@ class CheckedMaxFlow {
         return static_cast<int>(v);
     }
 
+    auto checked_edge(long long id) const {
+        if (id < 0 || id >= edges_) throw std::out_of_range("max_flow: invalid edge ID");
+        return graph_.get_edge(static_cast<int>(id));
+    }
+
 public:
     explicit CheckedMaxFlow(long long n) : vertices_(checked_vertices(n)), graph_(vertices_) {}
 
@@ -3107,8 +3112,12 @@ public:
     }
 
     long long edge_flow(long long id) const {
-        if (id < 0 || id >= edges_) throw std::out_of_range("max_flow: invalid edge ID");
-        return graph_.get_edge(static_cast<int>(id)).flow;
+        return checked_edge(id).flow;
+    }
+
+    std::tuple<int, int, long long, long long> get_edge(long long id) const {
+        const auto edge = checked_edge(id);
+        return {edge.from, edge.to, edge.cap, edge.flow};
     }
 
     std::vector<bool> min_cut(long long source) const {
@@ -3120,11 +3129,14 @@ public:
 #ifdef AC_HAS_ACL
 // Checked, single-use min-cost maximum flow with explicit capacity limit.
 class CheckedMinCostFlow {
+    using Graph = atcoder::mcf_graph<long long, long long>;
+    using EdgeSnapshot = std::tuple<int, int, long long, long long, long long>;
+
     int vertices_;
     int edges_ = 0;
     long long max_cost_ = 0;
     bool solved_ = false;
-    mutable atcoder::mcf_graph<long long, long long> graph_;
+    mutable Graph graph_;
 
     static int checked_vertices(long long n) {
         // Honor ACL's vertex bound; its CSR also needs n + 1 to fit in int.
@@ -3139,7 +3151,35 @@ class CheckedMinCostFlow {
     }
 
     void check_unsolved() const {
-        if (solved_) throw std::logic_error("min_cost_flow: flow already called");
+        if (solved_) throw std::logic_error("min_cost_flow: flow or slope already called");
+    }
+
+    auto checked_edge(long long id) const {
+        if (id < 0 || id >= edges_) throw std::out_of_range("min_cost_flow: invalid edge ID");
+        // ACL's non-const get_edge only reads and returns a copy.
+        return graph_.get_edge(static_cast<int>(id));
+    }
+
+    static EdgeSnapshot snapshot(const Graph::edge& edge) {
+        return {edge.from, edge.to, edge.cap, edge.flow, edge.cost};
+    }
+
+    std::pair<int, int> prepare_solve(long long source, long long sink, long long limit) {
+        check_unsolved();
+        const int s = vertex(source), t = vertex(sink);
+        if (s == t) throw std::invalid_argument("min_cost_flow: source and sink must differ");
+        if (limit < 0) throw std::invalid_argument("min_cost_flow: negative flow limit");
+        if (limit != 0) {
+            // A conservative version of ACL's n*C bound protects distance arithmetic.
+            // Each unit then costs at most (n-1)*C; bound the total before solving.
+            if (max_cost_ > 8'000'000'000'000'000'000LL / vertices_)
+                throw std::overflow_error("min_cost_flow: vertex count times maximum cost exceeds ACL bound");
+            const long long path_cost = (vertices_ - 1) * max_cost_;
+            if (path_cost != 0 && limit > std::numeric_limits<long long>::max() / path_cost)
+                throw std::overflow_error("min_cost_flow: total cost bound exceeds i64");
+        }
+        solved_ = true;
+        return {s, t};
     }
 
 public:
@@ -3160,27 +3200,30 @@ public:
     }
 
     std::pair<long long, long long> flow(long long source, long long sink, long long limit) {
-        check_unsolved();
-        const int s = vertex(source), t = vertex(sink);
-        if (s == t) throw std::invalid_argument("min_cost_flow: source and sink must differ");
-        if (limit < 0) throw std::invalid_argument("min_cost_flow: negative flow limit");
-        if (limit != 0) {
-            // A conservative version of ACL's n*C bound protects distance arithmetic.
-            // Each unit then costs at most (n-1)*C; bound the total before solving.
-            if (max_cost_ > 8'000'000'000'000'000'000LL / vertices_)
-                throw std::overflow_error("min_cost_flow: vertex count times maximum cost exceeds ACL bound");
-            const long long path_cost = (vertices_ - 1) * max_cost_;
-            if (path_cost != 0 && limit > std::numeric_limits<long long>::max() / path_cost)
-                throw std::overflow_error("min_cost_flow: total cost bound exceeds i64");
-        }
-        solved_ = true;
+        const auto [s, t] = prepare_solve(source, sink, limit);
         return limit == 0 ? std::pair{0LL, 0LL} : graph_.flow(s, t, limit);
     }
 
+    std::vector<std::pair<long long, long long>> slope(long long source, long long sink, long long limit) {
+        const auto [s, t] = prepare_solve(source, sink, limit);
+        if (limit == 0) return {{0, 0}};
+        return graph_.slope(s, t, limit);
+    }
+
     long long edge_flow(long long id) const {
-        if (id < 0 || id >= edges_) throw std::out_of_range("min_cost_flow: invalid edge ID");
-        // ACL's non-const get_edge only reads and returns a copy.
-        return graph_.get_edge(static_cast<int>(id)).flow;
+        return checked_edge(id).flow;
+    }
+
+    EdgeSnapshot get_edge(long long id) const {
+        return snapshot(checked_edge(id));
+    }
+
+    std::vector<EdgeSnapshot> edges() const {
+        std::vector<EdgeSnapshot> result;
+        result.reserve(edges_);
+        for (int id = 0; id < edges_; ++id)
+            result.push_back(snapshot(graph_.get_edge(id)));
+        return result;
     }
 };
 #endif // AC_HAS_ACL
