@@ -1615,19 +1615,25 @@ struct SubmasksView {
     Sentinel end() const { return {}; }
 };
 
+template<class T>
+concept CollectionInteger = std::same_as<T, int> || std::same_as<T, long long>
+    || std::same_as<T, std::size_t>;
+
 // Holds only the input length and choice count. Dereferencing yields an
 // independent index row, so saved rows survive advancing the iterator.
 class CombinationIndicesView {
     long long n_;
-    long long k_;
+    unsigned long long k_;
 public:
     using value_type = std::vector<long long>;
     using Sentinel = std::default_sentinel_t;
-    CombinationIndicesView(std::size_t n, long long k) : n_(0), k_(k) {
-        if (k < 0) throw std::invalid_argument("combination_indices: negative k");
+    template<CollectionInteger K>
+    CombinationIndicesView(std::size_t n, K k) : n_(0), k_(0) {
+        if (std::cmp_less(k, 0)) throw std::invalid_argument("combination_indices: negative k");
         if (!std::in_range<long long>(n))
             throw std::length_error("combination_indices: vector length exceeds i64");
         n_ = static_cast<long long>(n);
+        k_ = static_cast<unsigned long long>(k);
     }
     struct Iterator {
         using value_type = std::vector<long long>;
@@ -1654,7 +1660,7 @@ public:
         bool operator==(Sentinel) const { return done; }
     };
     Iterator begin() const {
-        if (k_ > n_) return {n_, {}, true};
+        if (std::cmp_greater(k_, n_)) return {n_, {}, true};
         value_type row(static_cast<std::size_t>(k_));
         std::iota(row.begin(), row.end(), 0LL);
         return {n_, std::move(row), false};
@@ -1671,10 +1677,12 @@ class CombinationsView {
 public:
     using value_type = std::vector<T>;
     using Sentinel = std::default_sentinel_t;
-    explicit CombinationsView(const std::vector<T>& values, long long k)
+    template<CollectionInteger K>
+    explicit CombinationsView(const std::vector<T>& values, K k)
         : indices_(values.size(), k),
           values_(k > 0 && std::cmp_less_equal(k, values.size()) ? values : value_type{}) {}
-    explicit CombinationsView(std::vector<T>&& values, long long k)
+    template<CollectionInteger K>
+    explicit CombinationsView(std::vector<T>&& values, K k)
         : indices_(values.size(), k),
           values_(k > 0 && std::cmp_less_equal(k, values.size()) ? std::move(values) : value_type{}) {}
     CombinationsView(const CombinationsView&) = default;
@@ -1772,7 +1780,7 @@ inline long long count(long long n) {
 }
 
 template<class C>
-decltype(auto) checked_index(C&& container, long long index) {
+decltype(auto) checked_index(C&& container, __int128 index) {
     const __int128 length = static_cast<__int128>(container.size());
     __int128 position = index;
     if (position < 0) position += length;
@@ -1784,7 +1792,7 @@ struct AtWrapReceiver {
     R&& source;
     using Item = typename std::remove_cvref_t<R>::value_type;
 
-    template<class I> requires (std::same_as<I, int> || std::same_as<I, long long>)
+    template<CollectionInteger I>
     Item at_wrap(I index) const {
         static_assert(ExtremaScalar<Item> || is_extrema_pair<Item>,
                       "at_wrap: expected an owning scalar or flat pair element");
@@ -1855,9 +1863,8 @@ auto pairwise_copy(const C& values) {
     return result;
 }
 
-template<class C, class K>
-    requires ((is_vector<C>::value || std::same_as<C, std::string>)
-              && (std::same_as<K, int> || std::same_as<K, long long>))
+template<class C, CollectionInteger K>
+    requires (is_vector<C>::value || std::same_as<C, std::string>)
 auto chunks_copy(const C& values, K width) {
     using Chunk = std::conditional_t<std::same_as<C, std::string>,
                                      std::string, std::vector<typename C::value_type>>;
@@ -1875,15 +1882,19 @@ auto chunks_copy(const C& values, K width) {
     return result;
 }
 
+template<class K>
+concept WindowsWidth = std::same_as<K, int> || std::same_as<K, long> || std::same_as<K, long long>
+    || std::same_as<K, unsigned int> || std::same_as<K, unsigned long> || std::same_as<K, unsigned long long>;
+
 // One immutable snapshot for all windows. A row owns its share independently
 // of the outer view; iterators borrow their respective view or row.
 template<class C>
 class WindowsView {
     std::shared_ptr<const C> values_;
-    long long width_ = 0;
+    unsigned long long width_ = 0;
     std::optional<std::vector<std::size_t>> selected_;
 
-    WindowsView(std::shared_ptr<const C> values, long long width)
+    WindowsView(std::shared_ptr<const C> values, unsigned long long width)
         : values_(std::move(values)), width_(width), selected_(std::in_place) {}
     std::size_t offset(std::size_t i) const { return selected_ ? (*selected_)[i] : i; }
 
@@ -1914,16 +1925,26 @@ public:
             return values_ ? values_->cbegin() + first_ + width_ : typename C::const_iterator{};
         }
         auto end() const && = delete;
+
+        friend std::ostream& operator<<(std::ostream& out, const Row& row)
+            requires std::same_as<C, std::string> {
+            if (!row.values_) return out;
+            return out << std::string_view(*row.values_).substr(row.first_, row.width_);
+        }
+        // ac.hpp's native print uses ADL before its generic range formatter.
+        friend void write_item(std::ostream& out, const Row& row)
+            requires std::same_as<C, std::string> {
+            out << row;
+        }
     };
 
     using value_type = Row;
 
-    template<class R, class K>
-        requires (std::same_as<std::remove_cvref_t<R>, C>
-                  && (std::same_as<K, int> || std::same_as<K, long long>))
+    template<class R, WindowsWidth K>
+        requires std::same_as<std::remove_cvref_t<R>, C>
     explicit WindowsView(R&& values, K width) {
         if (width <= 0) error("windows: width must be positive");
-        width_ = width;
+        width_ = static_cast<unsigned long long>(width);
         if (std::cmp_greater(width, values.size())) return;
         values_ = std::make_shared<const C>(std::forward<R>(values));
     }
@@ -2604,13 +2625,12 @@ concept IterOwnedScalar = std::same_as<T, int> || std::same_as<T, long long>
     || std::same_as<T, double> || std::same_as<T, bool>
     || std::same_as<T, char> || std::same_as<T, std::string>;
 
-template<IterOwnedScalar T, class P, class F, class K>
-    requires ((std::same_as<K, int> || std::same_as<K, long long>)
-              && IterOwnedScalar<std::remove_cvref_t<std::invoke_result_t<F&, const T&>>>)
+template<IterOwnedScalar T, class P, class F, CollectionInteger K>
+    requires IterOwnedScalar<std::remove_cvref_t<std::invoke_result_t<F&, const T&>>>
 auto cpp_iter_filter_map_take_collect(std::vector<T> source, P&& pred, F&& map, K count) {
     using Result = std::remove_cvref_t<std::invoke_result_t<F&, const T&>>;
     std::vector<Result> collected;
-    if (count < 0) throw std::invalid_argument("iter.take: negative count");
+    if (std::cmp_less(count, 0)) throw std::invalid_argument("iter.take: negative count");
     if (count == 0) return collected;
     for (const T& item : source) {
         if (!std::invoke(pred, item)) continue;
@@ -2639,6 +2659,11 @@ auto cpp_sum(const R& values) {
 }
 template<class R>
 long long cpp_len(const R& values) { return numeric_cast<long long>(std::size(values)); }
+// Own a Kuma literal without dropping embedded NULs or keeping the C++ terminator.
+template<std::size_t N>
+std::string cpp_reduce_string_literal(const char (&literal)[N]) {
+    return std::string(literal, N - 1);
+}
 template<class R, class F, class A>
 auto cpp_reduce(const R& values, F callback, A initial) {
     for (const auto& item : values) initial = callback(std::move(initial), item);
@@ -2809,16 +2834,20 @@ decltype(auto) cpp_member_sorted(R&& values, As&&... args) {
     else
         return kuma_rt::cpp_sorted(std::forward<R>(values), std::forward<As>(args)...);
 }
-template<bool IntegerLiteral = false, class R, class F, class Acc>
+template<bool IntegerLiteral = false, bool StringLiteral = false, class R, class F, class Acc>
 decltype(auto) cpp_member_reduce(R&& values, F&& callback, Acc&& initial) {
     if constexpr (requires { std::forward<R>(values).reduce(std::forward<F>(callback), std::forward<Acc>(initial)); })
         return std::forward<R>(values).reduce(std::forward<F>(callback), std::forward<Acc>(initial));
     else if constexpr (is_stock_windows_view<std::remove_cvref_t<R>>) {
         if constexpr (IntegerLiteral)
             return values.reduce_rows(std::forward<F>(callback), static_cast<long long>(initial));
+        else if constexpr (StringLiteral)
+            return values.reduce_rows(std::forward<F>(callback), kuma_rt::cpp_reduce_string_literal(initial));
         else
             return values.reduce_rows(std::forward<F>(callback), std::forward<Acc>(initial));
-    } else
+    } else if constexpr (StringLiteral)
+        return kuma_rt::cpp_reduce(std::forward<R>(values), std::forward<F>(callback), kuma_rt::cpp_reduce_string_literal(initial));
+    else
         return kuma_rt::cpp_reduce(std::forward<R>(values), std::forward<F>(callback), std::forward<Acc>(initial));
 }
 
@@ -2885,11 +2914,88 @@ decltype(auto) cpp_member_zip(bool strict, R&& values, As&&... args) {
     else
         return kuma_rt::cpp_zip(strict, std::forward<R>(values), std::forward<As>(args)...);
 }
+// Adapt only stock sequences without a native count member. Keep the call
+// itself outside the adapter so native braced arguments and temporaries work.
+template<class C>
+struct CountReceiver {
+    const C& values;
+    using Item = typename C::value_type;
+
+    template<class T>
+    long long count(T&& argument) const {
+        using Arg = std::remove_cvref_t<T>;
+        if constexpr (std::is_invocable_v<T&, Item>) {
+            using Result = std::remove_cvref_t<std::invoke_result_t<T&, Item>>;
+            constexpr bool valid = std::same_as<Result, bool> || CollectionInteger<Result>
+                || std::same_as<Result, double>;
+            static_assert(valid, "count: predicate must return bool or a number");
+            if constexpr (valid) {
+                return kuma_rt::count_matching<Item>(values, [&](Item item) {
+                    return static_cast<bool>(std::invoke(argument, std::move(item)));
+                });
+            } else {
+                return 0;
+            }
+        } else if constexpr (CollectionInteger<Item> && CollectionInteger<Arg>) {
+            return kuma_rt::count_matching<Item>(values, [&](Item item) {
+                return std::cmp_equal(item, argument);
+            });
+        } else {
+            constexpr bool valid =
+                std::same_as<Item, Arg> ||
+                (std::same_as<Item, double> && CollectionInteger<Arg>) ||
+                (std::same_as<Item, bool> && std::same_as<Arg, std::vector<bool>::reference>) ||
+                (std::same_as<Item, std::string> && std::is_convertible_v<T&&, Item>);
+            static_assert(valid, "count: expected an element value or a unary predicate");
+            if constexpr (valid) {
+                const Item needle(std::forward<T>(argument));
+                return kuma_rt::count_matching<Item>(values, [&](Item item) {
+                    return item == needle;
+                });
+            } else {
+                return 0;
+            }
+        }
+    }
+};
+
+template<class R>
+constexpr decltype(auto) count_receiver(R&& receiver) noexcept {
+    using C = std::remove_cvref_t<R>;
+    if constexpr ((is_plain_vector<C> || is_deque<C>::value || std::same_as<C, std::string>)
+                  && !std::is_volatile_v<std::remove_reference_t<R>>)
+        return CountReceiver<C>{receiver};
+    else
+        return std::forward<R>(receiver);
+}
+
+template<class C>
+struct ContainsReceiver {
+    const C& values;
+
+    template<class Key>
+    bool (contains)(const Key& key) const {
+        return std::find(values.begin(), values.end(), key) != values.end();
+    }
+};
+
+// Only actual stock sequences need a fallback. Leave native member
+// arguments (including braces and bit-fields) in the caller's full expression.
+template<class R>
+constexpr decltype(auto) contains_receiver(R&& values) noexcept {
+    using C = std::remove_cvref_t<R>;
+    if constexpr ((is_vector<C>::value || is_deque<C>::value)
+                  && !std::is_volatile_v<std::remove_reference_t<R>>)
+        return ContainsReceiver<C>{values};
+    else
+        return std::forward<R>(values);
+}
+
 template<class C>
 struct ChunksReceiver {
     const C& values;
 
-    template<class K> requires (std::same_as<K, int> || std::same_as<K, long long>)
+    template<CollectionInteger K>
     auto chunks(K width) const { return kuma_rt::chunks_copy(values, width); }
 };
 
@@ -2904,22 +3010,24 @@ constexpr decltype(auto) chunks_receiver(Receiver&& receiver) noexcept {
         return std::forward<Receiver>(receiver);
 }
 
-template<std::size_t Arity, bool IntegerLiteral, class R>
+template<std::size_t Arity, bool IntegerLiteral, bool StringLiteral, class R>
 struct WindowsReduceReceiver {
     R&& values;
     template<class F, class Acc>
     auto reduce(F&& callback, Acc&& initial) const {
         if constexpr (IntegerLiteral)
             return values.template reduce_fields<Arity>(std::forward<F>(callback), static_cast<long long>(initial));
+        else if constexpr (StringLiteral)
+            return values.template reduce_fields<Arity>(std::forward<F>(callback), kuma_rt::cpp_reduce_string_literal(initial));
         else
             return values.template reduce_fields<Arity>(std::forward<F>(callback), std::forward<Acc>(initial));
     }
 };
 
-template<std::size_t Arity, bool IntegerLiteral, class R>
+template<std::size_t Arity, bool IntegerLiteral, bool StringLiteral = false, class R>
 constexpr decltype(auto) windows_reduce_receiver(R&& values) noexcept {
     if constexpr (is_stock_windows_view<std::remove_cvref_t<R>>)
-        return WindowsReduceReceiver<Arity, IntegerLiteral, R>{std::forward<R>(values)};
+        return WindowsReduceReceiver<Arity, IntegerLiteral, StringLiteral, R>{std::forward<R>(values)};
     else
         return std::forward<R>(values);  // Native member receives the original callback.
 }
@@ -2928,7 +3036,7 @@ template<class Receiver, std::size_t Arity = 0>
 struct WindowsReceiver {
     Receiver&& values;
 
-    template<class K> requires (std::same_as<K, int> || std::same_as<K, long long>)
+    template<WindowsWidth K>
     auto windows(K width) const {
         if constexpr (Arity != 0) width = checked_window_binding_width<Arity>(width);
         return WindowsView<std::remove_cvref_t<Receiver>>(std::forward<Receiver>(values), width);
