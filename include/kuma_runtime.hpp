@@ -5615,6 +5615,32 @@ auto copy_lazy_adjacent_row(const Row& row) {
     } else return std::tuple<int, int>{};  // Keep diagnostics on the assertions above.
 }
 
+template<std::size_t Arity, bool Member, bool IntegerLiteral, bool StringLiteral = false,
+         class R, class F, class Acc>
+decltype(auto) cpp_reduce_tuple_arrow(R&& values, F&& callback, Acc&& initial) {
+    if constexpr (Member && requires { std::forward<R>(values).reduce(std::forward<F>(callback), std::forward<Acc>(initial)); }) {
+        return std::forward<R>(values).reduce(std::forward<F>(callback), std::forward<Acc>(initial));
+    } else if constexpr (Member && is_stock_windows_view<std::remove_cvref_t<R>>) {
+        return windows_reduce_receiver<Arity, IntegerLiteral, StringLiteral>(std::forward<R>(values))
+            .reduce(std::forward<F>(callback), std::forward<Acc>(initial));
+    } else {
+        using Row = cpp_item<R>;
+        constexpr bool matches = arrow_tuple_arity<Arity, Row>();
+        static_assert(matches, "reduce arrow: expected a pair or tuple matching the parameters after the accumulator");
+        if constexpr (matches) {
+            auto apply = [&callback](auto&& acc, const Row& row) {
+                return std::apply([&](const auto&... parts) {
+                    return std::invoke(callback, std::forward<decltype(acc)>(acc), parts...);
+                }, row);
+            };
+            if constexpr (StringLiteral)
+                return cpp_reduce(values, apply, cpp_reduce_string_literal(initial));
+            else
+                return cpp_reduce(values, apply, std::forward<Acc>(initial));
+        }
+    }
+}
+
 template<std::size_t Arity, bool Filter, bool Member, class R, class F>
 decltype(auto) cpp_map_filter_tuple_arrow(R&& values, F&& callback) {
     if constexpr (Member && is_stock_windows_view<std::remove_cvref_t<R>>)
