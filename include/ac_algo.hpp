@@ -2,6 +2,7 @@
 // Library: https://github.com/facedolid/atcoder-headers
 
 #include "ac_math.hpp"
+#include "ac_tree.hpp"
 #include <bit>
 
 // 定石データ構造・DP・文字列。包除等の計算で数論補助も使用する。
@@ -1159,6 +1160,26 @@ bool superset_mobius_transform(vector<T>& values) {
     return true;
 }
 
+namespace ac_detail::algorithm {
+template<class T>
+T narrow_subset_result(i128 value, const char* operation) {
+    if (value < numeric_limits<T>::min() || value > numeric_limits<T>::max())
+        throw overflow_error(string(operation) + ": result does not fit the element type");
+    return static_cast<T>(value);
+}
+
+template<class T, class Transform>
+bool checked_integer_subset_transform(vector<T>& input, Transform transform, const char* operation) {
+    require_subset_transform_size(input.size(), operation);
+    // Each intermediate is a signed sum of distinct original entries.
+    vector<i128> values(input.begin(), input.end());
+    transform(values);
+    for (const auto value : values) (void)narrow_subset_result<T>(value, operation);
+    std::copy(values.begin(), values.end(), input.begin());
+    return true;
+}
+}  // namespace ac_detail::algorithm
+
 // @acf fn count_multiples_union — (ll limit, range divisors) -> ll — いずれかの正の約数で割り切れる数を包除で数える
 
 /// 1..limitで、指定した少なくとも1つの数で割り切れる整数を数える。
@@ -1354,6 +1375,15 @@ public:
         difference_[r] -= value;
     }
 
+    friend void kuma_finite_imos_add(Imos& imos, int l, int r, double value)
+        requires std::same_as<T, double> {
+        if (l == r) return;
+        if (!std::isfinite(value)) throw domain_error("imos: update must be finite");
+        if (!std::isfinite(imos.difference_[l] + value) || !std::isfinite(imos.difference_[r] - value))
+            throw overflow_error("imos: difference must be finite");
+        imos.add(l, r, value);
+    }
+
     /// 登録した全区間を反映した配列を返す。
     vector<T> build() const {
         vector<T> result(n_);
@@ -1409,6 +1439,17 @@ public:
         difference_[r2][c2] += value;
     }
 
+    friend void kuma_finite_imos_add(Imos2D& imos, int r1, int c1, int r2, int c2, double value)
+        requires std::same_as<T, double> {
+        if (r1 == r2 || c1 == c2) return;
+        if (!std::isfinite(value)) throw domain_error("imos2d: update must be finite");
+        const auto& diff = imos.difference_;
+        if (!std::isfinite(diff[r1][c1] + value) || !std::isfinite(diff[r2][c1] - value)
+                || !std::isfinite(diff[r1][c2] - value) || !std::isfinite(diff[r2][c2] + value))
+            throw overflow_error("imos2d: difference must be finite");
+        imos.add(r1, c1, r2, c2, value);
+    }
+
     /// 登録した全矩形を反映した2次元配列を返す。
     vector<vector<T>> build() const {
         auto result = difference_;
@@ -1424,93 +1465,173 @@ public:
     }
 };
 
-// @acf fn Fenwick — (int n) -> Fenwick<T> — 0-indexの一点加算・半開区間和
+namespace ac_detail::algorithm {
+inline int checked_imos_dimension(ll size) {
+    if (size < 0 || size >= numeric_limits<int>::max())
+        throw out_of_range("imos: dimensions must be in [0, INT_MAX)");
+    return static_cast<int>(size);
+}
 
-/// 更新される配列の区間和を保持する型です。add(i,x) で一点に加算し、sum(l,r) で [l,r) の総和を求めます。頻度表や更新のある累積和に使います。
-///
-/// 引数 `n / values`: 初期要素数 n>=0（全要素 T{}）、または初期配列。T は加算・減算を扱える型。
-///
-/// 戻り値: 構築される`Fenwick<T>`。`sum(right)`は`[0,right)`の和、`sum(left,right)`は`[left,right)`の和を`T`型で返す。空区間は`T{}`。`get(i)`は現在値。`lower_bound_prefix(target)`は累積値が`target`以上になる最初の要素の添字で、該当なしは`size()`、`target<=T{}`は0。
-///
-/// 注意: add / set は内部の配列集計を更新します。添字は 0-indexed。add/get/set は 0<=i<size()、sum は 0<=left<=right<=size()。lower_bound_prefix には非負の要素を登録して使います。初期配列はコピーして集計するため、元配列の変更とは同期しません。n=INT_MAXは内部添字の上限を超えるため、配列確保前にlength_errorを送出します。
-///
-/// 呼び分け: `Fenwick<T>`() は要素0、`Fenwick<T>`(n) は零初期化、`Fenwick<T>`(values) は配列から構築。sum(right) と sum(left,right) はどちらも右端を含みません。
-template <class T>
-class Fenwick {
-    int n_ = 0;
-    vector<T> bit_;
+inline void check_imos_interval(ll left, ll right, int size) {
+    if (left < 0 || left > right || right > size)
+        throw out_of_range("imos: interval must satisfy 0 <= left <= right <= size");
+}
+
+inline void require_finite_imos_result(const vector<double>& row) {
+    for (double value : row)
+        if (!std::isfinite(value)) throw overflow_error("imos: result must be finite");
+}
+
+template<class T>
+class ModularImos {
+    Imos<T> difference_;
 
 public:
-    /// 要素数0のFenwick木を作る。
-    Fenwick() = default;
-
-    /// 要素数 `n` のFenwick木を構築する。
-    explicit Fenwick(int n) : n_(n) {
-        assert(n >= 0);
-        if (n == numeric_limits<int>::max())
-            throw length_error("Fenwick: size is too large for int indexing");
-        bit_.assign(static_cast<size_t>(n) + 1, T{});
-    }
-    /// 初期配列 `values` の各値を登録したFenwick木を構築する。
-    explicit Fenwick(const vector<T>& values) : Fenwick(sz(values)) {
-        for (int i = 0; i < n_; ++i) add(i, values[i]);
-    }
-
-    /// 要素数を返す。
-    int size() const { return n_; }
-
-    /// 添字 `index` に `value` を加算する。
-    void add(int index, const T& value) {
-        assert(0 <= index && index < n_);
-        for (unsigned i = static_cast<unsigned>(index) + 1;
-             i <= static_cast<unsigned>(n_); i += i & -i) bit_[i] += value;
-    }
-
-    /// 半開区間 `[0,right)` の総和を返す。
-    T sum(int right) const {
-        assert(0 <= right && right <= n_);
-        T result{};
-        for (int i = right; i > 0; i -= i & -i) result += bit_[i];
+    explicit ModularImos(ll size = 0) : difference_(checked_imos_dimension(size)) {}
+    int size() const { return difference_.size(); }
+    vector<T> build() const {
+        auto result = difference_.build();
+        if constexpr (std::same_as<T, double>) require_finite_imos_result(result);
         return result;
     }
 
-    /// 半開区間 `[left,right)` の総和を返す。
-    T sum(int left, int right) const {
-        assert(0 <= left && left <= right && right <= n_);
-        return sum(right) - sum(left);
-    }
-
-    /// 添字 `index` の現在値を返す。
-    T get(int index) const {
-        assert(0 <= index && index < n_);
-        return sum(index, index + 1);
-    }
-
-    /// 添字 `index` の値を `value` に置き換える。
-    void set(int index, const T& value) { add(index, value - get(index)); }
-
-    /// 全要素の総和を返す。
-    T total() const { return sum(n_); }
-
-    // 非負値を登録したとき、prefix sum が target 以上になる最小の添字。
-    // 存在しなければ size()、target<=0 なら 0 を返す。
-    /// prefix sumが `target` 以上になる最小の境界を返す。
-    int lower_bound_prefix(const T& target) const {
-        if (!(T{} < target)) return 0;
-        int index = 0;
-        T accumulated{};
-        int step = 1;
-        while (step <= n_ / 2) step <<= 1;
-        for (; step > 0; step >>= 1) {
-            int next = index + step;
-            if (next <= n_ && accumulated + bit_[next] < target) {
-                index = next;
-                accumulated += bit_[next];
-            }
-        }
-        return index;
+    void add(ll left, ll right, const T& value) {
+        check_imos_interval(left, right, size());
+        if constexpr (std::same_as<T, double>)
+            kuma_finite_imos_add(difference_, static_cast<int>(left), static_cast<int>(right), value);
+        else
+            difference_.add(static_cast<int>(left), static_cast<int>(right), value);
     }
 };
+
+template<class T>
+class ModularImos2D {
+    int height_, width_;
+    Imos2D<T> difference_;
+
+public:
+    ModularImos2D() : ModularImos2D(0, 0) {}
+    ModularImos2D(ll height, ll width)
+        : height_(checked_imos_dimension(height)), width_(checked_imos_dimension(width)) {
+        if (height_ != 0 && width_ != 0) difference_ = Imos2D<T>(height_, width_);
+    }
+
+    pair<int, int> size() const { return {height_, width_}; }
+    vector<vector<T>> build() const {
+        if (height_ == 0 || width_ == 0) return vector<vector<T>>(height_);
+        auto result = difference_.build();
+        if constexpr (std::same_as<T, double>)
+            for (const auto& row : result) require_finite_imos_result(row);
+        return result;
+    }
+
+    void add(ll top, ll left, ll bottom, ll right, const T& value) {
+        check_imos_interval(top, bottom, height_);
+        check_imos_interval(left, right, width_);
+        if (top == bottom || left == right) return;
+        if constexpr (std::same_as<T, double>)
+            kuma_finite_imos_add(difference_, static_cast<int>(top), static_cast<int>(left),
+                                static_cast<int>(bottom), static_cast<int>(right), value);
+        else
+            difference_.add(static_cast<int>(top), static_cast<int>(left),
+                            static_cast<int>(bottom), static_cast<int>(right), value);
+    }
+};
+
+inline void count_imos_update(uint64_t& updates) {
+    if (updates == numeric_limits<uint64_t>::max())
+        throw overflow_error("imos: too many updates");
+    ++updates;
+}
+
+template<class T>
+T narrow_imos_value(i128 value) {
+    if (value < numeric_limits<T>::min() || value > numeric_limits<T>::max())
+        throw overflow_error(std::same_as<T, int> ? "imos: result does not fit in i32" :
+                                                   "imos: result does not fit in i64");
+    return static_cast<T>(value);
+}
+
+template<class T>
+class CheckedIntegralImos {
+    int size_;
+    vector<i128> differences_;
+    uint64_t updates_ = 0;
+
+public:
+    explicit CheckedIntegralImos(ll size = 0)
+        : size_(ac_detail::algorithm::checked_imos_dimension(size)), differences_(size_ + 1) {}
+
+    int size() const { return size_; }
+
+    void add(ll left, ll right, T value) {
+        ac_detail::algorithm::check_imos_interval(left, right, size_);
+        if (left == right) return;
+        ac_detail::algorithm::count_imos_update(updates_);
+        differences_[left] += value;
+        differences_[right] -= value;
+    }
+
+    vector<T> build() const {
+        vector<T> result(size_);
+        i128 total = 0;
+        for (int index = 0; index < size_; ++index) {
+            total += differences_[index];
+            result[index] = narrow_imos_value<T>(total);
+        }
+        return result;
+    }
+};
+
+template<class T>
+class CheckedIntegralImos2D {
+    int height_, width_;
+    vector<vector<i128>> differences_;
+    uint64_t updates_ = 0;
+
+public:
+    CheckedIntegralImos2D() : CheckedIntegralImos2D(0, 0) {}
+    CheckedIntegralImos2D(ll height, ll width)
+        : height_(ac_detail::algorithm::checked_imos_dimension(height)),
+          width_(ac_detail::algorithm::checked_imos_dimension(width)) {
+        if (height_ != 0 && width_ != 0)
+            differences_.assign(height_ + 1, vector<i128>(width_ + 1));
+    }
+
+    pair<int, int> size() const { return {height_, width_}; }
+
+    void add(ll top, ll left, ll bottom, ll right, T value) {
+        ac_detail::algorithm::check_imos_interval(top, bottom, height_);
+        ac_detail::algorithm::check_imos_interval(left, right, width_);
+        if (top == bottom || left == right) return;
+        ac_detail::algorithm::count_imos_update(updates_);
+        differences_[top][left] += value;
+        differences_[bottom][left] -= value;
+        differences_[top][right] -= value;
+        differences_[bottom][right] += value;
+    }
+
+    vector<vector<T>> build() const {
+        vector<vector<T>> result(height_);
+        if (height_ == 0 || width_ == 0) return result;
+        vector<i128> totals(width_);
+        for (int row = 0; row < height_; ++row) {
+            auto& output = result[row];
+            output.resize(width_);
+            i128 row_delta = 0;
+            for (int column = 0; column < width_; ++column) {
+                row_delta += differences_[row][column];
+                totals[column] += row_delta;
+                output[column] = narrow_imos_value<T>(totals[column]);
+            }
+        }
+        return result;
+    }
+};
+}  // namespace ac_detail::algorithm
+
+using CheckedImos = ac_detail::algorithm::CheckedIntegralImos<ll>;
+using CheckedImos2D = ac_detail::algorithm::CheckedIntegralImos2D<ll>;
 
 // @acf fn RangeFenwick — (int n) -> RangeFenwick<T> — 0-indexの半開区間加算・区間和
 
@@ -1596,6 +1717,176 @@ public:
     T total() const { return sum(n_); }
 };
 
+namespace ac_detail::algorithm {
+inline void checked_fenwick_set(Fenwick<ll>& tree, int index, ll value) {
+    const auto delta = ac_detail::checked_ll(static_cast<i128>(value) - tree.get(index), "fenwick set");
+    tree.add(index, delta);
+}
+
+inline void checked_fenwick_set(RangeFenwick<ll>& tree, int index, ll value) {
+    const i128 wide = static_cast<i128>(value) - tree.get(index);
+    const auto delta = ac_detail::checked_ll(wide, "range_fenwick set");
+    ac_detail::checked_ll(-wide, "range_fenwick set");
+    ac_detail::checked_ll(-wide * index, "range_fenwick set");
+    ac_detail::checked_ll(wide * (index + 1), "range_fenwick set");
+    tree.add(index, index + 1, delta);
+}
+
+template<bool Ranged>
+class CheckedFenwick32 {
+    std::conditional_t<Ranged, RangeFenwick<i128>, Fenwick<i128>> tree_;
+    i128 update_magnitude_ = 0;
+
+    static int checked_length(std::size_t size) {
+        if (size >= static_cast<std::size_t>(numeric_limits<int>::max()))
+            throw length_error("fenwick: size too large");
+        return static_cast<int>(size);
+    }
+
+    static int narrow(i128 sum) {
+        if (sum < numeric_limits<int>::min() || sum > numeric_limits<int>::max())
+            throw overflow_error("fenwick: result does not fit in i32");
+        return static_cast<int>(sum);
+    }
+
+    void update(int left, int right, i128 delta) {
+        if (left == right) return;
+        const i128 magnitude = delta < 0 ? -delta : delta;
+        // Each difference moment is bounded by the update magnitude times an
+        // i32 index. This leaves room for the intermediate prefix arithmetic.
+        constexpr i128 limit = i128{1} << 94;
+        if (magnitude > limit - update_magnitude_)
+            throw overflow_error("fenwick: internal update magnitude exceeded");
+        if constexpr (Ranged) tree_.add(left, right, delta);
+        else tree_.add(left, delta);
+        update_magnitude_ += magnitude;
+    }
+
+public:
+    CheckedFenwick32() = default;
+    explicit CheckedFenwick32(int size) : tree_(size) {}
+    explicit CheckedFenwick32(const vector<int>& values) : tree_(checked_length(values.size())) {
+        for (int i = 0; i < size(); ++i) update(i, i + 1, values[i]);
+    }
+
+    int size() const { return tree_.size(); }
+    int get(int index) const { return narrow(tree_.get(index)); }
+    int sum(int right) const { return narrow(tree_.sum(right)); }
+    int sum(int left, int right) const { return narrow(tree_.sum(left, right)); }
+    int total() const { return narrow(tree_.total()); }
+
+    void add(int index, int delta) requires (!Ranged) { update(index, index + 1, delta); }
+    void add(int left, int right, int delta) requires (Ranged) { update(left, right, delta); }
+    void set(int index, int value) { update(index, index + 1, i128(value) - tree_.get(index)); }
+    int lower_bound_prefix(int target) const requires (!Ranged) { return tree_.lower_bound_prefix(target); }
+};
+}
+
+namespace ac_detail::algorithm {
+struct KumaKSmallestReal {
+    double value = 0;
+    bool operator<(const KumaKSmallestReal& other) const noexcept { return value < other.value; }
+};
+
+// Signed integer in units of 2^-1074. Binary64 uses at most 2098 bits
+// at that scale. The queue uses at most 2^31 terms during rebalancing;
+// the weighted forest may temporarily combine two paths and one constraint.
+class ExactBinary64Sum {
+    static_assert(numeric_limits<double>::is_iec559 && sizeof(double) == sizeof(uint64_t)
+                  && numeric_limits<double>::digits == 53 && numeric_limits<double>::max_exponent == 1024);
+    static constexpr uint64_t implicit_bit = uint64_t{1} << 52;
+    using Words = array<uint64_t, 34>;
+    Words words_{};
+
+    static bool bit(const Words& words, int index) {
+        return (words[index / 64] >> (index % 64)) & 1;
+    }
+
+    static bool any_below(const Words& words, int index) {
+        const int word = index / 64, offset = index % 64;
+        for (int i = 0; i < word; ++i)
+            if (words[i] != 0) return true;
+        return (words[word] & ((uint64_t{1} << offset) - 1)) != 0;
+    }
+
+    void accumulate(double value, bool subtract) {
+        const uint64_t bits = bit_cast<uint64_t>(value);
+        const int exponent = (bits >> 52) & 0x7ff;
+        const int shift = exponent == 0 ? 0 : exponent - 1;
+        const uint64_t mantissa = (bits & (implicit_bit - 1)) + (exponent == 0 ? 0 : implicit_bit);
+        u128 pending = u128(mantissa) << (shift % 64);
+        const bool negative = subtract != (bits >> 63);
+        for (size_t i = shift / 64; pending != 0 && i < words_.size(); ++i) {
+            const uint64_t low = static_cast<uint64_t>(pending);
+            const uint64_t previous = words_[i];
+            words_[i] = negative ? previous - low : previous + low;
+            const bool carry = negative ? previous < low : words_[i] < previous;
+            pending = (pending >> 64) + carry;
+        }
+    }
+
+    void combine(const ExactBinary64Sum& other, bool subtract) {
+        u128 carry = subtract;
+        for (size_t i = 0; i < words_.size(); ++i) {
+            const auto word = subtract ? ~other.words_[i] : other.words_[i];
+            carry += u128(words_[i]) + word;
+            words_[i] = static_cast<uint64_t>(carry);
+            carry >>= 64;
+        }
+    }
+
+public:
+    ExactBinary64Sum() = default;
+    explicit ExactBinary64Sum(double value) {
+        assert(std::isfinite(value));
+        accumulate(value, false);
+    }
+
+    void operator+=(KumaKSmallestReal value) { accumulate(value.value, false); }
+    void operator-=(KumaKSmallestReal value) { accumulate(value.value, true); }
+    void operator+=(double value) { accumulate(value, false); }
+
+    void operator+=(const ExactBinary64Sum& other) { combine(other, false); }
+    void operator-=(const ExactBinary64Sum& other) { combine(other, true); }
+    friend ExactBinary64Sum operator-(ExactBinary64Sum left, const ExactBinary64Sum& right) {
+        left -= right;
+        return left;
+    }
+    bool operator==(const ExactBinary64Sum&) const = default;
+
+    double value(const char* overflow_message = "k_smallest_sum: sum does not fit in f64") const {
+        auto magnitude = words_;
+        const bool negative = (magnitude.back() >> 63) != 0;
+        if (negative) {
+            bool carry = true;
+            for (auto& word : magnitude) {
+                word = ~word + carry;
+                carry = carry && word == 0;
+            }
+        }
+        int word = static_cast<int>(magnitude.size()) - 1;
+        while (word >= 0 && magnitude[word] == 0) --word;
+        if (word < 0) return 0;
+        const int highest = 64 * word + std::bit_width(magnitude[word]) - 1;
+        auto overflow = [overflow_message] {
+            throw overflow_error(overflow_message);
+        };
+        if (highest > 2097) overflow();
+        const int shift = max(0, highest - 52);
+        uint64_t rounded = 0;
+        for (int i = highest; i >= shift; --i)
+            rounded = (rounded << 1) | bit(magnitude, i);
+        if (highest == 2097 && rounded == 2 * implicit_bit - 1 && any_below(magnitude, shift))
+            overflow();
+        if (shift > 0 && bit(magnitude, shift - 1)
+                && ((rounded & 1) || any_below(magnitude, shift - 1)))
+            ++rounded;
+        const double result = ldexp(static_cast<double>(rounded), shift - 1074);
+        return negative ? -result : result;
+    }
+};
+}  // namespace ac_detail::algorithm
+
 // @acf fn KSmallestSum — (int k) -> KSmallestSum<T=ll> — 追加・1個削除つきの小さい方からK個の和
 
 /// 重複を含む集合の、小さい方からk個の和を更新する。
@@ -1609,23 +1900,31 @@ public:
 /// 呼び分け: KSmallestSumは上の引数順で呼び出します。
 template <class T = ll>
 class KSmallestSum {
+    static constexpr bool kuma_real = std::same_as<T, ac_detail::algorithm::KumaKSmallestReal>;
+    using Sum = conditional_t<kuma_real, ac_detail::algorithm::ExactBinary64Sum, T>;
     size_t k_;
     multiset<T> small_, large_;
-    T sum_{};
+    Sum sum_{};
 
     // 全 small_ <= 全 large_ を保ったまま、small_ の個数だけを調整する。
     void rebalance() {
         while (small_.size() > k_) {
             auto it = std::prev(small_.end());
             sum_ -= *it;
-            large_.insert(*it);
-            small_.erase(it);
+            if constexpr (kuma_real) large_.insert(small_.extract(it));
+            else {
+                large_.insert(*it);
+                small_.erase(it);
+            }
         }
         while (small_.size() < k_ && !large_.empty()) {
             auto it = large_.begin();
             sum_ += *it;
-            small_.insert(*it);
-            large_.erase(it);
+            if constexpr (kuma_real) small_.insert(large_.extract(it));
+            else {
+                small_.insert(*it);
+                large_.erase(it);
+            }
         }
     }
 
@@ -1639,7 +1938,10 @@ public:
     size_t size() const { return small_.size() + large_.size(); }
 
     /// 小さい方から `min(k,size())` 個の和を返す。空集合と `k=0` は0。
-    T sum() const { return sum_; }
+    auto sum() const {
+        if constexpr (kuma_real) return sum_.value();
+        else return sum_;
+    }
 
     /// 小さい方から `k` 番目の値。`k=0` または要素数不足なら nullopt。
     optional<T> kth() const {
@@ -1674,80 +1976,56 @@ public:
     }
 };
 
-// @acf fn UnionFind — (int n) -> UnionFind — 経路圧縮とサイズ併合の素集合データ構造
+template<class T>
+class CheckedKSmallestSumAs {
+    static constexpr bool real = std::same_as<T, double>;
+    using Key = conditional_t<real, ac_detail::algorithm::KumaKSmallestReal, i128>;
+    KSmallestSum<Key> values_;
 
-/// 要素を互いに重ならないグループへ分け、併合と「同じグループか」の判定を管理する型です。辺を足した後の連結性や成分サイズを求めるときに使います。
-///
-/// 引数 `n`: 要素数 n>=0。構築時は各要素が別々のグループに属する。
-///
-/// 戻り値: 構築される UnionFind。unite(a,b) は新しく併合したとき true、既に同じなら false。same(a,b) は同じグループか、component_size(v) は所属グループの要素数、count() はグループ数。
-///
-/// 注意: unite は所属関係と成分数を更新します。find / same / component_size など非 const 操作は経路圧縮で内部表現も変えます。要素添字は 0<=v<n。併合の取り消しや成分分割はできません。空構築は count()==0。
-///
-/// 呼び分け: UnionFind() は要素0、UnionFind(n) は n 個の単独成分。構築してから unite / same を呼びます。
-class UnionFind {
-    vector<int> parent_or_size_;
-    int components_ = 0;
+    static Key key(T value) {
+        if constexpr (real) {
+            if (!std::isfinite(value)) throw domain_error("k_smallest_sum: value must be finite");
+            return Key{value};
+        } else return value;
+    }
 
-    /// 経路圧縮を伴わずに代表元を探す内部処理。
-    int root_const(int x) const {
-        assert(0 <= x && x < sz(parent_or_size_));
-        while (parent_or_size_[x] >= 0) x = parent_or_size_[x];
-        return x;
+    static int checked_count(ll count) {
+        if (count < 0 || count > numeric_limits<int>::max())
+            throw out_of_range("k_smallest_sum: k must be in [0, INT_MAX]");
+        return static_cast<int>(count);
     }
 
 public:
-    /// 要素数0のUnion-Findを作る。
-    UnionFind() = default;
+    explicit CheckedKSmallestSumAs(ll count) : values_(checked_count(count)) {}
 
-    /// `n` 個の互いに異なる要素からUnion-Findを構築する。
-    explicit UnionFind(int n)
-        : parent_or_size_(n >= 0 ? n : 0, -1), components_(n >= 0 ? n : 0) {
-        assert(n >= 0);
+    void insert(T value) {
+        if (values_.size() == static_cast<unsigned long long>(numeric_limits<ll>::max()))
+            throw length_error("k_smallest_sum: too many elements");
+        values_.insert(key(value));
     }
 
-    /// 要素数を返す。
-    int size() const { return sz(parent_or_size_); }
+    bool erase_one(T value) { return values_.erase_one(key(value)); }
+    ll size() const { return static_cast<ll>(values_.size()); }
 
-    /// 要素 `x` の属する集合の代表元を返す。
-    int find(int x) {
-        assert(0 <= x && x < size());
-        if (parent_or_size_[x] < 0) return x;
-        return parent_or_size_[x] = find(parent_or_size_[x]);
+    T sum() const {
+        if constexpr (real) return values_.sum();
+        else {
+            const i128 total = values_.sum();
+            if (total < numeric_limits<T>::min() || total > numeric_limits<T>::max())
+                throw overflow_error(std::same_as<T, int> ? "k_smallest_sum: sum does not fit in i32" :
+                                                           "k_smallest_sum: sum does not fit in i64");
+            return static_cast<T>(total);
+        }
     }
 
-    /// `a` と `b` の集合を併合し、併合できたらtrueを返す。
-    bool unite(int a, int b) {
-        a = find(a);
-        b = find(b);
-        if (a == b) return false;
-        if (parent_or_size_[a] > parent_or_size_[b]) swap(a, b);
-        parent_or_size_[a] += parent_or_size_[b];
-        parent_or_size_[b] = a;
-        --components_;
-        return true;
-    }
-
-    /// `a` と `b` が同じ集合に属するか判定する。
-    bool same(int a, int b) { return find(a) == find(b); }
-
-    /// `x` の属する集合の要素数を返す。
-    int component_size(int x) { return -parent_or_size_[find(x)]; }
-
-    /// 現在の集合数を返す。
-    int count() const { return components_; }
-
-    /// 各集合を頂点一覧として返す。
-    vector<vi> groups() const {
-        vector<vi> result(size());
-        for (int v = 0; v < size(); ++v) result[root_const(v)].push_back(v);
-        result.erase(remove_if(ALL(result), [](const vi& group) {
-                          return group.empty();
-                      }),
-                     result.end());
-        return result;
+    pair<bool, T> kth() const {
+        const auto value = values_.kth();
+        if constexpr (real) return {value.has_value(), value.value_or(Key{}).value};
+        else return {value.has_value(), static_cast<T>(value.value_or(0))};
     }
 };
+
+using CheckedKSmallestSum = CheckedKSmallestSumAs<ll>;
 
 // @acf fn WeightedUnionFind — (int n) -> WeightedUnionFind<T> — 差分制約付きの素集合データ構造
 
@@ -1840,155 +2118,6 @@ public:
     int count() const { return components_; }
 };
 
-// @acf fn SegmentTree — (vector<T>, identity[, op]) -> SegmentTree<T> — 汎用の静的モノイド区間木
-
-/// 結合演算で半開区間を集約し、1点更新する。
-///
-/// 引数 `n / values`: 非負の要素数の単位元配列、または初期配列。内部の2冪配列がintに収まるサイズ。
-///
-/// 引数 `identity`: 演算の両側の単位元。省略時は `T{}`。
-///
-/// 引数 `op`: 結合則を満たす二項演算。省略時は `Op{}（既定plus<T>）`。
-///
-/// 戻り値: `SegmentTree<T,Op>`。prod(l,r)は0-index半開区間の左からの集約、空区間はidentity。all_prod/get/setも利用可能。max_right/min_leftは条件を保つ端点を返します。
-///
-/// 注意: setは内部を変更しO(log n)。構築時間/メモリO(n)、prod/端点探索O(log n)、get/all_prodはO(1)（演算費用は別）。callbackは副作用なく安定した判定、identityでtrue、区間を伸ばすとtrue→falseの単調性が必要です。内部の2冪配列の要素数がintに収まらないサイズは、配列確保前にlength_errorを送出します。
-///
-/// 呼び分け: max_right(left,pred) / min_left(right,pred)。範囲とidentityの条件はassert、結合則や単調性は自動検証しません。
-template <class T, class Op = plus<T>>
-class SegmentTree {
-    int n_ = 0, size_ = 1;
-    T identity_;
-    Op op_;
-    vector<T> data_;
-
-    static int checked_count(size_t n) {
-        if (n > static_cast<size_t>(numeric_limits<int>::max()))
-            throw length_error("SegmentTree: size is too large for int indexing");
-        return static_cast<int>(n);
-    }
-
-    /// 指定済みの単位元で内部配列を初期化する。
-    void init(int n) {
-        assert(n >= 0);
-        n_ = n;
-        size_ = 1;
-        while (size_ < n_) {
-            if (size_ > numeric_limits<int>::max() / 4)
-                throw length_error("SegmentTree: size is too large for int indexing");
-            size_ <<= 1;
-        }
-        data_.assign(2 * size_, identity_);
-    }
-
-public:
-    /// 要素数0の木を作る。TとOpがデフォルト構築できる場合のみ利用可能。
-    SegmentTree() requires (is_default_constructible_v<T> && is_default_constructible_v<Op>)
-        : SegmentTree(0, T{}, Op{}) {}
-
-    /// n要素を単位元で初期化する。通常の初期値と単位元を混同しないこと。
-    explicit SegmentTree(int n, T identity = T{}, Op op = Op{})
-        : identity_(std::move(identity)), op_(std::move(op)) {
-        init(n);
-    }
-    /// 配列をコピーして構築する。単位元と演算を渡せば非default構築型・capture付きラムダも使える。
-    explicit SegmentTree(const vector<T>& values, T identity = T{}, Op op = Op{})
-        : identity_(std::move(identity)), op_(std::move(op)) {
-        init(checked_count(values.size()));
-        for (int i = 0; i < n_; ++i) data_[size_ + i] = values[i];
-        for (int i = size_ - 1; i > 0; --i)
-            data_[i] = op_(data_[i << 1], data_[i << 1 | 1]);
-    }
-
-    /// 元配列の要素数を返す。
-    int size() const { return n_; }
-
-    /// 添字 `index` の値を更新する。
-    void set(int index, const T& value) {
-        assert(0 <= index && index < n_);
-        index += size_;
-        data_[index] = value;
-        while (index >>= 1)
-            data_[index] = op_(data_[index << 1], data_[index << 1 | 1]);
-    }
-
-    /// 添字 `index` の値を返す。
-    T get(int index) const {
-        assert(0 <= index && index < n_);
-        return data_[size_ + index];
-    }
-
-    /// 半開区間 `[left,right)` を演算 `op` で畳み込む。
-    T prod(int left, int right) const {
-        assert(0 <= left && left <= right && right <= n_);
-        T left_result = identity_, right_result = identity_;
-        left += size_;
-        right += size_;
-        while (left < right) {
-            if (left & 1) left_result = op_(left_result, data_[left++]);
-            if (right & 1) right_result = op_(data_[--right], right_result);
-            left >>= 1;
-            right >>= 1;
-        }
-        return op_(left_result, right_result);
-    }
-
-    /// 全要素を演算 `op` で畳み込む。
-    T all_prod() const { return data_[1]; }
-
-    /// `predicate` を保つ最長の左からの半開区間の右端を返す。
-    template <class F>
-    int max_right(int left, F predicate) const {
-        assert(0 <= left && left <= n_ && predicate(identity_));
-        if (left == n_) return n_;
-        left += size_;
-        T accumulated = identity_;
-        do {
-            while ((left & 1) == 0) left >>= 1;
-            if (!predicate(op_(accumulated, data_[left]))) {
-                while (left < size_) {
-                    left <<= 1;
-                    T candidate = op_(accumulated, data_[left]);
-                    if (predicate(candidate)) {
-                        accumulated = std::move(candidate);
-                        ++left;
-                    }
-                }
-                return left - size_;
-            }
-            accumulated = op_(accumulated, data_[left]);
-            ++left;
-        } while ((left & -left) != left);
-        return n_;
-    }
-
-    /// `predicate` を保つ最長の右からの半開区間の左端を返す。
-    template <class F>
-    int min_left(int right, F predicate) const {
-        assert(0 <= right && right <= n_ && predicate(identity_));
-        if (right == 0) return 0;
-        right += size_;
-        T accumulated = identity_;
-        do {
-            --right;
-            while (right > 1 && (right & 1)) right >>= 1;
-            if (!predicate(op_(data_[right], accumulated))) {
-                while (right < size_) {
-                    right = right * 2 + 1;
-                    T candidate = op_(data_[right], accumulated);
-                    if (predicate(candidate)) {
-                        accumulated = std::move(candidate);
-                        --right;
-                    }
-                }
-                return right + 1 - size_;
-            }
-            accumulated = op_(data_[right], accumulated);
-        } while ((right & -right) != right);
-        return 0;
-    }
-};
-
 // @acf fn SparseTable — (vector<T>[, op]) -> SparseTable<T> — 更新なしの静的区間畳み込み
 
 /// 更新しない配列を前処理して半開区間を集約する。
@@ -2063,6 +2192,58 @@ public:
     }
 };
 
+template<class T, class Op>
+class CheckedSparseTable {
+    Op op_;
+    bool check_order_ = false;
+    SparseTable<T, Op> table_;
+
+    static T minimum_value(T a, T b) { return std::min(a, b); }
+
+    static const vector<T>& checked_array(const vector<T>& values, bool check_order) {
+        if (values.size() >= (size_t{1} << 30))
+            throw length_error("sparse_table: size must be less than 2^30");
+        if (check_order) {
+            for (const auto& value : values) ::ac_detail::validate_ordered_finite(value);
+        }
+        return values;
+    }
+
+    CheckedSparseTable(const vector<T>& values, Op op, bool check_order)
+        : op_(std::move(op)), check_order_(check_order),
+          table_(checked_array(values, check_order_), op_) {}
+
+    void check_interval(ll left, ll right) const {
+        if (left < 0 || left >= right || right > table_.size())
+            throw out_of_range("sparse_table: invalid nonempty interval");
+    }
+
+public:
+    explicit CheckedSparseTable(const vector<T>& values, Op op)
+        : op_(std::move(op)), table_(checked_array(values, false), op_) {}
+
+    static CheckedSparseTable minimum(const vector<T>& values)
+        requires (std::is_constructible_v<Op, T (*)(T, T)> && requires(const T& a, const T& b) { a < b; }) {
+        return CheckedSparseTable(values, &minimum_value, true);
+    }
+
+    int size() const { return table_.size(); }
+
+    void build(const vector<T>& values) {
+        table_ = SparseTable<T, Op>(checked_array(values, check_order_), op_);
+    }
+
+    T query(ll left, ll right) const {
+        check_interval(left, right);
+        return table_.query(static_cast<int>(left), static_cast<int>(right));
+    }
+
+    T idempotent_query(ll left, ll right) const {
+        check_interval(left, right);
+        return table_.idempotent_query(static_cast<int>(left), static_cast<int>(right));
+    }
+};
+
 // @acf fn count_subarrays_with_sum — (range, ll target) -> ll — 和がtargetになる非空部分配列の個数
 
 /// 和がtargetになる非空の連続部分配列を数える。
@@ -2097,6 +2278,27 @@ ll count_subarrays_with_sum(const R& values, ll target) {
         ++frequency[prefix];
     }
     return result;
+}
+
+namespace ac_detail::algorithm {
+template<class T>
+ll count_subarrays_with_sum_wide(const vector<T>& values, ll target) {
+    const auto hash_prefix = [](i128 value) {
+        const auto bits = static_cast<u128>(value);
+        return ac_detail::memo_tuple_hash{}(tuple{static_cast<ull>(bits >> 64), static_cast<ull>(bits)});
+    };
+    unordered_map<i128, ll, decltype(hash_prefix)> frequencies;
+    frequencies.emplace(0, 1);
+    i128 prefix = 0;
+    ll count = 0;
+    for (const auto value : values) {
+        prefix += value;
+        const auto found = frequencies.find(prefix - target);
+        if (found != frequencies.end()) count += found->second;
+        ++frequencies[prefix];
+    }
+    return count;
+}
 }
 
 // @acf fn count_equal_pairs — (range) -> ll — 同じ値の非空ペアの個数を期待O(N)で数える
@@ -2180,6 +2382,19 @@ struct DpOptions {
 };
 
 namespace ac_detail::dp {
+inline DpOptions checked_kuma_options(std::string_view method, ll memory_limit, ll work_limit) {
+    DpMethod selected;
+    if (method == "auto") selected = DpMethod::Auto;
+    else if (method == "dense") selected = DpMethod::Dense;
+    else if (method == "value") selected = DpMethod::Value;
+    else if (method == "enumerate") selected = DpMethod::Enumerate;
+    else if (method == "meet_in_middle") selected = DpMethod::MeetInMiddle;
+    else throw invalid_argument("dp_options: unknown method");
+    if (memory_limit < 0 || static_cast<ull>(memory_limit) > numeric_limits<size_t>::max() || work_limit < 0)
+        throw out_of_range("dp_options: limits must be non-negative and representable");
+    return {selected, static_cast<size_t>(memory_limit), static_cast<ull>(work_limit)};
+}
+
 inline void validate(DpOptions o, bool value_axis) {
     switch (o.method) {
         case DpMethod::Auto: case DpMethod::Dense:
@@ -2682,7 +2897,8 @@ public:
             throw length_error("SubsetSumCounter: memory limit exceeded");
         ways_.assign(cells, Mint{});
         multiplicity_.assign(cells, 0);
-        ways_[0] = 1;
+        if constexpr (std::is_assignable_v<Mint&, int>) ways_[0] = 1;
+        else ways_[0] = Mint(1);
     }
 
     /// 値 `value` を1個追加する。
@@ -2692,6 +2908,18 @@ public:
             throw overflow_error("SubsetSumCounter: multiplicity exceeds int range");
         for (int sum = target_; sum >= value; --sum) ways_[sum] += ways_[sum - value];
         ++multiplicity_[value];
+    }
+
+    friend void kuma_checked_subset_sum_add(SubsetSumCounter& counter, int value)
+        requires (std::same_as<Mint, int> || std::same_as<Mint, long long>) {
+        counter.check_value(value);
+        // Descending updates read only coefficients from before this insertion.
+        for (int sum = counter.target_; sum >= value; --sum) {
+            const i128 next = i128(counter.ways_[sum]) + counter.ways_[sum - value];
+            if (next > numeric_limits<Mint>::max())
+                throw overflow_error("subset_sum_counter: count does not fit the element type");
+        }
+        counter.add(value);
     }
 
     /// 値 `value` を1個削除する。
@@ -2854,7 +3082,7 @@ vi lis_member_indices(const R& values, bool strict = true) {
     const int length = sz(increasing_tails);
     vi result;
     for (int i = 0; i < sz(a); ++i) {
-        if (left[i] + right[i] - 1 == length) result.push_back(i);
+        if (left[i] - 1 + right[i] == length) result.push_back(i);
     }
     return result;
 }
@@ -3228,6 +3456,7 @@ inline int edit_distance(string_view s, string_view t, DpOptions options = {}) {
 ///
 /// 呼び分け: メンバはstring_viewを受け取り入力文字列を保存しません。NULを含む語は長さ付きstring_viewかstringで渡します。UTF-8はバイト列として扱います。prefix_count("")はsize()、starts_with("")は!empty()です。
 class Trie {
+    friend class CheckedTrie;
     struct Node {
         map<char, int> next;
         int pass = 0;
@@ -3316,6 +3545,55 @@ public:
     int size() const { return words_; }
 };
 
+class CheckedTrie {
+    Trie trie_;
+
+public:
+    void insert(string_view word) {
+        constexpr auto limit = static_cast<size_t>(numeric_limits<int>::max());
+        if (trie_.words_ == numeric_limits<int>::max())
+            throw overflow_error("trie: word count exceeds int range");
+        auto& nodes = trie_.nodes_;
+        int state = 0;
+        size_t prefix = 0;
+        for (; prefix < word.size(); ++prefix) {
+            const auto edge = nodes[state].next.find(word[prefix]);
+            if (edge == nodes[state].next.end()) break;
+            state = edge->second;
+        }
+        const auto missing = word.size() - prefix;
+        if (missing > limit - nodes.size())
+            throw length_error("trie: node count exceeds int range");
+        if (missing != 0) {
+            const auto first = nodes.size();
+            vector<Trie::Node> suffix(missing);
+            for (size_t index = 1; index < missing; ++index)
+                suffix[index - 1].next.emplace(word[prefix + index], static_cast<int>(first + index));
+            if (first + missing > nodes.capacity())
+                nodes.reserve(max(first + missing, min(limit, nodes.capacity() * 2)));
+            nodes[state].next.emplace(word[prefix], static_cast<int>(first));
+            for (auto& node : suffix) nodes.push_back(std::move(node));
+        }
+        state = 0;
+        ++nodes[state].pass;
+        for (char byte : word) {
+            state = nodes[state].next.at(byte);
+            ++nodes[state].pass;
+        }
+        ++nodes[state].terminal;
+        ++trie_.words_;
+    }
+
+    bool erase(string_view word) { return trie_.erase(word); }
+    void clear() { trie_.clear(); }
+    bool contains(string_view word) const { return trie_.contains(word); }
+    int count(string_view word) const { return trie_.count(word); }
+    int prefix_count(string_view prefix) const { return trie_.prefix_count(prefix); }
+    bool starts_with(string_view prefix) const { return trie_.starts_with(prefix); }
+    bool empty() const { return trie_.empty(); }
+    int size() const { return trie_.size(); }
+};
+
 // @acf fn AhoCorasick — (string alphabet="abcdefghijklmnopqrstuvwxyz") -> AhoCorasick — 複数パターンの失敗リンク付き文字列オートマトン
 
 /// 複数のパターンを登録し、文章内の出現をまとめて照合する。
@@ -3328,6 +3606,7 @@ public:
 ///
 /// 呼び分け: addはbuild前かつ非空のパターン。範囲外文字、空/重複alphabet、build後のaddはinvalid_argument。構築前の照合や不正状態はassert。
 class AhoCorasick {
+    friend class CheckedAhoCorasick;
     struct Node {
         vector<int> next;
         vi terminal_ids;
@@ -3404,6 +3683,12 @@ public:
     void build() {
         if (built_) return;
         queue<int> pending;
+        build_pending(pending);
+    }
+
+private:
+    template<class Pending>
+    void build_pending(Pending& pending) {
         for (int c = 0; c < alphabet_size_; ++c) {
             int child = nodes_[0].next[c];
             if (child == -1) {
@@ -3437,6 +3722,7 @@ public:
         built_ = true;
     }
 
+public:
     /// オートマトンの状態数を返す。
     int size() const { return static_cast<int>(nodes_.size()); }
 
@@ -3493,6 +3779,107 @@ public:
             }
         }
         return result;
+    }
+};
+
+class CheckedAhoCorasick {
+    AhoCorasick automaton_;
+    static constexpr auto limit_ = static_cast<size_t>(numeric_limits<int>::max());
+
+    struct Pending {
+        vector<int> states;
+        size_t read = 0;
+        bool empty() const { return read == states.size(); }
+        int front() const { return states[read]; }
+        void pop() { ++read; }
+        void push(int state) { states.push_back(state); }
+    };
+
+    template<class T>
+    static void reserve_for(vector<T>& values, size_t required) {
+        if (required > values.capacity())
+            values.reserve(std::max(required, std::min(limit_, values.capacity() * 2)));
+    }
+
+    static string checked_alphabet(string alphabet) {
+        if (alphabet.size() > 256) throw invalid_argument("aho_corasick: alphabet exceeds 256 bytes");
+        return alphabet;
+    }
+
+    void require_built() const {
+        if (!automaton_.built_) throw invalid_argument("aho_corasick: build must precede queries");
+    }
+
+    int checked_state(ll state) const {
+        require_built();
+        if (state < 0 || state >= size()) throw out_of_range("aho_corasick: invalid state");
+        return static_cast<int>(state);
+    }
+
+public:
+    explicit CheckedAhoCorasick(string alphabet = "abcdefghijklmnopqrstuvwxyz")
+        : automaton_(checked_alphabet(std::move(alphabet))) {}
+
+    int add(string_view pattern) {
+        if (automaton_.built_) throw invalid_argument("aho_corasick: add must precede build");
+        if (pattern.empty()) throw invalid_argument("aho_corasick: empty pattern");
+        auto& nodes = automaton_.nodes_;
+        auto& patterns = automaton_.pattern_nodes_;
+        if (patterns.size() == limit_) throw length_error("aho_corasick: too many patterns");
+        for (char byte : pattern)
+            if (automaton_.code(byte) < 0)
+                throw invalid_argument("aho_corasick: pattern has a character outside alphabet");
+        int state = 0;
+        size_t prefix = 0;
+        for (; prefix < pattern.size(); ++prefix) {
+            const int next = nodes[state].next[automaton_.code(pattern[prefix])];
+            if (next < 0) break;
+            state = next;
+        }
+        const auto missing = pattern.size() - prefix;
+        if (missing > limit_ - nodes.size()) throw length_error("aho_corasick: too many states");
+        const int id = static_cast<int>(patterns.size());
+        reserve_for(patterns, patterns.size() + 1);
+        if (missing == 0) {
+            nodes[state].terminal_ids.push_back(id);
+        } else {
+            const auto first = nodes.size();
+            vector<AhoCorasick::Node> suffix;
+            suffix.reserve(missing);
+            for (size_t index = 0; index < missing; ++index) {
+                auto& node = suffix.emplace_back(automaton_.alphabet_size_);
+                if (index + 1 < missing)
+                    node.next[automaton_.code(pattern[prefix + index + 1])] = static_cast<int>(first + index + 1);
+            }
+            suffix.back().terminal_ids.push_back(id);
+            reserve_for(nodes, first + missing);
+            nodes[state].next[automaton_.code(pattern[prefix])] = static_cast<int>(first);
+            for (auto& node : suffix) nodes.push_back(std::move(node));
+            state = static_cast<int>(nodes.size() - 1);
+        }
+        patterns.push_back(state);
+        return id;
+    }
+
+    void build() {
+        if (automaton_.built_) return;
+        Pending pending;
+        pending.states.reserve(automaton_.nodes_.size());
+        automaton_.build_pending(pending);
+    }
+
+    int size() const { return automaton_.size(); }
+    int pattern_count() const { return automaton_.pattern_count(); }
+    int step(ll state, char byte) const { return automaton_.step(checked_state(state), byte); }
+    int failure_link(ll state) const { return automaton_.failure_link(checked_state(state)); }
+    int output_link(ll state) const { return automaton_.output_link(checked_state(state)); }
+    int output_count(ll state) const { return automaton_.output_count(checked_state(state)); }
+    vi terminal_ids(ll state) const { return automaton_.terminal_ids(checked_state(state)); }
+
+    vi match_counts(string_view text) const {
+        require_built();
+        if (text.size() > limit_) throw length_error("aho_corasick: text too long");
+        return automaton_.match_counts(text);
     }
 };
 
@@ -3573,6 +3960,47 @@ public:
                other_right <= other.size());
         return right - left == other_right - other_left &&
                base_ == other.base_ && get(left, right) == other.get(other_left, other_right);
+    }
+};
+
+class CheckedRollingHash {
+    RollingHash hash_;
+
+    static string_view checked_text(string_view text) {
+        if (text.size() >= static_cast<size_t>(numeric_limits<int>::max()))
+            throw length_error("rolling_hash: string too long");
+        return text;
+    }
+
+    static ull checked_base(ll base) {
+        if (base < 2 || static_cast<ull>(base) >= RollingHash::modulus)
+            throw out_of_range("rolling_hash: base must be in [2, 2^61 - 1)");
+        return static_cast<ull>(base);
+    }
+
+    void check_bounds(ll left, ll right) const {
+        if (left < 0 || left > right || right > size())
+            throw out_of_range("rolling_hash: invalid interval");
+    }
+
+public:
+    explicit CheckedRollingHash(string_view text, ll base = RollingHash::default_base)
+        : hash_(checked_text(text), checked_base(base)) {}
+
+    int size() const { return hash_.size(); }
+    ll whole() const { return static_cast<ll>(hash_.whole()); }
+
+    ll get(ll left, ll right) const {
+        check_bounds(left, right);
+        return static_cast<ll>(hash_.get(static_cast<int>(left), static_cast<int>(right)));
+    }
+
+    bool equal(ll left, ll right, const CheckedRollingHash& other,
+               ll other_left, ll other_right) const {
+        check_bounds(left, right);
+        other.check_bounds(other_left, other_right);
+        return hash_.equal(static_cast<int>(left), static_cast<int>(right), other.hash_,
+                           static_cast<int>(other_left), static_cast<int>(other_right));
     }
 };
 
@@ -3875,6 +4303,69 @@ public:
     }
 };
 
+namespace ac_detail {
+template<int Mode>
+class RangeAddRangeExtremum {
+    static_assert(Mode == 1 || Mode == 2);
+    using Wide = i128;
+    using Tree = algorithm::range_add_tree<Wide, Mode>;
+    static constexpr const char* operation = Mode == 1 ? "range_add_range_min" : "range_add_range_max";
+    static constexpr int max_size = 1 << 29;
+    static constexpr Wide max_update_budget = (Wide{1} << 96) - (Wide{1} << 63);
+    mutable Tree tree_;
+    Wide used_update_budget_ = 0;
+
+    static int checked_size(ll n) {
+        if (n < 0 || n > max_size) throw length_error(string(operation) + ": invalid size");
+        return static_cast<int>(n);
+    }
+    template<class T>
+    static vector<Wide> widen(const vector<T>& values) {
+        if (values.size() > static_cast<size_t>(max_size)) throw length_error(string(operation) + ": invalid size");
+        return vector<Wide>(values.begin(), values.end());
+    }
+    void check_interval(ll l, ll r) const {
+        if (l < 0 || r < l || r > size()) throw out_of_range(string(operation) + ": invalid interval");
+    }
+    int index(ll i) const {
+        if (i < 0 || i >= size()) throw out_of_range(string(operation) + ": invalid index");
+        return static_cast<int>(i);
+    }
+    ll extremum(ll l, ll r) const {
+        check_interval(l, r);
+        if (l == r) throw out_of_range(string(operation) + ": empty interval");
+        return checked_ll(tree_.prod(static_cast<int>(l), static_cast<int>(r)), operation);
+    }
+
+public:
+    explicit RangeAddRangeExtremum(ll n) : tree_(vector<Wide>(checked_size(n))) {}
+    template<class T>
+        requires (same_as<T, int> || same_as<T, ll>)
+    explicit RangeAddRangeExtremum(const vector<T>& values) : tree_(widen(values)) {}
+
+    int size() const { return tree_.size(); }
+    ll get(ll i) const { return checked_ll(tree_.get(index(i)), operation); }
+    void set(ll i, ll value) { tree_.set(index(i), value); }
+    ll min(ll l, ll r) const requires (Mode == 1) { return extremum(l, r); }
+    ll max(ll l, ll r) const requires (Mode == 2) { return extremum(l, r); }
+    ll all_prod() const {
+        if (size() == 0) throw out_of_range(string(operation) + ": empty interval");
+        return checked_ll(tree_.all_prod(), operation);
+    }
+
+    void add(ll l, ll r, ll delta) {
+        check_interval(l, r);
+        if (l == r) return;
+        const Wide d = delta;
+        const Wide cost = d < 0 ? -d : d;
+        if (cost > max_update_budget - used_update_budget_)
+            throw overflow_error(string(operation) + ": cumulative addition magnitude too large");
+        used_update_budget_ += cost;
+        tree_.apply(static_cast<int>(l), static_cast<int>(r), d);
+    }
+};
+} // namespace ac_detail
+
 // Checked i64 interface for assigning intervals and querying their minimum.
 class RangeAssignRangeMin {
     using Cell = std::optional<long long>;
@@ -3937,10 +4428,14 @@ public:
 #endif // AC_HAS_ACL
 
 // Checked Kuma adapter; preserve the native WeightedUnionFind<T> API.
-class CheckedWeightedUnionFind {
+namespace ac_detail::algorithm {
+template<class T>
+class CheckedWeightedUnionFindAs {
     // A forest path has at most INT_MAX - 1 constraint edges. Even two
     // such paths and another signed 64-bit weight fit in a signed 128-bit value.
-    WeightedUnionFind<__int128> groups_;
+    using Weight = std::conditional_t<std::is_integral_v<T>, __int128,
+                   std::conditional_t<std::same_as<T, double>, ExactBinary64Sum, T>>;
+    WeightedUnionFind<Weight> groups_;
 
     static int checked_size(long long n) {
         if (n < 0 || n > std::numeric_limits<int>::max())
@@ -3954,24 +4449,41 @@ class CheckedWeightedUnionFind {
         return static_cast<int>(x);
     }
 
-public:
-    CheckedWeightedUnionFind() = default;
-    explicit CheckedWeightedUnionFind(long long n) : groups_(checked_size(n)) {}
-
-    bool unite(long long x, long long y, long long difference) {
-        const int a = index(x), b = index(y);
-        return groups_.unite(a, b, static_cast<__int128>(difference));
+    static T checked_weight(Weight weight, const char* quantity) {
+        if constexpr (std::same_as<T, double>) {
+            return weight.value("weighted_union_find: result does not fit in f64");
+        } else {
+            if constexpr (std::is_integral_v<T>) {
+                if (weight < std::numeric_limits<T>::min() || weight > std::numeric_limits<T>::max())
+                    throw std::overflow_error(std::string("weighted_union_find: ") + quantity
+                                              + " does not fit " + (std::same_as<T, int> ? "i32" : "i64"));
+            }
+            return static_cast<T>(weight);
+        }
     }
 
-    long long diff(long long x, long long y) {
+public:
+    CheckedWeightedUnionFindAs() = default;
+    explicit CheckedWeightedUnionFindAs(long long n) : groups_(checked_size(n)) {}
+
+    bool unite(long long x, long long y, T difference) {
+        const int a = index(x), b = index(y);
+        if constexpr (std::same_as<T, double>) {
+            if (!std::isfinite(difference))
+                throw domain_error("weighted_union_find: difference must be finite");
+        }
+        return groups_.unite(a, b, static_cast<Weight>(difference));
+    }
+
+    T diff(long long x, long long y) {
         const int a = index(x), b = index(y);
         if (!groups_.same(a, b))
             throw std::invalid_argument("weighted_union_find: elements are not connected");
-        const __int128 difference = groups_.diff(a, b);
-        if (difference < std::numeric_limits<long long>::min()
-                || difference > std::numeric_limits<long long>::max())
-            throw std::overflow_error("weighted_union_find: difference does not fit i64");
-        return static_cast<long long>(difference);
+        return checked_weight(groups_.diff(a, b), "difference");
+    }
+
+    T potential(long long x) {
+        return checked_weight(groups_.potential(index(x)), "potential");
     }
 
     bool same(long long x, long long y) {
@@ -3984,6 +4496,9 @@ public:
     int count() const { return groups_.count(); }
     int size() const { return groups_.size(); }
 };
+}  // namespace ac_detail::algorithm
+
+using CheckedWeightedUnionFind = ac_detail::algorithm::CheckedWeightedUnionFindAs<long long>;
 
 // Immutable checked minimum queries for the pure Kuma preset.
 template<class T>
@@ -4079,124 +4594,7 @@ public:
 };
 #endif // AC_HAS_ACL
 
-// Immutable snapshot for zero-based order statistics in a half-open range.
-template<class T, bool Weighted = false>
-requires (std::same_as<T, int> || std::same_as<T, long long>)
-class WaveletMatrix {
-    using Wide = __int128;
-    struct NoSums {};
-    int size_;
-    std::vector<T> values_;
-    std::vector<std::vector<int>> zero_prefix_;
-    [[no_unique_address]] std::conditional_t<Weighted, std::vector<std::vector<Wide>>, NoSums> zero_sums_;
-
-    template<class I>
-    static constexpr bool is_index = std::same_as<I, int> || std::same_as<I, long long>;
-
-    static int checked_size(std::size_t size) {
-        if (size >= (std::size_t{1} << 30))
-            throw std::length_error(Weighted ? "weighted_wavelet_matrix: too many elements"
-                                             : "wavelet_matrix: too many elements");
-        return static_cast<int>(size);
-    }
-
-public:
-    explicit WaveletMatrix(const std::vector<T>& values)
-        : size_(checked_size(values.size())), values_(values) {
-        std::sort(values_.begin(), values_.end());
-        values_.erase(std::unique(values_.begin(), values_.end()), values_.end());
-        if (values_.size() < 2) return;
-
-        const int levels = std::bit_width(static_cast<unsigned>(values_.size() - 1));
-        zero_prefix_.reserve(levels);
-        if constexpr (Weighted) zero_sums_.reserve(levels);
-        std::vector<int> ranks(size_), next(size_);
-        for (int i = 0; i < size_; ++i)
-            ranks[i] = static_cast<int>(std::lower_bound(values_.begin(), values_.end(), values[i]) - values_.begin());
-
-        for (int bit = levels - 1; bit >= 0; --bit) {
-            const int mask = 1 << bit;
-            auto& prefix = zero_prefix_.emplace_back(size_ + 1, 0);
-            for (int i = 0; i < size_; ++i)
-                prefix[i + 1] = prefix[i] + ((ranks[i] & mask) == 0);
-            if constexpr (Weighted) {
-                auto& sums = zero_sums_.emplace_back(size_ + 1, 0);
-                for (int i = 0; i < size_; ++i)
-                    sums[i + 1] = sums[i] + ((ranks[i] & mask) ? Wide{0} : values_[ranks[i]]);
-            }
-            int zero = 0, one = prefix.back();
-            for (int rank : ranks)
-                next[(rank & mask) ? one++ : zero++] = rank;
-            ranks.swap(next);
-        }
-    }
-
-    int size() const { return size_; }
-
-    template<class L, class R, class K>
-    requires (is_index<L> && is_index<R> && is_index<K>)
-    T kth(L l, R r, K k) const {
-        if (l < 0 || l > r || r > size_)
-            throw std::out_of_range(Weighted ? "weighted_wavelet_matrix: invalid interval"
-                                             : "wavelet_matrix: invalid interval");
-        if (k < 0 || k >= r - l)
-            throw std::out_of_range(Weighted ? "weighted_wavelet_matrix: invalid rank"
-                                             : "wavelet_matrix: invalid rank");
-
-        int left = static_cast<int>(l), right = static_cast<int>(r);
-        int remaining = static_cast<int>(k), rank = 0;
-        for (const auto& prefix : zero_prefix_) {
-            const int zl = prefix[left], zr = prefix[right];
-            rank <<= 1;
-            if (remaining < zr - zl) {
-                left = zl;
-                right = zr;
-            } else {
-                remaining -= zr - zl;
-                rank |= 1;
-                left = prefix.back() + (left - zl);
-                right = prefix.back() + (right - zr);
-            }
-        }
-        return values_[rank];
-    }
-
-    template<class L, class R, class X>
-    requires (Weighted && is_index<L> && is_index<R> && is_index<X>)
-    long long sum_le(L l, R r, X x) const {
-        if (l < 0 || l > r || r > size_)
-            throw std::out_of_range("weighted_wavelet_matrix: invalid interval");
-        if (l == r) return 0;
-
-        const auto upper = std::upper_bound(values_.begin(), values_.end(), x);
-        if (upper == values_.begin()) return 0;
-        const int rank = static_cast<int>(upper - values_.begin() - 1);
-
-        int left = static_cast<int>(l), right = static_cast<int>(r);
-        Wide sum = 0;
-        const int levels = static_cast<int>(zero_prefix_.size());
-        for (int level = 0; level < levels; ++level) {
-            const auto& prefix = zero_prefix_[level];
-            const int zl = prefix[left], zr = prefix[right];
-            if (rank & (1 << (levels - level - 1))) {
-                sum += zero_sums_[level][right] - zero_sums_[level][left];
-                left = prefix.back() + (left - zl);
-                right = prefix.back() + (right - zr);
-            } else {
-                left = zl;
-                right = zr;
-            }
-        }
-        sum += static_cast<Wide>(values_[rank]) * (right - left);
-        if (sum < std::numeric_limits<long long>::min()
-                || sum > std::numeric_limits<long long>::max())
-            throw std::overflow_error("weighted_wavelet_matrix: sum does not fit i64");
-        return static_cast<long long>(sum);
-    }
-};
-
-template<class T>
-using WeightedWaveletMatrix = WaveletMatrix<T, true>;
+#include "ac_wavelet.hpp"
 
 #ifdef AC_HAS_ACL
 namespace ac_detail::algorithm {
@@ -4219,6 +4617,11 @@ class checked_lazy_segment_tree {
         if (n > static_cast<std::size_t>(max_size))
             throw std::length_error("lazy_segment_tree: too many elements");
         return static_cast<int>(n);
+    }
+    static int checked_length(long long length) {
+        if (length < 0 || length > max_size)
+            throw std::out_of_range("lazy_segment_tree: invalid length");
+        return static_cast<int>(length);
     }
     // Widen before comparing: negative signed values become larger than any valid endpoint.
     template <lazy_segment_index I>
@@ -4249,11 +4652,16 @@ public:
     explicit checked_lazy_segment_tree(const std::vector<S>& values)
         : size_(checked_size(values.size())), tree_(values) {}
 
+    explicit checked_lazy_segment_tree(long long length)
+        : size_(checked_length(length)), tree_(size_) {}
+
     int size() const { return size_; }
     template <lazy_segment_index I>
     void set(I i, const S& value) { tree_.set(checked_index(i), value); }
     template <lazy_segment_index I>
     S get(I i) const { return tree_.get(checked_index(i)); }
+    template <lazy_segment_index I>
+    void apply(I i, const F& tag) { tree_.apply(checked_index(i), tag); }
     template <lazy_segment_index L, lazy_segment_index R>
     void apply(L l, R r, const F& tag) {
         check_interval(l, r);

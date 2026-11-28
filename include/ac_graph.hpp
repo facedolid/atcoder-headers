@@ -31,6 +31,8 @@ struct Edge {
     friend bool operator==(const Edge&, const Edge&) = default;
 };
 
+namespace ac_graph_detail { class CheckedGraph; }
+
 // @acf using Graph — Graph<Cost> — 隣接リストと辺リストを持つグラフ型
 
 /// 頂点と辺のつながりを表すグラフです。各頂点から出る辺を`adj`、入力した辺を`edges`に保持し、BFS・最短路などの探索へ渡します。
@@ -50,6 +52,7 @@ struct Graph {
     /// 入力辺（無向も1入力につき1要素）。
     vector<edge_type> edges;  // 無向辺も入力1本につき1要素
 private:
+    friend class ac_graph_detail::CheckedGraph;
     unordered_set<int> used_edge_ids;
     long long next_auto_edge_id = 0;
 
@@ -581,20 +584,21 @@ int grid_w(const Grid& grid) {
     return static_cast<int>(grid[0].size());
 }
 
-template <class Grid, class Passable, class Dirs>
-Graph<> graph_from_grid_impl(const Grid& grid, Passable&& passable, const Dirs& dirs) {
+template <bool WideOffsets = false, class Result = Graph<>, class Grid, class Passable, class Dirs>
+Result graph_from_grid_impl(const Grid& grid, Passable&& passable, const Dirs& dirs) {
     const int h = grid_h(grid);
     const int w = grid_w(grid);
     assert(w > 0);
-    Graph<> graph(h * w);
+    Result graph(h * w);
+    using Coordinate = conditional_t<WideOffsets, ll, int>;
     for (int r = 0; r < h; ++r) {
         assert(static_cast<int>(grid[r].size()) == w);
         for (int c = 0; c < w; ++c) {
             if (!passable(grid[r][c])) continue;
             const int u = grid_id(r, c, w);
             for (const auto& [dr, dc] : dirs) {
-                const int nr = r + dr;
-                const int nc = c + dc;
+                const Coordinate nr = r + dr;
+                const Coordinate nc = c + dc;
                 if (out_grid(nr, nc, h, w) || !passable(grid[nr][nc])) continue;
                 const int v = grid_id(nr, nc, w);
                 if (u < v) graph.add_edge(u, v);
@@ -604,7 +608,7 @@ Graph<> graph_from_grid_impl(const Grid& grid, Passable&& passable, const Dirs& 
     return graph;
 }
 
-template <class Grid, class Passable, class Dirs>
+template <bool WideOffsets = false, class Grid, class Passable, class Dirs>
 ShortestPathResult<ll> grid_bfs_impl(const Grid& grid, const vi& sources,
                                      Passable&& passable, const Dirs& dirs) {
     const int h = grid_h(grid);
@@ -628,8 +632,9 @@ ShortestPathResult<ll> grid_bfs_impl(const Grid& grid, const vi& sources,
         que.pop();
         const auto [r, c] = grid_rc(u, w);
         for (const auto& [dr, dc] : dirs) {
-            const int nr = r + dr;
-            const int nc = c + dc;
+            using Coordinate = conditional_t<WideOffsets, ll, int>;
+            const Coordinate nr = r + dr;
+            const Coordinate nc = c + dc;
             if (out_grid(nr, nc, h, w) || !passable(grid[nr][nc])) continue;
             const int v = grid_id(nr, nc, w);
             if (result.dist[v] != INF) continue;
@@ -1177,6 +1182,39 @@ DfsResult dfs_forest(const Graph<Cost>& graph) {
     return ac_graph_detail::dfs_impl(graph, {}, true);
 }
 
+namespace ac_graph_detail {
+template <class Distance, class Cost>
+ShortestPathResult<Distance> dijkstra_with_distance(
+    const Graph<Cost>& graph, const vi& sources, Distance inf) {
+    ShortestPathResult<Distance> result{
+        vector<Distance>(graph.n, inf), vi(graph.n, -1), vi(graph.n, -1), inf};
+    using State = pair<Distance, int>;
+    priority_queue<State, vector<State>, greater<State>> que;
+    for (int source : sources) {
+        assert(0 <= source && source < graph.n);
+        if (result.dist[source] == Distance{}) continue;
+        result.dist[source] = Distance{};
+        que.emplace(Distance{}, source);
+    }
+    while (!que.empty()) {
+        auto [distance, v] = que.top();
+        que.pop();
+        if (distance != result.dist[v]) continue;
+        for (const auto& e : graph[v]) {
+            assert(!(e.cost < Cost{}) && "dijkstra requires non-negative costs");
+            Distance next = ac_graph_detail::add_clamped(
+                result.dist[v], static_cast<Distance>(e.cost), inf);
+            if (next >= result.dist[e.to]) continue;
+            result.dist[e.to] = next;
+            result.parent[e.to] = v;
+            result.parent_edge[e.to] = e.id;
+            que.emplace(next, e.to);
+        }
+    }
+    return result;
+}
+}
+
 // @acf fn dijkstra — (Graph, sources[, inf]) -> ShortestPathResult — 非負重みの単一/複数始点最短路
 
 /// 非負重みのグラフで、単一または複数始点からの最短距離を求める。
@@ -1196,31 +1234,7 @@ template <class Cost>
 ShortestPathResult<Cost> dijkstra(
     const Graph<Cost>& graph, const vi& sources,
     Cost inf = numeric_limits<Cost>::max() / Cost{4}) {
-    ShortestPathResult<Cost> result{
-        vector<Cost>(graph.n, inf), vi(graph.n, -1), vi(graph.n, -1), inf};
-    using State = pair<Cost, int>;
-    priority_queue<State, vector<State>, greater<State>> que;
-    for (int source : sources) {
-        assert(0 <= source && source < graph.n);
-        if (result.dist[source] == Cost{}) continue;
-        result.dist[source] = Cost{};
-        que.emplace(Cost{}, source);
-    }
-    while (!que.empty()) {
-        auto [distance, v] = que.top();
-        que.pop();
-        if (distance != result.dist[v]) continue;
-        for (const auto& e : graph[v]) {
-            assert(!(e.cost < Cost{}) && "dijkstra requires non-negative costs");
-            Cost next = ac_graph_detail::add_clamped(result.dist[v], e.cost, inf);
-            if (next >= result.dist[e.to]) continue;
-            result.dist[e.to] = next;
-            result.parent[e.to] = v;
-            result.parent_edge[e.to] = e.id;
-            que.emplace(next, e.to);
-        }
-    }
-    return result;
+    return ac_graph_detail::dijkstra_with_distance(graph, sources, inf);
 }
 
 
@@ -1609,6 +1623,139 @@ BellmanFordResult<Cost> bellman_ford(
     return result;
 }
 
+namespace ac_graph_detail {
+inline constexpr i128 kuma_distance_inf = i128{1} << 120;
+
+inline Graph<i128> widen_graph_costs(const Graph<ll>& input) {
+    Graph<i128> graph(input.n, input.directed);
+    graph.edges.reserve(input.edges.size());
+    for (const auto& edge : input.edges)
+        graph.add_edge(edge.from, edge.to, edge.cost, edge.id);
+    return graph;
+}
+
+template<class Item>
+requires requires { typename std::tuple_size<Item>::type; } && (std::tuple_size_v<Item> == 2)
+Graph<i128> checked_signed_adjacency(const vector<vector<Item>>& adjacency) {
+    if (adjacency.size() > static_cast<size_t>(numeric_limits<int>::max()))
+        throw length_error("shortest_path: too many vertices");
+    const int size = static_cast<int>(adjacency.size());
+    Graph<i128> graph(size, true);
+    for (int from = 0; from < size; ++from)
+        for (const auto& [to, weight] : adjacency[from]) {
+            if (to < 0 || to >= size) throw out_of_range("shortest_path: invalid neighbor");
+            graph.add_edge(from, static_cast<int>(to), static_cast<i128>(weight));
+        }
+    return graph;
+}
+
+inline int checked_distance_vertex(ll vertex, int size, const char* error = "shortest_path: invalid vertex") {
+    if (vertex < 0 || vertex >= size) throw out_of_range(error);
+    return static_cast<int>(vertex);
+}
+
+class CheckedShortestPath {
+    ShortestPathResult<i128> result_;
+
+    int vertex(ll v) const { return checked_distance_vertex(v, size()); }
+
+public:
+    explicit CheckedShortestPath(ShortestPathResult<i128> result) : result_(std::move(result)) {}
+
+    explicit CheckedShortestPath(ShortestPathResult<ll> result)
+        : result_{vector<i128>(result.dist.begin(), result.dist.end()),
+                  std::move(result.parent), std::move(result.parent_edge), result.inf} {}
+
+    int size() const { return static_cast<int>(result_.dist.size()); }
+    bool reachable(ll v) const { return result_.reachable(vertex(v)); }
+    vi path_to(ll v) const { return result_.path_to(vertex(v)); }
+    vi edge_path_to(ll v) const { return result_.edge_path_to(vertex(v)); }
+    int parent(ll v) const { return result_.parent[vertex(v)]; }
+    int parent_edge(ll v) const { return result_.parent_edge[vertex(v)]; }
+
+    pair<bool, ll> distance(ll v) const {
+        const int id = vertex(v);
+        if (!result_.reachable(id)) return {false, 0};
+        return {true, ac_detail::checked_ll(result_.dist[id], "shortest_path")};
+    }
+    vector<pair<bool, ll>> distances() const {
+        vector<pair<bool, ll>> result;
+        result.reserve(size());
+        for (int v = 0; v < size(); ++v) result.push_back(distance(v));
+        return result;
+    }
+    vi parents() const { return result_.parent; }
+    vi parent_edges() const { return result_.parent_edge; }
+};
+}
+
+class CheckedBellmanFord {
+    BellmanFordResult<i128> result_;
+
+    int vertex(ll value) const { return ac_graph_detail::checked_distance_vertex(value, size()); }
+
+    CheckedBellmanFord(const Graph<i128>& graph, ll source)
+        : result_(::bellman_ford(graph,
+              ac_graph_detail::checked_distance_vertex(source, graph.n),
+              ac_graph_detail::kuma_distance_inf)) {}
+
+public:
+    template<class Item>
+    requires requires { typename std::tuple_size<Item>::type; } && (std::tuple_size_v<Item> == 2)
+    explicit CheckedBellmanFord(const vector<vector<Item>>& adjacency, ll source)
+        : CheckedBellmanFord(ac_graph_detail::checked_signed_adjacency(adjacency), source) {}
+
+    explicit CheckedBellmanFord(const Graph<ll>& graph, ll source)
+        : CheckedBellmanFord(ac_graph_detail::widen_graph_costs(graph), source) {}
+
+    int size() const { return static_cast<int>(result_.dist.size()); }
+    bool negative(ll v) const { return result_.negative[vertex(v)]; }
+    bool reachable(ll v) const { return result_.reachable(vertex(v)); }
+    bool well_defined(ll v) const { return result_.well_defined(vertex(v)); }
+    vi path_to(ll v) const { return result_.path_to(vertex(v)); }
+
+    vi edge_path_to(ll v) const {
+        vi path = path_to(v);
+        if (path.empty()) return path;
+        path.erase(path.begin());
+        for (int& item : path) item = result_.parent_edge[item];
+        return path;
+    }
+
+    int parent(ll v) const {
+        const int id = vertex(v);
+        return result_.well_defined(id) ? result_.parent[id] : -1;
+    }
+
+    int parent_edge(ll v) const {
+        const int id = vertex(v);
+        return result_.well_defined(id) ? result_.parent_edge[id] : -1;
+    }
+
+    pair<bool, ll> distance(ll v) const {
+        const int id = vertex(v);
+        if (!result_.well_defined(id)) return {false, 0};
+        return {true, ac_detail::checked_ll(result_.dist[id], "bellman_ford")};
+    }
+    vector<pair<bool, ll>> distances() const {
+        vector<pair<bool, ll>> result;
+        result.reserve(size());
+        for (int v = 0; v < size(); ++v) result.push_back(distance(v));
+        return result;
+    }
+    vi parents() const {
+        vi result(size());
+        for (int v = 0; v < size(); ++v) result[v] = parent(v);
+        return result;
+    }
+    vi parent_edges() const {
+        vi result(size());
+        for (int v = 0; v < size(); ++v) result[v] = parent_edge(v);
+        return result;
+    }
+    vb negative_vertices() const { return result_.negative; }
+};
+
 /// すべての始点・終点の組について、辺重みの和で測った距離を保持する結果です。何組もの距離問い合わせと、グラフ内の負閉路の検出に使います。
 template <class Cost>
 struct AllPairsShortestPath {
@@ -1661,6 +1808,78 @@ AllPairsShortestPath<Cost> floyd_warshall(
     }
     return {std::move(dist), inf};
 }
+
+class CheckedFloydWarshall {
+    static constexpr i128 missing_ = ac_graph_detail::kuma_distance_inf;
+    vector<vector<i128>> dist_;
+    bool has_negative_ = false;
+
+    i128 lookup(ll from, ll to) const {
+        return dist_[ac_graph_detail::checked_distance_vertex(from, size())]
+                    [ac_graph_detail::checked_distance_vertex(to, size())];
+    }
+
+    template<class Cost>
+    void build(const Graph<Cost>& graph) {
+        const int size = graph.n;
+        dist_.assign(size, vector<i128>(size, missing_));
+        for (int from = 0; from < size; ++from) {
+            dist_[from][from] = 0;
+            for (const auto& edge : graph[from])
+                chmin(dist_[from][edge.to], static_cast<i128>(edge.cost));
+        }
+        for (int via = 0; via < size; ++via)
+            for (int from = 0; from < size; ++from) {
+                if (dist_[from][via] == missing_) continue;
+                for (int to = 0; to < size; ++to) {
+                    if (dist_[via][to] == missing_) continue;
+                    const auto candidate = dist_[from][via] + dist_[via][to];
+                    chmin(dist_[from][to], std::clamp(candidate, -missing_, missing_ - 1));
+                }
+            }
+        for (int via = 0; via < size; ++via) {
+            if (dist_[via][via] >= 0) continue;
+            has_negative_ = true;
+            for (int from = 0; from < size; ++from) {
+                if (dist_[from][via] == missing_) continue;
+                for (int to = 0; to < size; ++to)
+                    if (dist_[via][to] != missing_) dist_[from][to] = -missing_;
+            }
+        }
+    }
+
+public:
+    template<class Item>
+    requires requires { typename std::tuple_size<Item>::type; } && (std::tuple_size_v<Item> == 2)
+    explicit CheckedFloydWarshall(const vector<vector<Item>>& adjacency) {
+        build(ac_graph_detail::checked_signed_adjacency(adjacency));
+    }
+
+    explicit CheckedFloydWarshall(const Graph<ll>& graph) { build(graph); }
+
+    int size() const { return static_cast<int>(dist_.size()); }
+    bool has_negative_cycle() const { return has_negative_; }
+    bool reachable(ll from, ll to) const { return lookup(from, to) != missing_; }
+    bool negative(ll from, ll to) const { return lookup(from, to) == -missing_; }
+    bool well_defined(ll from, ll to) const {
+        const auto result = lookup(from, to);
+        return result != missing_ && result != -missing_;
+    }
+
+    pair<bool, ll> distance(ll from, ll to) const {
+        const auto result = lookup(from, to);
+        if (result == missing_ || result == -missing_) return {false, 0};
+        return {true, ac_detail::checked_ll(result, "floyd_warshall")};
+    }
+    vector<vector<pair<bool, ll>>> distances() const {
+        vector<vector<pair<bool, ll>>> result(size());
+        for (int u = 0; u < size(); ++u) {
+            result[u].reserve(size());
+            for (int v = 0; v < size(); ++v) result[u].push_back(distance(u, v));
+        }
+        return result;
+    }
+};
 
 /// 有向グラフを「どの2頂点の間も互いに到達できるまとまり」へ分けた結果です。閉路のまとまりを1頂点へ縮約してDAGとして扱うときに使います。
 struct StronglyConnectedComponents {
@@ -1848,6 +2067,88 @@ struct MinimumSpanningForest {
     bool is_spanning_tree() const { return components == 1; }
 };
 
+namespace ac_graph_detail {
+template <class Cost, class Sum, class Finish>
+MinimumSpanningForest<Cost> kruskal_edges_with_sum(int vertices, const vector<Edge<Cost>>& edges, Sum total, Finish finish) {
+    vi parent(vertices, -1);
+    auto leader = [&](auto&& self, int v) -> int {
+        return parent[v] < 0 ? v : parent[v] = self(self, parent[v]);
+    };
+    auto merge = [&](int a, int b) {
+        a = leader(leader, a);
+        b = leader(leader, b);
+        if (a == b) return false;
+        if (parent[a] > parent[b]) swap(a, b);
+        parent[a] += parent[b];
+        parent[b] = a;
+        return true;
+    };
+
+    vector<int> indices(edges.size());
+    iota(indices.begin(), indices.end(), 0);
+    stable_sort(indices.begin(), indices.end(), [&](int a, int b) {
+        return edges[a].cost < edges[b].cost;
+    });
+    MinimumSpanningForest<Cost> result;
+    result.components = vertices;
+    for (int index : indices) {
+        const auto& e = edges[index];
+        if (!merge(e.from, e.to)) continue;
+        total += e.cost;
+        result.edge_ids.push_back(e.id);
+        --result.components;
+    }
+    result.cost = finish(total);
+    return result;
+}
+
+template<class Cost>
+MinimumSpanningForest<Cost> kruskal_edges(int vertices, const vector<Edge<Cost>>& edges) {
+    constexpr bool wide_sum = is_integral_v<Cost> && sizeof(Cost) <= sizeof(ll);
+    using Sum = conditional_t<wide_sum, i128, Cost>;
+    return kruskal_edges_with_sum(vertices, edges, Sum{}, [](Sum& total) {
+        if constexpr (wide_sum) {
+            if (total < i128(numeric_limits<Cost>::lowest()) || total > i128(numeric_limits<Cost>::max()))
+                throw overflow_error("kruskal cost does not fit Cost");
+        }
+        return static_cast<Cost>(total);
+    });
+}
+
+template<class Cost = ll, class ExactSum = void, class Item>
+MinimumSpanningForest<Cost> checked_kruskal(ll vertices, const vector<Item>& input) {
+    if (vertices < 0 || vertices > numeric_limits<int>::max())
+        throw out_of_range("kruskal: invalid vertex count");
+    if (input.size() > static_cast<size_t>(numeric_limits<int>::max()))
+        throw length_error("kruskal: too many edges");
+    vector<Edge<Cost>> edges;
+    edges.reserve(input.size());
+    for (const auto& item : input) {
+        const ll from = std::get<0>(item), to = std::get<1>(item);
+        if (from < 0 || from >= vertices || to < 0 || to >= vertices)
+            throw out_of_range("kruskal: invalid endpoint");
+        Cost cost = 1;
+        if constexpr (std::tuple_size_v<Item> == 3) {
+            const auto weight = std::get<2>(item);
+            if constexpr (std::integral<Cost>) {
+                if (weight < numeric_limits<Cost>::min() || weight > numeric_limits<Cost>::max())
+                    throw out_of_range("kruskal: edge weight does not fit the element type");
+            }
+            cost = static_cast<Cost>(weight);
+            if constexpr (std::floating_point<Cost>) {
+                if (!std::isfinite(cost))
+                    throw domain_error("kruskal: edge weight must be finite");
+            }
+        }
+        edges.push_back({static_cast<int>(from), static_cast<int>(to), cost, static_cast<int>(edges.size())});
+    }
+    if constexpr (std::is_void_v<ExactSum>) return kruskal_edges(static_cast<int>(vertices), edges);
+    else return kruskal_edges_with_sum(static_cast<int>(vertices), edges, ExactSum{}, [](const ExactSum& total) {
+        return total.value("kruskal: total weight does not fit in f64");
+    });
+}
+}
+
 // @acf fn kruskal — (Graph) -> MinimumSpanningForest — 無向の最小全域森
 
 /// 無向グラフの最小全域森を求める。
@@ -1862,44 +2163,7 @@ struct MinimumSpanningForest {
 template <class Cost>
 MinimumSpanningForest<Cost> kruskal(const Graph<Cost>& graph) {
     assert(!graph.directed && "kruskal requires an undirected graph");
-    vi parent(graph.n, -1);
-    auto leader = [&](auto&& self, int v) -> int {
-        return parent[v] < 0 ? v : parent[v] = self(self, parent[v]);
-    };
-    auto merge = [&](int a, int b) {
-        a = leader(leader, a);
-        b = leader(leader, b);
-        if (a == b) return false;
-        if (parent[a] > parent[b]) swap(a, b);
-        parent[a] += parent[b];
-        parent[b] = a;
-        return true;
-    };
-
-    vector<int> indices(graph.edges.size());
-    iota(indices.begin(), indices.end(), 0);
-    stable_sort(indices.begin(), indices.end(), [&](int a, int b) {
-        return graph.edges[a].cost < graph.edges[b].cost;
-    });
-    MinimumSpanningForest<Cost> result;
-    constexpr bool wide_sum = is_integral_v<Cost> && sizeof(Cost) <= sizeof(ll);
-    using Sum = conditional_t<wide_sum, i128, Cost>;
-    Sum total{};
-    result.components = graph.n;
-    for (int index : indices) {
-        const auto& e = graph.edges[index];
-        if (!merge(e.from, e.to)) continue;
-        total += e.cost;
-        result.edge_ids.push_back(e.id);
-        --result.components;
-    }
-    if constexpr (wide_sum) {
-        if (total < i128(numeric_limits<Cost>::lowest()) ||
-            total > i128(numeric_limits<Cost>::max()))
-            throw overflow_error("kruskal cost does not fit Cost");
-    }
-    result.cost = static_cast<Cost>(total);
-    return result;
+    return ac_graph_detail::kruskal_edges(graph.n, graph.edges);
 }
 
 // @acf fn LowestCommonAncestor — (tree[, root]) -> LCA — 祖先・距離のダブリング
@@ -2385,6 +2649,62 @@ struct FunctionalGraphDoubling {
         return v;
     }
 };
+
+namespace ac_graph_detail {
+template<class T>
+decltype(auto) checked_functional_next(const vector<T>& next) {
+    if (next.size() > static_cast<size_t>(numeric_limits<int>::max()))
+        throw length_error("functional_graph: too many vertices");
+    for (const auto to : next)
+        if (to < 0 || to >= static_cast<ll>(next.size()))
+            throw out_of_range("functional_graph: invalid destination");
+    if constexpr (std::same_as<T, int>) return (next);
+    else return vi(next.begin(), next.end());
+}
+}
+
+class CheckedFunctionalGraphDoubling {
+    FunctionalGraphDoubling graph_;
+
+    static int checked_bits(ll bits) {
+        if (bits < 1 || bits > 64) throw out_of_range("functional_graph_doubling: bits must be in [1, 64]");
+        return static_cast<int>(bits);
+    }
+
+public:
+    CheckedFunctionalGraphDoubling() = default;
+
+    template<class T>
+    explicit CheckedFunctionalGraphDoubling(const vector<T>& next, ll bits = 60)
+        : graph_(ac_graph_detail::checked_functional_next(next), checked_bits(bits)) {}
+
+    int size() const { return graph_.jump_table.empty() ? 0 : static_cast<int>(graph_.jump_table[0].size()); }
+    int bits() const { return static_cast<int>(graph_.jump_table.size()); }
+    vector<vi> jump_table() const { return graph_.jump_table; }
+
+    int jump(ll vertex, ll steps) const {
+        if (vertex < 0 || vertex >= size()) throw out_of_range("functional_graph_doubling: invalid vertex");
+        if (steps < 0 || (bits() < 64 && (static_cast<ull>(steps) >> bits()) != 0))
+            throw out_of_range("functional_graph_doubling: steps do not fit in the table");
+        return graph_.jump(static_cast<int>(vertex), static_cast<ull>(steps));
+    }
+};
+
+namespace ac_graph_detail {
+template<class T>
+FunctionalGraphOrbit checked_functional_orbit(const vector<T>& next, ll start) {
+    const auto& converted = checked_functional_next(next);
+    if (start < 0 || start >= static_cast<ll>(converted.size()))
+        throw out_of_range("functional_graph_orbit: invalid start vertex");
+    return ::functional_graph_orbit(converted, static_cast<int>(start));
+}
+
+inline int checked_functional_orbit_at(const FunctionalGraphOrbit& orbit, ll steps) {
+    if (steps < 0) throw out_of_range("functional_graph_orbit: negative steps");
+    if (orbit.route.empty()) throw invalid_argument("functional_graph_orbit: uninitialized orbit");
+    return orbit.at(static_cast<ull>(steps));
+}
+}
 
 // ---------------------------------------------------------------------------
 // print / pr / cerr / ostringstream support for every public graph type.
@@ -2898,8 +3218,8 @@ inline int checked_heavy_light_index(long long value) {
 // An owning bridge from Kuma's 0-based, reciprocal integer adjacency lists.
 // Reject malformed input before narrowing any endpoint. Keep the native Graph
 // constructor's behavior unchanged and avoid to_graph's assertion-only checks.
-template<class Vertex>
-Graph<> checked_adjacency_tree(const std::vector<std::vector<Vertex>>& adjacency,
+template<class Vertex, class Cost = ll>
+Graph<Cost> checked_adjacency_tree(const std::vector<std::vector<Vertex>>& adjacency,
                                long long root, const char* operation, bool preserve_order) {
     if (adjacency.empty() || std::cmp_greater(adjacency.size(), std::numeric_limits<int>::max()))
         throw std::length_error(std::string(operation) + ": invalid vertex count");
@@ -2917,7 +3237,7 @@ Graph<> checked_adjacency_tree(const std::vector<std::vector<Vertex>>& adjacency
     if (entries != expected)
         throw std::invalid_argument(std::string(operation) + ": expected a tree");
 
-    Graph<> tree(n);
+    Graph<Cost> tree(n);
     std::vector<int> seen(n, -1);
     for (int from = 0; from < n; ++from) {
         for (const auto endpoint : adjacency[from]) {
@@ -2969,7 +3289,738 @@ HeavyLightDecomposition checked_heavy_light(
     auto tree = checked_adjacency_tree(adjacency, root, "heavy_light", false);
     return HeavyLightDecomposition(tree, static_cast<int>(root));
 }
+
+template<class Vertex>
+Graph<i128> checked_query_tree(const vector<vector<Vertex>>& adjacency, ll root, const char* operation) {
+    auto tree = checked_adjacency_tree<Vertex, i128>(adjacency, root, operation, true);
+    if (!is_tree(tree)) throw invalid_argument(string(operation) + ": expected a connected tree");
+    return tree;
+}
+
+template<class Item>
+requires requires { typename std::tuple_size<Item>::type; } && (std::tuple_size_v<Item> == 2)
+Graph<i128> checked_query_tree(const vector<vector<Item>>& adjacency,
+                              ll root, const char* operation) {
+    using Vertex = std::tuple_element_t<0, Item>;
+    vector<vector<Vertex>> endpoints(adjacency.size());
+    for (size_t from = 0; from < adjacency.size(); ++from) {
+        endpoints[from].reserve(adjacency[from].size());
+        for (const auto& edge : adjacency[from]) endpoints[from].push_back(std::get<0>(edge));
+    }
+    auto tree = checked_query_tree(endpoints, root, operation);
+    for (int from = 0; from < tree.n; ++from)
+        for (size_t index = 0; index < tree[from].size(); ++index) {
+            auto& edge = tree[from][index];
+            edge.cost = std::get<1>(adjacency[from][index]);
+            auto& original = tree.edges[edge.id];
+            if (from < edge.to) original.cost = edge.cost;
+            else if (original.cost != edge.cost)
+                throw invalid_argument(string(operation) + ": reciprocal weights differ");
+        }
+    return tree;
+}
+
+template<class Row>
+TreeInfo checked_tree_info(const vector<Row>& adjacency, ll root = 0) {
+    const auto tree = checked_query_tree(adjacency, root, "tree_info");
+    return ::tree_info(tree, static_cast<int>(root));
+}
+
+inline TreeDiameterResult<ll> checked_wide_tree_diameter(const Graph<i128>& tree) {
+    for (const auto& edge : tree.edges)
+        if (edge.cost < 0) throw invalid_argument("tree_diameter: negative edge weight");
+    auto result = ::tree_diameter(tree);
+    return {result.from, result.to, ac_detail::checked_ll(result.distance, "tree_diameter"),
+            std::move(result.path)};
+}
+
+template<class Row>
+TreeDiameterResult<ll> checked_tree_diameter(const vector<Row>& adjacency) {
+    return checked_wide_tree_diameter(checked_query_tree(adjacency, 0, "tree_diameter"));
+}
+
+struct CheckedEulerTrailResult {
+    bool found;
+    vi vertices;
+    vi edge_ids;
+};
+using CheckedCycleResult = CheckedEulerTrailResult;
+
+inline int checked_walk_size(ll size, const char* operation) {
+    if (size < 0 || size > numeric_limits<int>::max())
+        throw out_of_range(string(operation) + ": invalid vertex count");
+    return static_cast<int>(size);
+}
+
+class CheckedGraph {
+    using Snapshot = tuple<int, int, ll, int>;
+    Graph<ll> graph_;
+
+    static constexpr auto limit_ = static_cast<size_t>(numeric_limits<int>::max());
+
+    static vector<Snapshot> snapshots(const vector<Edge<ll>>& edges) {
+        vector<Snapshot> result;
+        result.reserve(edges.size());
+        for (const auto& edge : edges) result.emplace_back(edge.from, edge.to, edge.cost, edge.id);
+        return result;
+    }
+
+    static void reserve_edges(vector<Edge<ll>>& row, size_t extra) {
+        if (extra > limit_ - row.size()) throw length_error("graph: too many edges");
+        const auto required = row.size() + extra;
+        if (required > row.capacity())
+            row.reserve(std::max(required, std::min(limit_, row.capacity() * 2)));
+    }
+
+    int vertex(ll value) const {
+        if (value < 0 || value >= size()) throw out_of_range("graph: invalid vertex");
+        return static_cast<int>(value);
+    }
+
+public:
+    explicit CheckedGraph(ll n = 0, bool directed = false)
+        : graph_(checked_walk_size(n, "graph"), directed) {}
+
+    const Graph<ll>& native() const { return graph_; }
+    int size() const { return graph_.n; }
+    bool empty() const { return graph_.empty(); }
+    bool directed() const { return graph_.directed; }
+    CheckedGraph reversed() const {
+        CheckedGraph result;
+        result.graph_ = graph_.reversed();
+        return result;
+    }
+    vector<Snapshot> edges() const { return snapshots(graph_.edges); }
+    vector<Snapshot> adjacent(ll v) const { return snapshots(graph_[vertex(v)]); }
+    vector<vector<Snapshot>> adj() const {
+        vector<vector<Snapshot>> result;
+        result.reserve(graph_.adj.size());
+        for (const auto& row : graph_.adj) result.push_back(snapshots(row));
+        return result;
+    }
+
+    int add_edge(ll from, ll to, ll cost = 1, ll id = -1) {
+        const int u = vertex(from), v = vertex(to);
+        if (id > numeric_limits<int>::max()) throw out_of_range("graph: invalid edge ID");
+        reserve_edges(graph_.edges, 1);
+        reserve_edges(graph_[u], !directed() && u == v ? 2 : 1);
+        if (!directed() && u != v) reserve_edges(graph_[v], 1);
+        const auto next = graph_.next_auto_edge_id;
+        try {
+            return graph_.add_edge(u, v, cost, id < 0 ? -1 : static_cast<int>(id));
+        } catch (...) {
+            graph_.next_auto_edge_id = next;
+            throw;
+        }
+    }
+};
+
+inline const Graph<ll>& checked_native_tree(const CheckedGraph& tree, ll root, const char* operation) {
+    if (tree.empty()) throw length_error(string(operation) + ": invalid vertex count");
+    if (root < 0 || root >= tree.size()) throw out_of_range(string(operation) + ": root out of range");
+    if (!::is_tree(tree.native())) throw invalid_argument(string(operation) + ": expected a connected undirected tree");
+    return tree.native();
+}
+
+inline TreeInfo checked_tree_info(const CheckedGraph& tree, ll root = 0) {
+    const auto& native = checked_native_tree(tree, root, "tree_info");
+    return ::tree_info(native, static_cast<int>(root));
+}
+
+inline TreeDiameterResult<ll> checked_tree_diameter(const CheckedGraph& tree) {
+    const auto& native = checked_native_tree(tree, 0, "tree_diameter");
+    return checked_wide_tree_diameter(widen_graph_costs(native));
+}
+
+inline HeavyLightDecomposition checked_heavy_light(const CheckedGraph& tree, ll root) {
+    const auto& native = checked_native_tree(tree, root, "heavy_light");
+    return HeavyLightDecomposition(native, static_cast<int>(root));
+}
+
+inline int checked_grid_id(ll row, ll col, ll width) {
+    const auto limit = numeric_limits<int>::max();
+    if (width <= 0 || width > limit || row < 0 || col < 0 || col >= width
+            || row > (limit - col) / width)
+        throw out_of_range("grid_id: invalid coordinate or width");
+    return ::grid_id(static_cast<int>(row), static_cast<int>(col), static_cast<int>(width));
+}
+
+inline pii checked_grid_rc(ll id, ll width) {
+    const auto limit = numeric_limits<int>::max();
+    if (id < 0 || id > limit || width <= 0 || width > limit)
+        throw out_of_range("grid_rc: invalid vertex or width");
+    return ::grid_rc(static_cast<int>(id), static_cast<int>(width));
+}
+
+inline int checked_grid_cell_count(ll height, ll width) {
+    if (height <= 0 || width <= 0 || height > numeric_limits<int>::max() / width)
+        throw out_of_range("grid: invalid shape or too many cells");
+    return static_cast<int>(height * width);
+}
+
+template<class Row>
+pii checked_grid_shape(const vector<Row>& board) {
+    if (board.empty() || board.size() > static_cast<size_t>(numeric_limits<int>::max())
+            || board.front().size() > static_cast<size_t>(numeric_limits<int>::max()))
+        throw out_of_range("grid: invalid shape or too many cells");
+    const int height = static_cast<int>(board.size()), width = static_cast<int>(board.front().size());
+    checked_grid_cell_count(height, width);
+    for (const auto& row : board)
+        if (row.size() != static_cast<size_t>(width))
+            throw invalid_argument("grid: rows must have equal length");
+    return {height, width};
+}
+
+class CheckedGridBfs {
+    ShortestPathResult<ll> result_;
+    int height_, width_;
+
+    int cell(ll r, ll c) const {
+        if (out_grid(r, c, height_, width_)) throw out_of_range("grid_bfs: invalid cell");
+        return ::grid_id(static_cast<int>(r), static_cast<int>(c), width_);
+    }
+
+public:
+    CheckedGridBfs(ShortestPathResult<ll> result, int height, int width)
+        : result_(std::move(result)), height_(height), width_(width) {}
+
+    int height() const { return height_; }
+    int width() const { return width_; }
+    bool reachable(ll r, ll c) const { return result_.reachable(cell(r, c)); }
+
+    pair<bool, ll> distance(ll r, ll c) const {
+        const ll d = result_.dist[cell(r, c)];
+        if (d == result_.inf) return {false, 0};
+        return {true, d};
+    }
+
+    vector<pii> path_to(ll r, ll c) const {
+        const auto path = result_.path_to(cell(r, c));
+        vector<pii> coordinates;
+        coordinates.reserve(path.size());
+        for (int id : path) coordinates.push_back(::grid_rc(id, width_));
+        return coordinates;
+    }
+
+    vvll distances() const {
+        vvll output(height_, vll(width_));
+        for (int r = 0; r < height_; ++r)
+            for (int c = 0; c < width_; ++c) {
+                const ll d = result_.dist[::grid_id(r, c, width_)];
+                output[r][c] = d == result_.inf ? -1 : d;
+            }
+        return output;
+    }
+};
+
+template<class Point>
+vi checked_grid_starts(const vector<Point>& starts, int height, int width) {
+    vi ids;
+    ids.reserve(starts.size());
+    for (const auto& start : starts) {
+        if constexpr (is_integral_v<Point>) {
+            if (start < 0 || start >= height * width)
+                throw out_of_range("grid_bfs: invalid source");
+            ids.push_back(static_cast<int>(start));
+        } else {
+            const auto [r, c] = start;
+            if (out_grid(r, c, height, width)) throw out_of_range("grid_bfs: invalid source");
+            ids.push_back(::grid_id(static_cast<int>(r), static_cast<int>(c), width));
+        }
+    }
+    return ids;
+}
+
+template<class Dirs>
+vector<pair<ll, ll>> checked_grid_directions(const Dirs& dirs, int height, int width) {
+    vector<pair<ll, ll>> offsets;
+    for (const auto& [dr, dc] : dirs)
+        if (-height < dr && dr < height && -width < dc && dc < width)
+            offsets.emplace_back(dr, dc);
+    return offsets;
+}
+
+template<class Grid, class Point, class Passable, class Dirs = decltype(kGrid4)>
+CheckedGridBfs checked_grid_bfs(const Grid& board, const vector<Point>& starts,
+                                Passable passable, const Dirs& dirs = kGrid4) {
+    const auto [height, width] = checked_grid_shape(board);
+    const auto ids = checked_grid_starts(starts, height, width);
+    const auto offsets = checked_grid_directions(dirs, height, width);
+    if constexpr (is_same_v<Passable, char>) {
+        return CheckedGridBfs(grid_bfs_impl<true>(board, ids,
+            [passable](char cell) { return cell != passable; }, offsets), height, width);
+    } else {
+        return CheckedGridBfs(grid_bfs_impl<true>(board, ids, passable, offsets), height, width);
+    }
+}
+
+template<class Grid, class Passable, class Dirs = decltype(kGrid4)>
+CheckedGridBfs checked_grid_bfs(const Grid& board, ll row, ll col,
+                                Passable passable, const Dirs& dirs = kGrid4) {
+    return checked_grid_bfs(board, vector<pair<ll, ll>>{{row, col}}, std::move(passable), dirs);
+}
+
+template<class Grid, class Passable, class Dirs = decltype(kGrid4)>
+CheckedGraph checked_graph_from_grid(const Grid& board, Passable passable, const Dirs& dirs = kGrid4) {
+    const auto [height, width] = checked_grid_shape(board);
+    const auto offsets = checked_grid_directions(dirs, height, width);
+    if constexpr (is_same_v<Passable, char>) {
+        return graph_from_grid_impl<true, CheckedGraph>(board,
+            [passable](char cell) { return cell != passable; }, offsets);
+    } else {
+        return graph_from_grid_impl<true, CheckedGraph>(board, passable, offsets);
+    }
+}
+
+template<class Grid, class Passable>
+vb checked_grid_passable(const Grid& board, Passable passable) {
+    checked_grid_shape(board);
+    return ::grid_passable(board, std::move(passable));
+}
+
+inline void check_grid_graph_shape(const CheckedGraph& graph, ll height, ll width) {
+    if (checked_grid_cell_count(height, width) != graph.size())
+        throw invalid_argument("grid_from_graph: shape does not match vertex count");
+}
+
+inline vs checked_grid_from_graph(const CheckedGraph& graph, ll height, ll width,
+                                  char floor = '.', char wall = '#') {
+    check_grid_graph_shape(graph, height, width);
+    return ::grid_from_graph(graph.native(), static_cast<int>(height), static_cast<int>(width), floor, wall);
+}
+
+inline vs checked_grid_from_graph(const CheckedGraph& graph, ll height, ll width, const vb& mask,
+                                  char floor = '.', char wall = '#') {
+    check_grid_graph_shape(graph, height, width);
+    if (mask.size() != static_cast<size_t>(graph.size()))
+        throw invalid_argument("grid_from_graph: mask does not match vertex count");
+    return ::grid_from_graph(graph.native(), static_cast<int>(height), static_cast<int>(width), mask, floor, wall);
+}
+
+template<class Passable>
+    requires invocable<Passable&, int>
+vs checked_grid_from_graph(const CheckedGraph& graph, ll height, ll width, Passable passable,
+                           char floor = '.', char wall = '#') {
+    check_grid_graph_shape(graph, height, width);
+    return ::grid_from_graph(graph.native(), static_cast<int>(height), static_cast<int>(width),
+                             std::move(passable), floor, wall);
+}
+
+inline vs checked_grid_from_graph(const CheckedGraph& graph, const vs& board,
+                                  char wall = '#', char floor = '.') {
+    const auto [height, width] = checked_grid_shape(board);
+    check_grid_graph_shape(graph, height, width);
+    return ::grid_from_graph(graph.native(), board, wall, floor);
+}
+
+template<class Components>
+struct CheckedComponents : Components {
+    explicit CheckedComponents(Components components) : Components(std::move(components)) {}
+
+    bool same(ll a, ll b) const {
+        const auto size = static_cast<int>(this->id.size());
+        if (a < 0 || a >= size || b < 0 || b >= size)
+            throw out_of_range("components: invalid vertex");
+        return Components::same(static_cast<int>(a), static_cast<int>(b));
+    }
+};
+
+using CheckedConnectedComponents = CheckedComponents<ConnectedComponents>;
+
+inline CheckedConnectedComponents checked_connected_components(const CheckedGraph& graph) {
+    if (graph.directed()) throw invalid_argument("connected_components: expected an undirected graph");
+    return CheckedConnectedComponents(::connected_components(graph.native()));
+}
+
+class CheckedStronglyConnectedComponents : public CheckedComponents<StronglyConnectedComponents> {
+    vector<pair<int, int>> cross_edges_;
+
+public:
+    explicit CheckedStronglyConnectedComponents(const CheckedGraph& graph)
+        : CheckedComponents(::strongly_connected_components(graph.native())) {
+        for (const auto& edge : graph.native().edges) {
+            const int from = id[edge.from], to = id[edge.to];
+            if (from != to) cross_edges_.emplace_back(from, to);
+        }
+    }
+
+    CheckedGraph condensation_graph() const {
+        CheckedGraph dag(count(), true);
+        set<pair<int, int>> added;
+        for (const auto& [from, to] : cross_edges_)
+            if (added.emplace(from, to).second) dag.add_edge(from, to);
+        return dag;
+    }
+};
+
+inline void checked_add_edge_with_base(CheckedGraph& graph, ll source, ll target, ll cost,
+                                       ll id, ll index_base, const char* operation) {
+    const i128 from = static_cast<i128>(source) - index_base;
+    const i128 to = static_cast<i128>(target) - index_base;
+    if (from < 0 || from >= graph.size() || to < 0 || to >= graph.size())
+        throw out_of_range(string(operation) + ": invalid endpoint after subtracting index_base");
+    graph.add_edge(static_cast<ll>(from), static_cast<ll>(to), cost, id);
+}
+
+template<class Item>
+CheckedGraph checked_graph_from_edges(ll size, const vector<Item>& edges, bool directed, ll index_base) {
+    CheckedGraph graph(size, directed);
+    for (const auto& item : edges) {
+        ll cost = 1;
+        if constexpr (std::tuple_size_v<Item> >= 3) cost = std::get<2>(item);
+        ll id = -1;
+        if constexpr (std::tuple_size_v<Item> == 4) id = std::get<3>(item);
+        checked_add_edge_with_base(graph, std::get<0>(item), std::get<1>(item), cost, id,
+                                   index_base, "graph_from_edges");
+    }
+    return graph;
+}
+
+template<class Item>
+CheckedGraph checked_to_graph(const vector<vector<Item>>& input, bool directed) {
+    if (input.size() > static_cast<size_t>(numeric_limits<int>::max()))
+        throw length_error("to_graph: too many vertices");
+    const int n = static_cast<int>(input.size());
+    CheckedGraph graph(n, directed);
+    map<tuple<int, int, ll>, pair<size_t, size_t>> counts;
+    for (int from = 0; from < n; ++from) {
+        for (const auto& item : input[from]) {
+            ll target, cost = 1;
+            if constexpr (std::integral<Item>) target = item;
+            else std::tie(target, cost) = item;
+            if (target < 0 || target >= n) throw out_of_range("to_graph: invalid neighbor");
+            const int to = static_cast<int>(target);
+            if (directed) {
+                graph.add_edge(from, to, cost);
+            } else {
+                auto& count = counts[{std::min(from, to), std::max(from, to), cost}];
+                if (from <= to) ++count.first;
+                else ++count.second;
+            }
+        }
+    }
+    for (const auto& [edge, count] : counts) {
+        const auto [u, v, cost] = edge;
+        if (u == v ? count.first % 2 != 0 : count.first != count.second)
+            throw invalid_argument("to_graph: undirected adjacency must be reciprocal");
+        const auto copies = u == v ? count.first / 2 : count.first;
+        for (size_t index = 0; index < copies; ++index) graph.add_edge(u, v, cost);
+    }
+    return graph;
+}
+
+inline vector<tuple<ll, ll, ll>> checked_to_edge_list(const CheckedGraph& graph, ll index_base = 0) {
+    vector<tuple<ll, ll, ll>> result;
+    result.reserve(graph.native().edges.size());
+    for (const auto& edge : graph.native().edges)
+        result.emplace_back(ac_detail::checked_ll(static_cast<i128>(edge.from) + index_base, "to_edge_list"),
+                            ac_detail::checked_ll(static_cast<i128>(edge.to) + index_base, "to_edge_list"), edge.cost);
+    return result;
+}
+
+inline vvi checked_to_adjacency_list(const CheckedGraph& graph) {
+    return ::to_adjacency_list(graph.native());
+}
+
+inline void checked_write_graph(ostream& output, const CheckedGraph& graph, ll index_base, bool with_cost) {
+    int largest = 0;
+    for (const auto& edge : graph.native().edges)
+        largest = std::max({largest, edge.from, edge.to});
+    (void)ac_detail::checked_ll(static_cast<i128>(largest) + index_base, "write_graph");
+    for (const auto& edge : graph.native().edges) {
+        output << index_base + edge.from << ' ' << index_base + edge.to;
+        if (with_cost) output << ' ' << edge.cost;
+        output << '\n';
+    }
+}
+
+template<class Item>
+Graph<> checked_walk_graph(int size, const vector<Item>& edges, bool directed, const char* operation) {
+    constexpr auto largest = numeric_limits<int>::max();
+    if (edges.size() > static_cast<size_t>(largest)) throw length_error(string(operation) + ": too many edges");
+    Graph<> graph(size, directed);
+    for (const auto& edge : edges) {
+        const ll source = std::get<0>(edge), target = std::get<1>(edge);
+        if (source < 0 || source >= size || target < 0 || target >= size)
+            throw out_of_range(string(operation) + ": invalid endpoint");
+        const int from = static_cast<int>(source), to = static_cast<int>(target);
+        const size_t entries = !directed && from == to ? 2 : 1;
+        if (graph[from].size() > static_cast<size_t>(largest) - entries
+                || (!directed && from != to && graph[to].size() >= static_cast<size_t>(largest)))
+            throw length_error(string(operation) + ": too many incident edges");
+        graph.add_edge(from, to);
+    }
+    return graph;
+}
+
+template<class Item>
+CheckedEulerTrailResult checked_euler_trail(ll size, const vector<Item>& edges, bool directed, ll start) {
+    const int vertices = checked_walk_size(size, "euler_trail");
+    if (start < -1 || start >= vertices) throw out_of_range("euler_trail: invalid start");
+    const auto graph = checked_walk_graph(vertices, edges, directed, "euler_trail");
+    auto result = ::euler_trail(graph, static_cast<int>(start));
+    if (!result) return {false, {}, {}};
+    return {true, std::move(result->vertices), std::move(result->edge_ids)};
+}
+
+template<class Item>
+CheckedCycleResult checked_find_cycle(ll size, const vector<Item>& edges, bool directed) {
+    const auto graph = checked_walk_graph(checked_walk_size(size, "find_cycle"), edges, directed, "find_cycle");
+    auto result = ::find_cycle(graph);
+    if (!result) return {false, {}, {}};
+    return {true, std::move(result->vertices), std::move(result->edge_ids)};
+}
+
+template<class Item>
+LowLinkResult checked_low_link(ll size, const vector<Item>& edges) {
+    const auto graph = checked_walk_graph(checked_walk_size(size, "low_link"), edges, false, "low_link");
+    return ::low_link(graph);
+}
+
+inline CheckedCycleResult checked_find_cycle(const CheckedGraph& value) {
+    auto result = ::find_cycle(value.native());
+    if (!result) return {false, {}, {}};
+    return {true, std::move(result->vertices), std::move(result->edge_ids)};
+}
+
+inline CheckedEulerTrailResult checked_euler_trail(const CheckedGraph& value, ll start) {
+    if (start < -1 || start >= value.size()) throw out_of_range("euler_trail: invalid start");
+    auto result = ::euler_trail(value.native(), static_cast<int>(start));
+    if (!result) return {false, {}, {}};
+    return {true, std::move(result->vertices), std::move(result->edge_ids)};
+}
+
+inline LowLinkResult checked_low_link(const CheckedGraph& value) {
+    if (value.directed()) throw invalid_argument("low_link: expected an undirected graph");
+    return ::low_link(value.native());
+}
+
+inline MinimumSpanningForest<ll> checked_kruskal(const CheckedGraph& value) {
+    if (value.directed()) throw invalid_argument("kruskal: expected an undirected graph");
+    return ::kruskal(value.native());
+}
+
+inline vi checked_connected_component_ids(const CheckedGraph& value) {
+    if (value.directed()) throw invalid_argument("connected_component_ids: expected an undirected graph");
+    return ::connected_components(value.native()).id;
+}
+
+inline pair<bool, vi> checked_bipartite_colors(const CheckedGraph& value) {
+    if (value.directed()) throw invalid_argument("bipartite_colors: expected an undirected graph");
+    auto result = ::bipartite_coloring(value.native());
+    if (!result) return {false, {}};
+    return {true, std::move(*result)};
+}
+
+inline vi checked_path_sources(ll source, int size, const char* error = "shortest_path: invalid vertex") {
+    return {checked_distance_vertex(source, size, error)};
+}
+
+template<class Vertex>
+vi checked_path_sources(const vector<Vertex>& sources, int size, const char* error = "shortest_path: invalid vertex") {
+    vi result;
+    result.reserve(sources.size());
+    for (const auto source : sources) result.push_back(checked_distance_vertex(source, size, error));
+    return result;
+}
+
+inline void check_dfs_size(int size) {
+    if (size > numeric_limits<int>::max() / 2)
+        throw out_of_range("dfs: too many vertices for timestamps");
+}
+
+template<class Sources>
+DfsResult checked_dfs(const CheckedGraph& graph, const Sources& sources) {
+    check_dfs_size(graph.size());
+    return ::dfs(graph.native(), checked_path_sources(sources, graph.size(), "dfs: invalid source"));
+}
+
+inline DfsResult checked_dfs_forest(const CheckedGraph& graph) {
+    check_dfs_size(graph.size());
+    return ::dfs_forest(graph.native());
+}
+
+template<class Sources>
+CheckedShortestPath checked_bfs(const CheckedGraph& value, const Sources& sources) {
+    return CheckedShortestPath(::bfs(value.native(), checked_path_sources(sources, value.size())));
+}
+
+template<class Sources>
+CheckedShortestPath checked_dijkstra(const CheckedGraph& value, const Sources& sources) {
+    for (const auto& edge : value.native().edges)
+        if (edge.cost < 0) throw invalid_argument("dijkstra: expected non-negative weights");
+    return CheckedShortestPath(dijkstra_with_distance(
+        value.native(), checked_path_sources(sources, value.size()), kuma_distance_inf));
+}
+
+inline CheckedShortestPath checked_zero_one_bfs(const CheckedGraph& value, ll source) {
+    for (const auto& edge : value.native().edges)
+        if (edge.cost != 0 && edge.cost != 1)
+            throw invalid_argument("zero_one_bfs: expected weights 0 or 1");
+    return CheckedShortestPath(::zero_one_bfs(value.native(), checked_distance_vertex(source, value.size())));
+}
+
+template<class Item>
+bool checked_is_tree(ll size, const vector<Item>& edges, bool directed) {
+    const auto graph = checked_walk_graph(checked_walk_size(size, "is_tree"), edges, directed, "is_tree");
+    return ::is_tree(graph);
+}
+
+template<class Row>
+bool checked_is_tree(const vector<Row>& adjacency) {
+    const auto n = adjacency.size();
+    if (n == 0) return false;
+    if (n > static_cast<size_t>(numeric_limits<int>::max()))
+        throw length_error("is_tree: too many vertices");
+    for (const auto& row : adjacency)
+        for (const auto& entry : row) {
+            const ll to = [&]() -> ll {
+                if constexpr (std::integral<typename Row::value_type>) return entry;
+                else return std::get<0>(entry);
+            }();
+            if (to < 0 || to >= static_cast<ll>(n)) throw out_of_range("is_tree: invalid neighbor");
+        }
+    try {
+        (void)checked_query_tree(adjacency, 0, "is_tree");
+        return true;
+    } catch (const invalid_argument&) {
+        return false;
+    }
+}
+
+template<class Vertex>
+Graph<> checked_directed_adjacency(const vector<vector<Vertex>>& input, const char* operation) {
+    constexpr auto max_size = static_cast<size_t>(numeric_limits<int>::max());
+    if (input.size() > max_size) throw length_error(string(operation) + ": too many vertices");
+    const int vertices = static_cast<int>(input.size());
+    Graph<> graph(vertices, true);
+    for (int from = 0; from < vertices; ++from) {
+        if (input[from].size() > max_size - graph.edges.size())
+            throw length_error(string(operation) + ": too many edges");
+        for (const auto to : input[from]) {
+            if (to < 0 || to >= vertices) throw out_of_range(string(operation) + ": invalid neighbor");
+            graph.add_edge(from, static_cast<int>(to));
+        }
+    }
+    return graph;
+}
+
+inline pair<bool, vi> checked_topological_order(const CheckedGraph& value) {
+    if (!value.directed()) return {false, {}};
+    auto result = ::topological_sort(value.native());
+    if (!result) return {false, {}};
+    return {true, std::move(*result)};
+}
+
+inline pair<bool, vi> checked_grundy_dag(const Graph<ll>& graph) {
+    auto result = ::grundy_dag(graph);
+    if (!result) return {false, {}};
+    return {true, std::move(*result)};
+}
+
+template<class Vertex>
+pair<bool, vi> checked_grundy_dag(const vector<vector<Vertex>>& input) {
+    return checked_grundy_dag(checked_directed_adjacency(input, "grundy_dag"));
+}
+
+inline vvi checked_condensation_graph(const Graph<ll>& graph) {
+    return ::to_adjacency_list(::condensation_graph(graph, ::strongly_connected_components(graph)));
+}
+
+template<class Index>
+vvi checked_condensation_graph(const Graph<ll>& graph, const vector<Index>& ids) {
+    if (static_cast<size_t>(graph.n) != ids.size())
+        throw invalid_argument("condensation_graph: expected one component ID per vertex");
+    auto components = ::strongly_connected_components(graph);
+    vi given_to_actual(components.count(), -1), actual_to_given(components.count(), -1);
+    for (int v = 0; v < graph.n; ++v) {
+        const auto given = ids[v];
+        if (given < 0 || given >= components.count())
+            throw out_of_range("condensation_graph: invalid component ID");
+        const int actual = components.id[v];
+        if ((given_to_actual[given] != -1 && given_to_actual[given] != actual)
+                || (actual_to_given[actual] != -1 && actual_to_given[actual] != given))
+            throw invalid_argument("condensation_graph: IDs do not describe the strong components");
+        given_to_actual[given] = actual;
+        actual_to_given[actual] = static_cast<int>(given);
+        components.id[v] = static_cast<int>(given);
+    }
+    for (const auto& edge : graph.edges)
+        if (components.id[edge.from] > components.id[edge.to])
+            throw invalid_argument("condensation_graph: IDs must be in topological order");
+    vvi groups(components.groups.size());
+    for (int actual = 0; actual < components.count(); ++actual)
+        groups[actual_to_given[actual]] = std::move(components.groups[actual]);
+    components.groups = std::move(groups);
+    return ::to_adjacency_list(::condensation_graph(graph, components));
+}
+
+template<class Vertex>
+vvi checked_condensation_graph(const vector<vector<Vertex>>& input) {
+    return checked_condensation_graph(checked_directed_adjacency(input, "condensation_graph"));
+}
+
+template<class Vertex, class Index>
+vvi checked_condensation_graph(const vector<vector<Vertex>>& input, const vector<Index>& ids) {
+    if (input.size() != ids.size())
+        throw invalid_argument("condensation_graph: expected one component ID per vertex");
+    return checked_condensation_graph(checked_directed_adjacency(input, "condensation_graph"), ids);
+}
 }  // namespace ac_graph_detail
+
+class CheckedLowestCommonAncestor {
+    LowestCommonAncestor<i128> ancestors_;
+
+    int vertex(ll id) const { return ac_graph_detail::checked_distance_vertex(id, size()); }
+
+public:
+    CheckedLowestCommonAncestor() = default;
+
+    template<class Row>
+    explicit CheckedLowestCommonAncestor(const vector<Row>& adjacency, ll root = 0)
+        : ancestors_(ac_graph_detail::checked_query_tree(adjacency, root, "lowest_common_ancestor"),
+                     static_cast<int>(root)) {}
+
+    explicit CheckedLowestCommonAncestor(const ac_graph_detail::CheckedGraph& tree, ll root = 0)
+        : ancestors_(ac_graph_detail::widen_graph_costs(
+                         ac_graph_detail::checked_native_tree(tree, root, "lowest_common_ancestor")),
+                     static_cast<int>(root)) {}
+
+    int size() const { return static_cast<int>(ancestors_.depth.size()); }
+    vector<vi> up() const { return ancestors_.up; }
+    vi depths() const { return ancestors_.depth; }
+    vll root_distances() const {
+        vll result;
+        result.reserve(size());
+        for (const auto distance : ancestors_.root_distance)
+            result.push_back(ac_detail::checked_ll(distance, "lowest_common_ancestor"));
+        return result;
+    }
+    int depth(ll v) const { return ancestors_.depth[vertex(v)]; }
+    ll root_distance(ll v) const {
+        return ac_detail::checked_ll(ancestors_.root_distance[vertex(v)], "lowest_common_ancestor");
+    }
+
+    int query(ll lhs, ll rhs) const { return ancestors_.query(vertex(lhs), vertex(rhs)); }
+
+    int kth_ancestor(ll v, ll steps) const {
+        const int id = vertex(v);
+        if (steps < 0) throw out_of_range("lowest_common_ancestor: negative steps");
+        if (steps > ancestors_.depth[id]) return -1;
+        return ancestors_.kth_ancestor(id, static_cast<int>(steps));
+    }
+
+    int distance_edges(ll lhs, ll rhs) const {
+        const int first = vertex(lhs), second = vertex(rhs);
+        const int ancestor = ancestors_.query(first, second);
+        return static_cast<int>(ll(ancestors_.depth[first]) + ancestors_.depth[second] - 2LL * ancestors_.depth[ancestor]);
+    }
+
+    ll distance_cost(ll lhs, ll rhs) const {
+        const int first = vertex(lhs), second = vertex(rhs);
+        return ac_detail::checked_ll(ancestors_.distance_cost(first, second), "lowest_common_ancestor");
+    }
+};
 
 /// Compute one state for every root of a nonempty undirected tree, without recursion.
 /// merge(left, right) is associative with the supplied identity. finish(merged, v)
@@ -3062,15 +4113,32 @@ std::vector<State> checked_rerooting(const std::vector<std::vector<Vertex>>& adj
                        },
                        std::move(finish), static_cast<int>(root));
 }
+
+template<class State, class Merge, class Lift, class Finish>
+std::vector<State> checked_rerooting(const CheckedGraph& tree, State identity, Merge merge,
+                                    Lift lift, Finish finish, ll root) {
+    const auto& native = checked_native_tree(tree, root, "rerooting");
+    auto send = [&](const State& state, const Edge<ll>& edge) {
+        if constexpr (is_invocable_v<Lift&, const State&, int, int, ll, int>)
+            return std::invoke(lift, state, edge.from, edge.to, edge.cost, edge.id);
+        else
+            return std::invoke(lift, state, edge.from, edge.to);
+    };
+    return ::rerooting(native, std::move(identity), std::move(merge), send,
+                       std::move(finish), static_cast<int>(root));
+}
 }  // namespace ac_graph_detail
 
 #ifdef AC_HAS_ACL
 // Checked directed flow using ACL's residual graph.
-class CheckedMaxFlow {
+template<class Cap>
+class CheckedMaxFlowAs {
     int vertices_;
     int edges_ = 0;
+    bool manually_changed_flow_ = false;
+    std::optional<std::pair<int, int>> checked_terminals_;
     // ACL exposes get_edge and min_cut as non-const, though both only read this graph.
-    mutable atcoder::mf_graph<long long> graph_;
+    mutable atcoder::mf_graph<Cap> graph_;
 
     static int checked_vertices(long long n) {
         if (n < 0 || n > std::numeric_limits<int>::max())
@@ -3088,10 +4156,25 @@ class CheckedMaxFlow {
         return graph_.get_edge(static_cast<int>(id));
     }
 
-public:
-    explicit CheckedMaxFlow(long long n) : vertices_(checked_vertices(n)), graph_(vertices_) {}
+    void validate_flow(int source, int sink) const {
+        // An int-sized number of i64 edge flows fits in a signed 128-bit balance.
+        std::vector<__int128> balance(vertices_);
+        for (int id = 0; id < edges_; ++id) {
+            const auto edge = graph_.get_edge(id);
+            balance[edge.from] += edge.flow;
+            balance[edge.to] -= edge.flow;
+        }
+        for (int v = 0; v < vertices_; ++v) {
+            if ((v == source && balance[v] < 0) || (v == sink && balance[v] > 0)
+                    || (v != source && v != sink && balance[v] != 0))
+                throw std::invalid_argument("max_flow: edited flow violates conservation for these terminals");
+        }
+    }
 
-    int add_edge(long long from, long long to, long long capacity) {
+public:
+    explicit CheckedMaxFlowAs(long long n) : vertices_(checked_vertices(n)), graph_(vertices_) {}
+
+    int add_edge(long long from, long long to, Cap capacity) {
         const int u = vertex(from), v = vertex(to);
         if (capacity < 0) throw std::invalid_argument("max_flow: negative capacity");
         // ACL stores indexes into its adjacency vectors in int; a self-loop
@@ -3103,38 +4186,62 @@ public:
         return id;
     }
 
-    long long flow(long long source, long long sink,
-                   long long limit = std::numeric_limits<long long>::max()) {
+    void change_edge(long long id, Cap capacity, Cap sent) {
+        const auto previous = checked_edge(id);
+        if (capacity < 0 || sent < 0 || sent > capacity)
+            throw std::invalid_argument("max_flow: change_edge requires 0 <= flow <= capacity");
+        graph_.change_edge(static_cast<int>(id), capacity, sent);
+        if (sent != previous.flow && previous.from != previous.to) {
+            manually_changed_flow_ = true;
+            checked_terminals_.reset();
+        }
+    }
+
+    Cap flow(long long source, long long sink, Cap limit = std::numeric_limits<Cap>::max()) {
         const int s = vertex(source), t = vertex(sink);
         if (s == t) throw std::invalid_argument("max_flow: source and sink must differ");
         if (limit < 0) throw std::invalid_argument("max_flow: negative flow limit");
+        const std::pair terminals{s, t};
+        if (manually_changed_flow_ && checked_terminals_ != terminals) {
+            validate_flow(s, t);
+            checked_terminals_ = terminals;
+        }
         return limit == 0 ? 0 : graph_.flow(s, t, limit);
     }
 
-    long long edge_flow(long long id) const {
+    Cap edge_flow(long long id) const {
         return checked_edge(id).flow;
     }
 
-    std::tuple<int, int, long long, long long> get_edge(long long id) const {
+    std::tuple<int, int, Cap, Cap> get_edge(long long id) const {
         const auto edge = checked_edge(id);
         return {edge.from, edge.to, edge.cap, edge.flow};
+    }
+
+    std::vector<std::tuple<int, int, Cap, Cap>> edges() const {
+        std::vector<std::tuple<int, int, Cap, Cap>> result;
+        result.reserve(edges_);
+        for (int id = 0; id < edges_; ++id) result.push_back(get_edge(id));
+        return result;
     }
 
     std::vector<bool> min_cut(long long source) const {
         return graph_.min_cut(vertex(source));
     }
 };
+using CheckedMaxFlow = CheckedMaxFlowAs<long long>;
 #endif // AC_HAS_ACL
 
 #ifdef AC_HAS_ACL
 // Checked, single-use min-cost maximum flow with explicit capacity limit.
-class CheckedMinCostFlow {
-    using Graph = atcoder::mcf_graph<long long, long long>;
-    using EdgeSnapshot = std::tuple<int, int, long long, long long, long long>;
+template<class Cap, class Cost>
+class CheckedMinCostFlowAs {
+    using Graph = atcoder::mcf_graph<Cap, Cost>;
+    using EdgeSnapshot = std::tuple<int, int, Cap, Cap, Cost>;
 
     int vertices_;
     int edges_ = 0;
-    long long max_cost_ = 0;
+    Cost max_cost_ = 0;
     bool solved_ = false;
     mutable Graph graph_;
 
@@ -3160,11 +4267,29 @@ class CheckedMinCostFlow {
         return graph_.get_edge(static_cast<int>(id));
     }
 
-    static EdgeSnapshot snapshot(const Graph::edge& edge) {
+    static EdgeSnapshot snapshot(const typename Graph::edge& edge) {
         return {edge.from, edge.to, edge.cap, edge.flow, edge.cost};
     }
 
-    std::pair<int, int> prepare_solve(long long source, long long sink, long long limit) {
+    Cap full_flow_bound(long long source, long long sink) const {
+        check_unsolved();
+        const int from = vertex(source), to = vertex(sink);
+        if (from == to) throw std::invalid_argument("min_cost_flow: source and sink must differ");
+        i128 leaving = 0, entering = 0;
+        for (int id = 0; id < edges_; ++id) {
+            const auto edge = graph_.get_edge(id);
+            if (edge.from == edge.to) continue;
+            if (edge.from == from) leaving += edge.cap;
+            if (edge.to == to) entering += edge.cap;
+        }
+        const i128 bound = std::min(leaving, entering);
+        if (bound > std::numeric_limits<Cap>::max())
+            throw std::overflow_error(std::same_as<Cap, int> ? "min_cost_flow: inferred flow limit does not fit in i32" :
+                                                            "min_cost_flow: inferred flow limit does not fit in i64");
+        return static_cast<Cap>(bound);
+    }
+
+    std::pair<int, int> prepare_solve(long long source, long long sink, Cap limit) {
         check_unsolved();
         const int s = vertex(source), t = vertex(sink);
         if (s == t) throw std::invalid_argument("min_cost_flow: source and sink must differ");
@@ -3172,20 +4297,22 @@ class CheckedMinCostFlow {
         if (limit != 0) {
             // A conservative version of ACL's n*C bound protects distance arithmetic.
             // Each unit then costs at most (n-1)*C; bound the total before solving.
-            if (max_cost_ > 8'000'000'000'000'000'000LL / vertices_)
+            constexpr long long acl_bound = std::same_as<Cost, int> ? 2'000'000'000LL : 8'000'000'000'000'000'000LL;
+            if (max_cost_ > acl_bound / vertices_)
                 throw std::overflow_error("min_cost_flow: vertex count times maximum cost exceeds ACL bound");
             const long long path_cost = (vertices_ - 1) * max_cost_;
-            if (path_cost != 0 && limit > std::numeric_limits<long long>::max() / path_cost)
-                throw std::overflow_error("min_cost_flow: total cost bound exceeds i64");
+            if (path_cost != 0 && limit > std::numeric_limits<Cost>::max() / path_cost)
+                throw std::overflow_error(std::same_as<Cost, int> ? "min_cost_flow: total cost bound exceeds i32" :
+                                                                 "min_cost_flow: total cost bound exceeds i64");
         }
         solved_ = true;
         return {s, t};
     }
 
 public:
-    explicit CheckedMinCostFlow(long long n) : vertices_(checked_vertices(n)), graph_(vertices_) {}
+    explicit CheckedMinCostFlowAs(long long n) : vertices_(checked_vertices(n)), graph_(vertices_) {}
 
-    int add_edge(long long from, long long to, long long capacity, long long cost) {
+    int add_edge(long long from, long long to, Cap capacity, Cost cost) {
         check_unsolved();
         const int u = vertex(from), v = vertex(to);
         if (capacity < 0) throw std::invalid_argument("min_cost_flow: negative capacity");
@@ -3199,18 +4326,26 @@ public:
         return id;
     }
 
-    std::pair<long long, long long> flow(long long source, long long sink, long long limit) {
+    std::pair<Cap, Cost> flow(long long source, long long sink, Cap limit) {
         const auto [s, t] = prepare_solve(source, sink, limit);
-        return limit == 0 ? std::pair{0LL, 0LL} : graph_.flow(s, t, limit);
+        return limit == 0 ? std::pair<Cap, Cost>{0, 0} : graph_.flow(s, t, limit);
     }
 
-    std::vector<std::pair<long long, long long>> slope(long long source, long long sink, long long limit) {
+    std::vector<std::pair<Cap, Cost>> slope(long long source, long long sink, Cap limit) {
         const auto [s, t] = prepare_solve(source, sink, limit);
         if (limit == 0) return {{0, 0}};
         return graph_.slope(s, t, limit);
     }
 
-    long long edge_flow(long long id) const {
+    std::pair<Cap, Cost> flow_all(long long source, long long sink) {
+        return flow(source, sink, full_flow_bound(source, sink));
+    }
+
+    std::vector<std::pair<Cap, Cost>> slope_all(long long source, long long sink) {
+        return slope(source, sink, full_flow_bound(source, sink));
+    }
+
+    Cap edge_flow(long long id) const {
         return checked_edge(id).flow;
     }
 
@@ -3226,4 +4361,5 @@ public:
         return result;
     }
 };
+using CheckedMinCostFlow = CheckedMinCostFlowAs<long long, long long>;
 #endif // AC_HAS_ACL

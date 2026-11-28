@@ -92,6 +92,7 @@ public:
 /// Tのコピー・移動・演算コストは別です。push_backなどは列を変更します。
 template <class T, class Op = std::plus<T>>
 class SlidingWindowAggregation {
+    template<class Value, class Operation> friend class CheckedSlidingWindowAggregation;
     struct Entry {
         T value;
         T product;
@@ -153,6 +154,65 @@ public:
     }
 };
 
+template<class T, class Op>
+class CheckedSlidingWindowAggregation {
+    using Queue = SlidingWindowAggregation<T, Op>;
+    Queue queue_;
+
+    void require_nonempty() const {
+        if (queue_.empty()) throw std::out_of_range("sliding_window_aggregation: queue is empty");
+    }
+
+public:
+    CheckedSlidingWindowAggregation(const std::vector<T>& values, T identity, Op op)
+        : queue_(values, std::move(identity), std::move(op)) {}
+
+    long long size() const {
+        if (queue_.size() > static_cast<unsigned long long>(std::numeric_limits<long long>::max()))
+            throw std::overflow_error("sliding_window_aggregation: size does not fit in i64");
+        return static_cast<long long>(queue_.size());
+    }
+
+    bool empty() const { return queue_.empty(); }
+    void clear() { queue_.clear(); }
+    T prod() const { return queue_.prod(); }
+
+    void reserve(long long capacity) {
+        if (capacity < 0 || static_cast<unsigned long long>(capacity) > std::numeric_limits<std::size_t>::max())
+            throw std::out_of_range("sliding_window_aggregation: invalid capacity");
+        queue_.reserve(static_cast<std::size_t>(capacity));
+    }
+
+    void push_back(T value) { queue_.push_back(std::move(value)); }
+
+    void pop_front() {
+        require_nonempty();
+        if (!queue_.front_.empty()) {
+            queue_.pop_front();
+            return;
+        }
+        std::vector<typename Queue::Entry> next;
+        next.reserve(queue_.back_.size() - 1);
+        for (std::size_t index = queue_.back_.size(); index > 1; --index) {
+            const auto& value = queue_.back_[index - 1].value;
+            T product = next.empty() ? value : queue_.op_(value, next.back().product);
+            next.push_back({value, std::move(product)});
+        }
+        queue_.front_.swap(next);
+        queue_.back_.clear();
+    }
+
+    T front() const {
+        require_nonempty();
+        return queue_.front();
+    }
+
+    T back() const {
+        require_nonempty();
+        return queue_.back();
+    }
+};
+
 // @acf fn IntervalSet — () -> IntervalSet<T> — 半開区間の集合・mex・次/前の整数
 /// 整数集合を交わらない半開区間[l,r)として管理します。隣接区間は自動で結合します。
 /// insert(l,r)、erase(l,r)は実際に増減した整数の個数(uint64_t)を返します。
@@ -163,6 +223,7 @@ public:
 /// sizeは登録した整数の個数をuint64_tで返します。next/prevの不在はnulloptです。
 template <class T = long long>
 class IntervalSet {
+    template<class> friend class CheckedIntervalSetAs;
     static_assert(std::is_integral_v<T> && !std::is_same_v<T, bool> && sizeof(T) <= 8,
                   "IntervalSet<T> requires an integer type up to 64 bits");
     std::map<T, T> intervals_;
@@ -268,3 +329,56 @@ public:
         return x < it->second ? x : static_cast<T>(it->second - 1);
     }
 };
+
+template<class T>
+class CheckedIntervalSetAs {
+    IntervalSet<T> values_;
+
+public:
+    long long insert(T left, T right) {
+        if (right < left) throw std::invalid_argument("interval_set: left must not exceed right");
+        auto added = values_.length(left, right);
+        const auto room = static_cast<std::uint64_t>(std::numeric_limits<long long>::max()) - values_.size();
+        if (added > room) {
+            const auto& intervals = values_.intervals_;
+            auto item = intervals.lower_bound(left);
+            if (item != intervals.begin() && std::prev(item)->second > left) --item;
+            for (; item != intervals.end() && item->first < right; ++item) {
+                const auto overlap_left = std::max(left, item->first);
+                const auto overlap_right = std::min(right, item->second);
+                if (overlap_left < overlap_right) added -= values_.length(overlap_left, overlap_right);
+            }
+            if (added > room) throw std::overflow_error("interval_set: size does not fit in i64");
+        }
+        return static_cast<long long>(values_.insert(left, right));
+    }
+
+    long long erase(T left, T right) {
+        return static_cast<long long>(values_.erase(left, right));
+    }
+
+    void clear() { values_.clear(); }
+    bool empty() const { return values_.empty(); }
+    long long size() const { return static_cast<long long>(values_.size()); }
+    long long interval_count() const { return static_cast<long long>(values_.interval_count()); }
+    bool contains(T value) const { return values_.contains(value); }
+    bool contains(T left, T right) const { return values_.contains(left, right); }
+    bool intersects(T left, T right) const { return values_.intersects(left, right); }
+    T mex(T value = T{}) const { return values_.mex(value); }
+
+    std::pair<bool, T> next(T value) const {
+        const auto found = values_.next(value);
+        return {found.has_value(), found.value_or(0)};
+    }
+
+    std::pair<bool, T> prev(T value) const {
+        const auto found = values_.prev(value);
+        return {found.has_value(), found.value_or(0)};
+    }
+
+    std::vector<std::pair<T, T>> intervals() const {
+        return {values_.begin(), values_.end()};
+    }
+};
+
+using CheckedIntervalSet = CheckedIntervalSetAs<long long>;

@@ -1265,9 +1265,8 @@ istream& extract(istream& is, T& x) {
     } else if constexpr (ac_detail::io::is_mutable_range_v<T>) {
         return read_seq(is, x);
     } else if constexpr (ac_detail::io::is_modint_v<T>) {
-        ll value;
-        is >> value;
-        x = value;
+        ll value{};
+        if (is >> value) x = value;
         return is;
     } else {
         return is >> x;
@@ -1284,13 +1283,10 @@ istream& extract(istream& is, T& x) {
 
 // Stream adapters belong to common input, before geometry defines its readers.
 #ifdef AC_HAS_ACL
-// ACL modint の直接入力。負数や mod 以上の値も代入時に正規化される。
+// ACL modint の直接入力。符号付き整数を読めたときだけ正規化して代入する。
 template <class Mint, enable_if_t<ac_detail::io::is_modint_v<Mint>, int> = 0>
 istream& operator>>(istream& is, Mint& value) {
-    ll input;
-    is >> input;
-    value = input;
-    return is;
+    return ac_detail::input::extract(is, value);
 }
 #endif
 // @acf helper operator>> — STL mutable range / pair / tuple / optional の入力
@@ -2018,6 +2014,43 @@ template <class T>
 constexpr void delta_update(T& total, const T& old_value, const T& new_value) {
     total += new_value - old_value;
 }
+
+namespace ac_detail {
+template<class T>
+T narrow_kuma_update(i128 value, const char* operation) {
+    if (value < numeric_limits<T>::min() || value > numeric_limits<T>::max())
+        throw overflow_error(string(operation) + ": result does not fit the destination type");
+    return static_cast<T>(value);
+}
+
+template<bool Maximum, class T, class Target, class U>
+bool kuma_extreme_update(Target&& target, const U& candidate) {
+    const T& current = target;
+    if (!(Maximum ? current < candidate : candidate < current)) return false;
+    const char* operation = Maximum ? "chmax" : "chmin";
+    if constexpr ((same_as<T, int> || same_as<T, ll>) && is_floating_point_v<U>) {
+        const auto truncated = std::trunc(candidate);
+        const auto limit = std::ldexp(1.0, numeric_limits<T>::digits);
+        if (!std::isfinite(truncated) || truncated < -limit || truncated >= limit)
+            throw overflow_error(string(operation) + ": candidate does not fit the destination type");
+        target = static_cast<T>(truncated);
+    } else if constexpr ((same_as<T, int> || same_as<T, ll>) && is_integral_v<U>) {
+        target = narrow_kuma_update<T>(candidate, operation);
+    } else {
+        target = static_cast<T>(candidate);
+    }
+    return true;
+}
+
+template<class T>
+void kuma_delta_update(T& total, const T& old_value, const T& new_value) {
+    if constexpr (is_integral_v<T>) {
+        total = narrow_kuma_update<T>(static_cast<i128>(total) + new_value - old_value, "delta_update");
+    } else {
+        ::delta_update(total, old_value, new_value);
+    }
+}
+}  // namespace ac_detail
 // @acf fn popv — (A& a) -> value_type — top/front を取り出して pop、値を返す
 
 /// 先頭またはtopの要素を取り出し、コンテナから削除する。
@@ -2647,6 +2680,19 @@ inline str base_convert(string_view s, const map<char, int>& digit_map) {
     return ac_detail::radix::convert(s, from_base, 10, &digit_map);
 }
 
+namespace ac_detail::radix {
+template<class T>
+str checked_digit_map_convert(string_view s, const map<char, T>& digit_map) {
+    map<char, int> narrowed;
+    for (const auto& [symbol, digit] : digit_map) {
+        if (digit < 0 || std::cmp_greater(digit, digit_map.size()) || digit >= numeric_limits<int>::max() / 10)
+            throw invalid_argument("base_convert: digit_map values must be consecutive from 0 or 1");
+        narrowed.emplace(symbol, static_cast<int>(digit));
+    }
+    return ::base_convert(s, narrowed);
+}
+}  // namespace ac_detail::radix
+
 // @acf fn fill_range — (range&, l, r, value) -> void — 半開区間 [l,r) を同じ値で埋める
 
 /// 配列の半開区間を同じ値で埋める。
@@ -2671,6 +2717,18 @@ void fill_range(R& values, int l, int r, const T& value) {
 #endif
     ranges::fill(ranges::begin(values) + l, ranges::begin(values) + r, value);
 }
+
+namespace ac_detail {
+template<class R, class T>
+void checked_fill_range(R& values, ll l, ll r, const T& value) {
+    if (l < 0 || l > r || std::cmp_greater(r, values.size()) || r > numeric_limits<int>::max())
+        throw out_of_range("fill_range: invalid interval");
+    if constexpr (requires { ::fill_range(values, 0, 0, value); })
+        ::fill_range(values, static_cast<int>(l), static_cast<int>(r), value);
+    else
+        for (ll i = l; i < r; ++i) values[i] = value;
+}
+}  // namespace ac_detail
 
 // @acf fn for_rect — (r1, r2, c1, c2, F) -> void — 半開矩形を行優先で走査
 
@@ -2915,6 +2973,56 @@ optional<GridBounds> grid_bounds_if(const Grid& grid, Pred pred) {
 }
 
 namespace ac_detail::grid {
+inline int checked_rect_endpoint(ll endpoint) {
+    if (endpoint < numeric_limits<int>::min() || endpoint > numeric_limits<int>::max())
+        throw out_of_range("for_rect: endpoint does not fit i32");
+    return static_cast<int>(endpoint);
+}
+
+template<class Grid>
+void check_kuma_rect(const Grid& grid, ll top, ll bottom, ll left, ll right) {
+    if (top < 0 || bottom < top || std::cmp_greater(bottom, grid.size())
+            || left < 0 || right < left || bottom > numeric_limits<int>::max()
+            || right > numeric_limits<int>::max())
+        throw out_of_range("grid rectangle: invalid bounds");
+    for (ll row = top; row < bottom; ++row)
+        if (std::cmp_greater(right, grid[row].size()))
+            throw out_of_range("grid rectangle: column is outside a selected row");
+}
+
+template<class Grid, class T>
+void checked_fill_rect(Grid& grid, ll top, ll left, ll bottom, ll right, const T& value) {
+    check_kuma_rect(grid, top, bottom, left, right);
+    if constexpr (requires { ::fill_rect(grid, 0, 0, 0, 0, value); }) {
+        ::fill_rect(grid, static_cast<int>(top), static_cast<int>(left),
+                    static_cast<int>(bottom), static_cast<int>(right), value);
+    } else {
+        // Some standard-library versions do not model indirectly_writable for vector<bool>.
+        for (ll row = top; row < bottom; ++row)
+            for (ll col = left; col < right; ++col) grid[row][col] = value;
+    }
+}
+
+struct KumaGridBounds {
+    bool found;
+    int top, left, bottom, right;
+
+    bool contains(ll row, ll col) const {
+        return found && top <= row && row <= bottom && left <= col && col <= right;
+    }
+};
+
+template<class Grid, class Predicate>
+KumaGridBounds checked_grid_bounds_if(const Grid& grid, Predicate predicate) {
+    const auto limit = static_cast<size_t>(numeric_limits<int>::max());
+    if (grid.size() > limit) throw length_error("grid_bounds_if: too many rows");
+    for (const auto& row : grid)
+        if (row.size() > limit) throw length_error("grid_bounds_if: row is too long");
+    const auto bounds = ::grid_bounds_if(grid, std::move(predicate));
+    if (!bounds) return {false, 0, 0, 0, 0};
+    return {true, bounds->top, bounds->left, bounds->bottom, bounds->right};
+}
+
 template <class Rows>
 bool rectangular(const Rows& grid) {
     if (grid.empty()) return true;
@@ -3608,7 +3716,7 @@ reduced_shape_t<T> zero_like(const T& value) {
     }
 }
 
-template <class Out, class In>
+template <bool Checked = false, class Out, class In>
 void add_assign(Out& out, const In& in) {
     if constexpr (ac_detail::io::is_range_v<bare_t<In>>) {
         auto out_it = std::begin(out);
@@ -3616,10 +3724,16 @@ void add_assign(Out& out, const In& in) {
         const auto out_end = std::end(out);
         const auto in_end = std::end(in);
         for (; out_it != out_end && in_it != in_end; ++out_it, ++in_it)
-            add_assign(*out_it, *in_it);
+            add_assign<Checked>(*out_it, *in_it);
 #ifdef LOCAL
         assert(out_it == out_end && in_it == in_end);
 #endif
+    } else if constexpr (Checked && std::is_integral_v<bare_t<Out>>) {
+        using Element = bare_t<Out>;
+        const i128 sum = static_cast<i128>(out) + static_cast<i128>(in);
+        if (sum < numeric_limits<Element>::min() || sum > numeric_limits<Element>::max())
+            throw overflow_error("axis_sum: intermediate value does not fit the element type");
+        out = static_cast<Element>(sum);
     } else {
         out += in;
     }
@@ -3660,7 +3774,7 @@ bool rectangular(const T& value) {
     }
 }
 
-template <size_t Axis, class Range>
+template <size_t Axis, bool Checked = false, class Range>
 axis_result_t<Axis, Range> axis_sum_impl(const Range& input) {
     using Bare = bare_t<Range>;
     static_assert(ac_detail::io::is_range_v<Bare>,
@@ -3672,12 +3786,12 @@ axis_result_t<Axis, Range> axis_sum_impl(const Range& input) {
         const auto end = std::end(input);
         if (it == end) return result;
         result = zero_like(*it);
-        for (; it != end; ++it) add_assign(result, *it);
+        for (; it != end; ++it) add_assign<Checked>(result, *it);
         return result;
     } else {
         Result result;
         for (const auto& child : input)
-            result.push_back(axis_sum_impl<Axis - 1>(child));
+            result.push_back(axis_sum_impl<Axis - 1, Checked>(child));
         return result;
     }
 }
@@ -3867,6 +3981,76 @@ long double stddev(const Range& a) {
     return sqrt(variance(a));
 }
 
+namespace ac_detail {
+enum class KumaStatistic { mean, variance, stddev };
+
+template<KumaStatistic Statistic, class Range>
+double kuma_statistic(const Range& values, const char* operation) {
+    const auto first = std::begin(values);
+    if (first == std::end(values))
+        throw invalid_argument(string(operation) + ": expected a nonempty sequence");
+    using Element = remove_cvref_t<decltype(*first)>;
+    const Element origin = *first;
+    long double scale = 1;
+    if constexpr (is_floating_point_v<Element>) {
+        scale = 0;
+        for (const auto value : values) {
+            if (!std::isfinite(value)) throw invalid_argument(string(operation) + ": expected finite values");
+            scale = std::max(scale, std::abs(static_cast<long double>(value)));
+        }
+        if (scale == 0) return 0;
+    }
+    auto centered = [&](Element value) -> long double {
+        if constexpr (is_integral_v<Element>) {
+            // Subtract in integer arithmetic so neighboring i64 values stay distinct.
+            return static_cast<long double>(static_cast<i128>(value) - origin);
+        } else {
+            if constexpr (Statistic != KumaStatistic::mean) {
+                const long double x = value, anchor = origin;
+                if ((x < 0) == (anchor < 0)) return (x - anchor) / scale;
+                return x / scale - anchor / scale;
+            }
+            return static_cast<long double>(value) / scale;
+        }
+    };
+
+    size_t count = 0;
+    long double result;
+    if constexpr (Statistic == KumaStatistic::mean && is_integral_v<Element>) {
+        i128 sum = 0;
+        for (const auto value : values) {
+            sum += value;
+            ++count;
+        }
+        result = static_cast<long double>(sum) / count;
+    } else {
+        long double sum = 0;
+        for (const auto value : values) {
+            sum += centered(value);
+            ++count;
+        }
+        const long double mean = sum / count;
+        if constexpr (Statistic == KumaStatistic::mean) {
+            result = mean * scale;
+        } else {
+            long double squares = 0;
+            for (const auto value : values) {
+                const long double deviation = centered(value) - mean;
+                squares += deviation * deviation;
+            }
+            const long double variance = squares / count;
+            if constexpr (Statistic == KumaStatistic::stddev)
+                result = std::sqrt(variance) * scale;
+            else
+                result = (variance * scale) * scale;
+        }
+    }
+    if (!std::isfinite(result) || std::abs(result) > numeric_limits<double>::max())
+        throw overflow_error(string(operation) + ": result does not fit in f64");
+    return static_cast<double>(result);
+}
+}  // namespace ac_detail
+
 // @acf fn product_by — (const nested range& a, Projection projection) -> scalar / (const nested range& a) -> scalar — 葉を変換して全体を乗算
 
 /// ネストした列の葉を変換し、全体を掛け合わせる。
@@ -3943,7 +4127,7 @@ template <class T>
 inline constexpr bool is_text_v =
     is_same_v<bare_t<T>, string> || is_same_v<bare_t<T>, string_view>;
 
-template <class Value, class Needle>
+template <class KumaLeaf = void, class Value, class Needle>
 ll count_impl(const Value& value, const Needle& needle) {
     using Bare = bare_t<Value>;
     if constexpr (is_text_v<Bare>) {
@@ -3956,8 +4140,14 @@ ll count_impl(const Value& value, const Needle& needle) {
         }
     } else if constexpr (ac_detail::io::is_range_v<Bare>) {
         ll result = 0;
-        for (const auto& child : value) result += count_impl(child, needle);
+        for (const auto& child : value) result += count_impl<KumaLeaf>(child, needle);
         return result;
+    } else if constexpr (!std::is_void_v<KumaLeaf> && !std::is_same_v<KumaLeaf, Bare>) {
+        // Map keys are const in storage; compare the two fields without copying.
+        if constexpr (ac_detail::io::is_pair_v<Bare>)
+            return static_cast<ll>(value.first == needle.first && value.second == needle.second);
+        else
+            return static_cast<ll>(KumaLeaf(value) == needle);
     } else {
         return static_cast<ll>(value == needle);
     }
@@ -3983,6 +4173,49 @@ template <class Range, class Value>
 ll count_all(const Range& input, const Value& target) {
     return ac_detail::nested_count::count_impl(input, target);
 }
+
+namespace ac_detail::nested_sum {
+template<class T>
+T narrow_kuma_reduction(i128 value, const char* operation) {
+    if (value < numeric_limits<T>::min() || value > numeric_limits<T>::max())
+        throw overflow_error(string(operation) + ": result does not fit the element type");
+    return static_cast<T>(value);
+}
+
+template<class T, class Leaf>
+T kuma_sum_cast(const Leaf& value) {
+    if constexpr (is_integral_v<T> && is_floating_point_v<Leaf>) {
+        const auto integral = std::trunc(value);
+        const auto limit = std::ldexp(1.0, numeric_limits<T>::digits);
+        if (!std::isfinite(integral) || integral < -limit || integral >= limit)
+            throw overflow_error("sum_as: leaf does not fit the requested type");
+    } else if constexpr (is_integral_v<T> && is_integral_v<Leaf>) {
+        return narrow_kuma_reduction<T>(value, "sum_as");
+    }
+    return static_cast<T>(value);
+}
+
+template<bool Product, class T, class Range, class Projection>
+T kuma_reduce(const Range& values, Projection&& projection, const char* operation) {
+    if constexpr (ac_detail::io::is_range_v<bare_t<Range>>) {
+        T accumulator = T(Product ? 1 : 0);
+        for (const auto& value : values) {
+            const T next = kuma_reduce<Product, T>(value, projection, operation);
+            if constexpr (is_integral_v<T>) {
+                const i128 wide = accumulator;
+                accumulator = narrow_kuma_reduction<T>(Product ? wide * next : wide + next, operation);
+            } else if constexpr (Product) {
+                accumulator *= next;
+            } else {
+                accumulator += next;
+            }
+        }
+        return accumulator;
+    } else {
+        return std::invoke(projection, values);
+    }
+}
+}  // namespace ac_detail::nested_sum
 
 // @acf fn axis_sum — (Axis, const nested range& a) -> nested vector — 指定軸を潰したN次元配列の和
 
@@ -5020,6 +5253,42 @@ optional<vi> find_impl(const R& values, const V& target) {
 }
 }  // namespace ac_detail::nested_find
 
+namespace ac_detail::nested_find {
+template<class Leaf, class R, class V>
+bool find_kuma_leaf(const R& values, const V& target, vi& reversed_path) {
+    using Element = ac_detail::algorithm::range_value_t<R>;
+    size_t index = 0;
+    for (const auto& value : values) {
+        bool found;
+        if constexpr (ac_detail::io::is_range_v<Element>)
+            found = find_kuma_leaf<Leaf>(value, target, reversed_path);
+        else if constexpr (requires { value == target; })
+            found = value == target;
+        else
+            found = static_cast<Leaf>(value) == target;
+        if (found) {
+            reversed_path.push_back(ac_detail::checked_range_index(index));
+            return true;
+        }
+        ++index;
+    }
+    return false;
+}
+
+template<class Leaf, class R, class V>
+vi checked_kuma_find(const R& values, const V& target) {
+    vi coordinates;
+    find_kuma_leaf<Leaf>(values, target, coordinates);
+    std::reverse(coordinates.begin(), coordinates.end());
+    return coordinates;
+}
+
+inline int checked_kuma_substring(string_view text, string_view needle) {
+    const auto position = text.find(needle);
+    return ac_detail::checked_range_index(position == string_view::npos ? text.size() : position);
+}
+}  // namespace ac_detail::nested_find
+
 // @acf fn find — (range, value) -> int / (string, string) -> int — 要素または部分文字列を左から探す
 
 /// 要素・部分文字列の最初の位置、またはネスト配列の座標を返す。
@@ -5089,6 +5358,27 @@ int find(const R& values, const V& target) {
     return index;
 }
 
+namespace ac_detail {
+template<class A, class B, class Check>
+bool has_common_impl(const A& a, const B& b, Check check) {
+    using T = common_type_t<std::ranges::range_value_t<const A>,
+                            std::ranges::range_value_t<const B>>;
+    set<T> values;
+    for (const auto& value : a) {
+        T key = static_cast<T>(value);
+        check(std::as_const(key));
+        values.insert(std::move(key));
+    }
+    if (values.empty()) return false;
+    for (const auto& value : b) {
+        const T key = static_cast<T>(value);
+        check(key);
+        if (values.contains(key)) return true;
+    }
+    return false;
+}
+}  // namespace ac_detail
+
 // @acf fn has_common — (range, range) -> bool — 共通する要素があるか判定
 
 /// 2つのrangeに共通する要素があればtrue、なければfalse。各要素を共通型に変換し、大小比較で同値か判定する。文字列そのものは文字のrangeとして扱う。入力は変更しない。空rangeはfalse。aがN要素・D種類、bがM要素のとき、時間O((N+M) log(D+1))、追加メモリO(D)（要素の変換・コピー・比較の費用を除く）
@@ -5096,14 +5386,7 @@ int find(const R& values, const V& target) {
 template <class A, class B>
 requires std::ranges::input_range<const A> && std::ranges::input_range<const B>
 bool has_common(const A& a, const B& b) {
-    using T = common_type_t<std::ranges::range_value_t<const A>,
-                            std::ranges::range_value_t<const B>>;
-    set<T> values;
-    for (const auto& value : a) values.insert(static_cast<T>(value));
-    if (values.empty()) return false;
-    for (const auto& value : b)
-        if (values.contains(static_cast<T>(value))) return true;
-    return false;
+    return ac_detail::has_common_impl(a, b, [](const auto&) {});
 }
 
 // @acf fn rfind — (range, value) -> int — 配列から値を右から探す
@@ -5212,6 +5495,27 @@ template<class T> void validate_ordered_finite(const T& value) {
 }
 } // namespace ac_detail
 
+namespace ac_detail {
+template <std::ranges::input_range R, class Check>
+map<std::ranges::range_value_t<R>, ll> frequencies_impl(R&& values, Check check) {
+    using Key = std::ranges::range_value_t<R>;
+    static_assert(ac_detail::kuma_record_fields_own_values<Key>(),
+                  "frequencies requires owning Kuma record fields");
+    map<Key, ll> result;
+    for (const auto& value : values) {
+        if constexpr (std::is_same_v<std::remove_cvref_t<decltype(value)>, Key>) {
+            check(value);
+            ++result[value];
+        } else {
+            Key key = value;
+            check(std::as_const(key));
+            ++result[std::move(key)];
+        }
+    }
+    return result;
+}
+}  // namespace ac_detail
+
 // @acf fn frequencies — (range) -> map<T,ll> — 値ごとの出現回数
 
 /// 値ごとの出現回数をmapにまとめる。
@@ -5225,22 +5529,30 @@ template<class T> void validate_ordered_finite(const T& value) {
 /// 呼び分け: 回数だけならfrequencies、位置が必要ならpositions。一つの値を一回だけ数えるならcountでもできます。
 template <std::ranges::input_range R>
 map<std::ranges::range_value_t<R>, ll> frequencies(R&& values) {
-    using Key = std::ranges::range_value_t<R>;
-    static_assert(ac_detail::kuma_record_fields_own_values<Key>(),
-                  "frequencies requires owning Kuma record fields");
-    map<Key, ll> result;
+    return ac_detail::frequencies_impl(std::forward<R>(values), [](const auto& key) {
+        ::ac_detail::validate_ordered_finite(key);
+    });
+}
+
+namespace ac_detail {
+template <std::ranges::input_range R, class Check>
+map<std::ranges::range_value_t<R>, vll> positions_impl(R&& values, ll start, Check check) {
+    map<std::ranges::range_value_t<R>, vll> result;
+    ll index = start;
+    bool first = true;
     for (const auto& value : values) {
-        if constexpr (std::is_same_v<std::remove_cvref_t<decltype(value)>, Key>) {
-            ac_detail::validate_ordered_finite(value);
-            ++result[value];
-        } else {
-            Key key = value;
-            ac_detail::validate_ordered_finite(key);
-            ++result[std::move(key)];
+        if (!first) {
+            if (index == numeric_limits<ll>::max())
+                throw overflow_error("positions: index exceeds ll maximum");
+            ++index;
         }
+        first = false;
+        check(value);
+        result[value].push_back(index);
     }
     return result;
 }
+}  // namespace ac_detail
 
 // @acf fn positions — (range, ll start=0) -> map<T,vll> — 値ごとの出現位置一覧
 
@@ -5257,20 +5569,31 @@ map<std::ranges::range_value_t<R>, ll> frequencies(R&& values) {
 /// 呼び分け: `positions(values)`と`positions(values,0)`は同じ結果です。1始まりなら`positions(values,1)`。位置を保存せず回数だけ数えるならfrequenciesを使います。
 template <std::ranges::input_range R>
 map<std::ranges::range_value_t<R>, vll> positions(R&& values, ll start = 0) {
-    map<std::ranges::range_value_t<R>, vll> result;
-    ll index = start;
-    bool first = true;
-    for (const auto& value : values) {
-        if (!first) {
-            if (index == numeric_limits<ll>::max())
-                throw overflow_error("positions: index exceeds ll maximum");
-            ++index;
+    return ac_detail::positions_impl(std::forward<R>(values), start, [](const auto&) {});
+}
+
+namespace ac_detail {
+template <bool CheckedSize, class R, class Check>
+vector<pair<ac_detail::algorithm::range_value_t<R>, int>> run_length_encode_impl(
+    const R& values, Check check) {
+    using T = ac_detail::algorithm::range_value_t<R>;
+    vector<pair<T, int>> result;
+    [[maybe_unused]] int count = 0;
+    for (const T& value : values) {
+        if constexpr (CheckedSize) {
+            if (count == numeric_limits<int>::max())
+                throw out_of_range("run_length_encode: input too large");
+            ++count;
         }
-        first = false;
-        result[value].push_back(index);
+        check(value);
+        if (result.empty() || result.back().first != value)
+            result.emplace_back(value, 1);
+        else
+            ++result.back().second;
     }
     return result;
 }
+}  // namespace ac_detail
 
 // @acf fn run_length_encode — (range) -> vector<pair<T,int>> — 連続する同値をまとめる
 
@@ -5288,15 +5611,7 @@ map<std::ranges::range_value_t<R>, vll> positions(R&& values, ll start = 0) {
 template <class R>
 vector<pair<ac_detail::algorithm::range_value_t<R>, int>> run_length_encode(
     const R& values) {
-    using T = ac_detail::algorithm::range_value_t<R>;
-    vector<pair<T, int>> result;
-    for (const T& value : values) {
-        if (result.empty() || result.back().first != value)
-            result.emplace_back(value, 1);
-        else
-            ++result.back().second;
-    }
-    return result;
+    return ac_detail::run_length_encode_impl<false>(values, [](const auto&) {});
 }
 
 // @acf fn run_length_decode — (vector<pair<T,int>>) -> vector<T> — ランレングスを展開
@@ -6120,22 +6435,27 @@ bool matches(const array<Iter, Width>& window, Pred& pred) {
         window);
 }
 
-template <size_t Width, ranges::forward_range R, class Visit>
-void for_each_window(R&& values, Visit visit) {
+template <size_t Width, class Iter, class End, class Visit>
+void for_each_window(Iter next, const End& last, Visit visit) {
     static_assert(Width >= 2, "adjacent window width must be at least 2");
-    array<ranges::iterator_t<R>, Width> window{};
-    auto next = ranges::begin(values);
-    const auto last = ranges::end(values);
+    array<Iter, Width> window{};
     for (auto& it : window) {
         if (next == last) return;
-        it = next++;
+        it = next;
+        ++next;
     }
     while (true) {
         if (!std::invoke(visit, window)) return;
         if (next == last) return;
         for (size_t i = 1; i < Width; ++i) window[i - 1] = window[i];
-        window[Width - 1] = next++;
+        window[Width - 1] = next;
+        ++next;
     }
+}
+
+template <size_t Width, ranges::forward_range R, class Visit>
+void for_each_window(R&& values, Visit visit) {
+    for_each_window<Width>(ranges::begin(values), ranges::end(values), std::move(visit));
 }
 }  // namespace ac_detail::adjacent
 
@@ -7241,6 +7561,24 @@ int is_heap_until_idx(R&& values, Comp comp = {}, Proj projection = {}) {
     return ac_detail::checked_range_index(ranges::distance(ranges::begin(values), result));
 }
 
+namespace ac_detail {
+template<bool Desired = true, ranges::bidirectional_range R, class Pred, class Proj = identity>
+    requires ranges::sized_range<R> && ranges::common_range<R>
+int checked_find_last_index(const R& values, Pred pred, Proj project = {}) {
+    auto current = ranges::end(values);
+    const auto begin = ranges::begin(values);
+    const auto size = ranges::size(values);
+    auto index = size;
+    while (current != begin) {
+        --current;
+        --index;
+        if (std::invoke(pred, std::invoke(project, *current)) == Desired)
+            return checked_range_index(index);
+    }
+    return checked_range_index(size);
+}
+} // namespace ac_detail
+
 #if defined(__cpp_lib_ranges_find_last) && __cpp_lib_ranges_find_last >= 202207L
 // @acf fn find_last_idx — (range, target, projection={}) -> int — 値と一致する最後の添字
 
@@ -7590,11 +7928,9 @@ auto unique_stable(R&& values) {
     return unique_by(std::forward<R>(values), [](const auto& value) { return ranges::range_value_t<R>(value); });
 }
 
-// @acf fn count_by — (range, key) -> map<K,ll> — キーごとの個数を数える
-/// keyを各要素に1回適用し、キーごとの個数を返す。キーは厳密弱順序が必要。浮動小数点・tuple・pair・Kuma構造体内の非有限値は例外。未知のC++型は内部を検査しない。Kuma構造体の参照フィールドを含むキーは未対応。
-/// 時間O(N log N)、追加メモリO(K)。Kは異なるキーの数。
+namespace ac_detail {
 template <ranges::input_range R, class F>
-auto count_by(R&& values, F key) {
+auto count_by_impl(R&& values, F& key) {
     using K = std::decay_t<std::invoke_result_t<F&, ranges::range_reference_t<R>>>;
     static_assert(ac_detail::kuma_record_fields_own_values<K>(), "count_by requires owning Kuma record keys");
     map<K, ll> out;
@@ -7606,14 +7942,9 @@ auto count_by(R&& values, F key) {
     return out;
 }
 
-// @acf fn sum_by_key — (const range&, key, value) -> map<K,V> — キーごとに変換した値を足す
-/// 各要素にキー関数、値関数の順で1回ずつ適用し、キーごとの合計を返す。空入力では空のmapを返す。
-/// 値関数はbool以外の整数型・浮動小数点型を返すこと。合計は同じ型で保持し、途中の整数の合計が型の範囲を超えたらoverflow_error。
-/// キーに含まれる浮動小数点の非有限値は値関数を呼ぶ前に例外。検査対象はcount_byと同じ。
-/// N個の要素とK種類のキーについて、比較・コピー・関数呼び出しの費用を除き時間O(N log(K+1)+N+1)、追加メモリO(K+1)。
 template <class R, class Key, class Value>
     requires ranges::input_range<const R>
-auto sum_by_key(const R& values, Key key, Value project) {
+auto sum_by_key_impl(const R& values, Key& key, Value& project) {
     using Ref = ranges::range_reference_t<const R>;
     using K = std::decay_t<std::invoke_result_t<Key&, Ref>>;
     using V = std::decay_t<std::invoke_result_t<Value&, Ref>>;
@@ -7636,6 +7967,26 @@ auto sum_by_key(const R& values, Key key, Value project) {
         }
     }
     return out;
+}
+}  // namespace ac_detail
+
+// @acf fn count_by — (range, key) -> map<K,ll> — キーごとの個数を数える
+/// keyを各要素に1回適用し、キーごとの個数を返す。キーは厳密弱順序が必要。浮動小数点・tuple・pair・Kuma構造体内の非有限値は例外。未知のC++型は内部を検査しない。Kuma構造体の参照フィールドを含むキーは未対応。
+/// 時間O(N log N)、追加メモリO(K)。Kは異なるキーの数。
+template <ranges::input_range R, class F>
+auto count_by(R&& values, F key) {
+    return ::ac_detail::count_by_impl(std::forward<R>(values), key);
+}
+
+// @acf fn sum_by_key — (const range&, key, value) -> map<K,V> — キーごとに変換した値を足す
+/// 各要素にキー関数、値関数の順で1回ずつ適用し、キーごとの合計を返す。空入力では空のmapを返す。
+/// 値関数はbool以外の整数型・浮動小数点型を返すこと。合計は同じ型で保持し、途中の整数の合計が型の範囲を超えたらoverflow_error。
+/// キーに含まれる浮動小数点の非有限値は値関数を呼ぶ前に例外。検査対象はcount_byと同じ。
+/// N個の要素とK種類のキーについて、比較・コピー・関数呼び出しの費用を除き時間O(N log(K+1)+N+1)、追加メモリO(K+1)。
+template <class R, class Key, class Value>
+    requires ranges::input_range<const R>
+auto sum_by_key(const R& values, Key key, Value project) {
+    return ::ac_detail::sum_by_key_impl(values, key, project);
 }
 
 // @acf fn partition_vec — (range, pred) -> pair<vector<T>,vector<T>> — 条件で2つに分ける

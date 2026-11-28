@@ -380,13 +380,15 @@ inline vector<T> sieve(T n) {
     prime[0] = prime[1] = false;
     for (T p = 2; p <= n / p; ++p) {
         if (!prime[static_cast<size_t>(p)]) continue;
-        for (T x = p * p; x <= n; x += p) {
+        for (T x = p * p; ; x += p) {
             prime[static_cast<size_t>(x)] = false;
+            if (x > n - p) break;
         }
     }
     vector<T> result;
-    for (T x = 2; x <= n; ++x) {
+    for (T x = 2; ; ++x) {
         if (prime[static_cast<size_t>(x)]) result.push_back(x);
+        if (x == n) break;
     }
     return result;
 }
@@ -519,6 +521,31 @@ inline vector<pair<ull, int>> prime_factorize_with_sieve(
         result.push_back({static_cast<ull>(prime), exponent});
     }
     return result;
+}
+
+namespace ac_detail {
+inline int checked_kuma_sieve_bound(ll bound) {
+    if (bound >= numeric_limits<int>::max())
+        throw length_error("sieve: bound must be less than INT_MAX");
+    return bound < 0 ? 0 : static_cast<int>(bound);
+}
+
+inline vector<pair<ll, int>> checked_kuma_sieve_factors(ll n, const vi& table) {
+    if (n < 2) return {};
+    if (n > numeric_limits<int>::max())
+        throw out_of_range("prime_factorize_with_sieve: value exceeds INT_MAX");
+    const auto factors = ::prime_factorize_with_sieve(static_cast<int>(n), table);
+    vector<pair<ll, int>> result;
+    result.reserve(factors.size());
+    ull previous = 1;
+    for (const auto& [prime, exponent] : factors) {
+        if (prime <= previous || !::is_prime(prime))
+            throw invalid_argument("prime_factorize_with_sieve: invalid SPF factor sequence");
+        result.emplace_back(static_cast<ll>(prime), exponent);
+        previous = prime;
+    }
+    return result;
+}
 }
 
 // @acf fn euler_phi — (integer n) -> ull — オイラーのトーシェント関数
@@ -795,7 +822,7 @@ inline u128 divisor_sum(T n) {
 /// 例: `print(divisor_sum(12));`
 template <class Mint, enable_if_t<ac_detail::io::is_modint_v<Mint>, int> = 0>
 Mint divisor_sum(const vector<pair<ull, int>>& factors) {
-    Mint result = 1;
+    Mint result{1};
     for (auto [prime, exponent] : factors) {
         result *= geom_sum(Mint(1), prime, static_cast<ll>(exponent) + 1);
     }
@@ -844,6 +871,116 @@ Mint divisor_sum(T n) {
 /// 例: `print(primes_up_to(10));`
 inline vi primes_up_to(int n) {
     return ac_detail::prime_detail::sieve(n);
+}
+
+namespace ac_detail {
+template<class Item>
+vector<pair<ull, int>> checked_kuma_divisor_factors(const vector<Item>& input) {
+    vector<pair<ull, int>> factors;
+    factors.reserve(input.size());
+    unordered_set<ll> seen;
+    for (const auto& factor : input) {
+        const ll prime = std::get<0>(factor);
+        const ll exponent = std::get<1>(factor);
+        if (prime < 2 || exponent <= 0 || exponent > numeric_limits<int>::max()
+                || !::is_prime(prime) || !seen.insert(prime).second)
+            throw invalid_argument("divisor factors: expected distinct primes and positive i32 exponents");
+        factors.emplace_back(static_cast<ull>(prime), static_cast<int>(exponent));
+    }
+    return factors;
+}
+
+inline ll kuma_divisor_count(ll n) { return static_cast<ll>(::divisor_count(n)); }
+
+inline vll kuma_divisors(ll n) {
+    const auto values = ::divisors(n);
+    return vll(values.begin(), values.end());
+}
+
+template<class Item>
+vll kuma_divisors(const vector<Item>& input) {
+    const auto factors = checked_kuma_divisor_factors(input);
+    ll product = 1;
+    for (const auto& [prime, exponent] : factors)
+        for (int e = 0; e < exponent; ++e)
+            product = checked_ll(static_cast<i128>(product) * prime, "divisors");
+    size_t count = 1;
+    const auto limit = std::min(vll().max_size(), vector<ull>().max_size());
+    for (const auto& [prime, exponent] : factors) {
+        const auto choices = static_cast<size_t>(exponent) + 1;
+        if (count > limit / choices) throw length_error("divisors: too many divisors");
+        count *= choices;
+    }
+    const auto values = ::divisors(factors);
+    return vll(values.begin(), values.end());
+}
+
+template<class Item>
+vector<pair<ull, int>> checked_kuma_prime_group_factors(ll p, const vector<Item>& input) {
+    if (p < 2 || !::is_prime(p)) throw invalid_argument("prime group: modulus must be prime");
+    auto factors = checked_kuma_divisor_factors(input);
+    ull remainder = static_cast<ull>(p - 1);
+    for (const auto& [prime, exponent] : factors)
+        for (int k = 0; k < exponent; ++k) {
+            if (remainder % prime != 0)
+                throw invalid_argument("prime group: factors must decompose p - 1");
+            remainder /= prime;
+        }
+    if (remainder != 1) throw invalid_argument("prime group: factors must decompose p - 1");
+    return factors;
+}
+
+template<class Item>
+ll kuma_multiplicative_order_prime(ll a, ll p, const vector<Item>& input) {
+    if (a < 1 || a >= p) throw invalid_argument("multiplicative_order_prime: require 1 <= a < p");
+    const auto factors = checked_kuma_prime_group_factors(p, input);
+    return static_cast<ll>(::multiplicative_order_prime(static_cast<ull>(a), static_cast<ull>(p), factors));
+}
+
+template<class Item>
+ll kuma_primitive_root_prime(ll p, const vector<Item>& input) {
+    const auto factors = checked_kuma_prime_group_factors(p, input);
+    return static_cast<ll>(::primitive_root_prime(static_cast<ull>(p), factors));
+}
+
+template<class Item>
+ll kuma_divisor_count(const vector<Item>& input) {
+    ll count = 1;
+    for (const auto& factor : checked_kuma_divisor_factors(input))
+        count = checked_ll(static_cast<i128>(count) * (static_cast<ll>(factor.second) + 1), "divisor_count");
+    return count;
+}
+
+template<class Result>
+Result kuma_divisor_sum(ll n) {
+    if constexpr (std::same_as<Result, ll>) {
+        const auto total = ::divisor_sum(n);
+        if (total > static_cast<u128>(numeric_limits<ll>::max()))
+            throw overflow_error("divisor_sum: result does not fit in i64");
+        return static_cast<ll>(total);
+    } else {
+        return ::divisor_sum<Result>(n);
+    }
+}
+
+template<class Result, class Item>
+Result kuma_divisor_sum(const vector<Item>& input) {
+    const auto factors = checked_kuma_divisor_factors(input);
+    if constexpr (std::same_as<Result, ll>) {
+        ll total = 1;
+        for (const auto& [prime, exponent] : factors) {
+            ll term = 1, power = 1;
+            for (int k = 0; k < exponent; ++k) {
+                power = checked_ll(static_cast<i128>(power) * prime, "divisor_sum");
+                term = checked_ll(static_cast<i128>(term) + power, "divisor_sum");
+            }
+            total = checked_ll(static_cast<i128>(total) * term, "divisor_sum");
+        }
+        return total;
+    } else {
+        return ::divisor_sum<Result>(factors);
+    }
+}
 }
 
 // @acf fn mobius_sieve — (int n) -> vi — n 以下のメビウス関数をふるいで列挙
@@ -967,6 +1104,25 @@ inline vll primes_in_range(ll left, ll right) {
         if (prime[i]) result.push_back(left + static_cast<ll>(i));
     }
     return result;
+}
+
+namespace ac_detail {
+inline vll checked_kuma_primes_in_range(ll left, ll right) {
+    if (left > right || right < 2) return {};
+    left = std::max(2LL, left);
+    const ll width = right - left + 1;
+    if (width <= right / width) {
+        vll result;
+        for (ll candidate = left; ; ++candidate) {
+            if (::is_prime(candidate)) result.push_back(candidate);
+            if (candidate == right) break;
+        }
+        return result;
+    }
+    if (static_cast<ull>(width) > vector<char>{}.max_size())
+        throw length_error("primes_in_range: interval is too large");
+    return ::primes_in_range(left, right);
+}
 }
 
 // @acf fn lcm_bounded — (ll a, ll b, ll limit) -> optional<ll> — 上限を超えたLCMをnulloptにする
@@ -1323,8 +1479,8 @@ template <class Mint, enable_if_t<ac_detail::io::is_modint_v<Mint>, int> = 0>
 Mint nCr(ll n, ll r) {
     if (r < 0 || n < 0 || r > n) return Mint(0);
     r = min(r, n - r);
-    Mint result = 1;
-    const ll mod = Mint::mod();
+    Mint result(1);
+    const ll mod = result.mod();
     for (ll i = 1; i <= r; ++i) {
         if (gcd(i, mod) != 1) {
             throw invalid_argument("nCr: r! must be invertible modulo Mint::mod()");
@@ -1385,7 +1541,7 @@ inline ll nPr(ll n, ll r) {
 template <class Mint, enable_if_t<ac_detail::io::is_modint_v<Mint>, int> = 0>
 Mint nPr(ll n, ll r) {
     if (r < 0 || n < 0 || r > n) return Mint(0);
-    Mint result = 1;
+    Mint result(1);
     for (ll i = 0; i < r; ++i) result *= Mint(n - i);
     return result;
 }
@@ -1445,6 +1601,30 @@ Mint nHr(ll n, ll r) {
         throw overflow_error("nHr: n + r - 1 does not fit in long long");
     }
     return nCr<Mint>((n - 1) + r, r);
+}
+
+namespace ac_detail {
+template<class Mint>
+Mint kuma_nCr(ll n, ll r) {
+    const ll mod = Mint{}.mod();
+    if (mod == 1) return Mint(0);
+    if (n >= 0 && r >= 0 && r <= n && std::min(r, n - r) >= mod)
+        throw invalid_argument("nCr: r! must be invertible modulo Mint::mod()");
+    return ::nCr<Mint>(n, r);
+}
+
+template<class Mint>
+Mint kuma_nPr(ll n, ll r) {
+    if (n >= 0 && r <= n && r > n % Mint{}.mod()) return Mint(0);
+    return ::nPr<Mint>(n, r);
+}
+
+template<class Mint>
+Mint kuma_nHr(ll n, ll r) {
+    if (n > 1 && r > 0 && r <= numeric_limits<ll>::max() - (n - 1))
+        return kuma_nCr<Mint>((n - 1) + r, r);
+    return ::nHr<Mint>(n, r);
+}
 }
 #endif
 // 実行時mod指定の互換用クラス。新規コードは数字付きCombを推奨。
@@ -1541,7 +1721,7 @@ struct ModintComb {
 
     /// `Mint::mod()` を法として0から `n` までの階乗を前計算する。
     bool init(int n) {
-        const int mod = Mint::mod();
+        const int mod = Mint{}.mod();
         if (n < 0) throw invalid_argument("Comb: max_n must be non-negative");
         if (mod < 2 || !is_prime(mod)) {
             throw invalid_argument("Comb: Mint::mod() must be prime");
@@ -1553,9 +1733,9 @@ struct ModintComb {
         max_n = n;
         fac.assign(n + 1, Mint(1));
         ifac.assign(n + 1, Mint(1));
-        for (int i = 1; i <= n; ++i) fac[i] = fac[i - 1] * i;
+        for (int i = 1; i <= n; ++i) fac[i] = fac[i - 1] * Mint(i);
         ifac[n] = fac[n].inv();
-        for (int i = n; i > 0; --i) ifac[i - 1] = ifac[i] * i;
+        for (int i = n; i > 0; --i) ifac[i - 1] = ifac[i] * Mint(i);
         return true;
     }
 
@@ -1622,6 +1802,71 @@ using Comb1000000007 = ac_detail::ModintComb<mint1000000007>;
 /// 「998244353で割った余り」の組合せに使う。`Comb998244353 comb(max_n); comb.C(n,r)`
 using Comb998244353 = ac_detail::ModintComb<mint998244353>;
 #endif
+
+namespace ac_detail {
+template<class Result>
+struct KumaCombBackend;
+
+template<>
+struct KumaCombBackend<ll> { using type = ::Comb; };
+
+#ifdef AC_HAS_ACL
+template<class Result>
+struct KumaCombBackend { using type = ModintComb<Result>; };
+#endif
+
+template<class Result>
+class CheckedComb {
+    using Table = typename KumaCombBackend<Result>::type;
+    static constexpr bool tracks_generation = requires { typename Result::ModulusLock; };
+    struct NoGeneration {};
+    [[no_unique_address]] std::conditional_t<tracks_generation, Result, NoGeneration> generation_{};
+    Table table_;
+
+    const Table& current() const {
+        if constexpr (tracks_generation) (void)generation_.val();
+        return table_;
+    }
+
+    static int checked_int(ll value, const char* operation) {
+        if (value < 0 || value > numeric_limits<int>::max())
+            throw out_of_range(string("comb: ") + operation + " outside i32 range");
+        return static_cast<int>(value);
+    }
+
+public:
+    CheckedComb() = default;
+    explicit CheckedComb(ll n) { init(n); }
+    CheckedComb(ll n, ll modulus) requires std::same_as<Result, ll> { init(n, modulus); }
+
+    bool init(ll n) {
+        table_ = Table(checked_int(n, "precompute bound"));
+        if constexpr (tracks_generation) generation_ = Result{};
+        return true;
+    }
+
+    bool init(ll n, ll modulus) requires std::same_as<Result, ll> {
+        table_ = Table(checked_int(n, "precompute bound"), checked_int(modulus, "modulus"));
+        return true;
+    }
+
+    int max_n() const { return current().max_n; }
+    int mod() const {
+        if constexpr (std::same_as<Result, ll>) return table_.mod;
+        else if constexpr (tracks_generation) return generation_.mod();
+        else return Result::mod();
+    }
+    const vector<Result>& fac() const { return current().fac; }
+    const vector<Result>& ifac() const { return current().ifac; }
+
+    Result fact(ll n) const { return current().fact(checked_int(n, "factorial index")); }
+    Result inv_fact(ll n) const { return current().inv_fact(checked_int(n, "factorial index")); }
+    Result C(ll n, ll r) const { return current().C(n, r); }
+    Result P(ll n, ll r) const { return current().P(n, r); }
+    Result H(ll n, ll r) const { return current().H(n, r); }
+    Result catalan(ll n) const { return current().catalan(n); }
+};
+}  // namespace ac_detail
 
 // 競プロ向け動的行列。通常の環では演算子を使い、min-plus などは
 // matrix_product / 4引数 matrix_power に演算を渡す。
@@ -2004,6 +2249,269 @@ Matrix<T> matrix_power_sum(Matrix<T> base, ull exponent) {
 }
 
 namespace ac_detail::matrix {
+template<class T>
+struct KumaCheckedInteger {
+    T value{};
+
+    static T narrow(i128 result) {
+        if (result < numeric_limits<T>::min() || result > numeric_limits<T>::max())
+            throw overflow_error("matrix: intermediate value does not fit the element type");
+        return static_cast<T>(result);
+    }
+
+    KumaCheckedInteger& operator+=(KumaCheckedInteger other) {
+        value = narrow(static_cast<i128>(value) + other.value);
+        return *this;
+    }
+
+    friend KumaCheckedInteger operator+(KumaCheckedInteger left, KumaCheckedInteger right) {
+        return left += right;
+    }
+
+    friend KumaCheckedInteger operator*(KumaCheckedInteger left, KumaCheckedInteger right) {
+        return {narrow(static_cast<i128>(left.value) * right.value)};
+    }
+};
+
+template<class T>
+void require_kuma_matrix_shape(const vector<vector<T>>& rows) {
+    const auto height = rows.size();
+    const auto width = rows.empty() ? 0 : rows.front().size();
+    constexpr auto limit = static_cast<size_t>(numeric_limits<int>::max());
+    if (height > limit || width > limit) throw length_error("matrix: dimensions exceed INT_MAX");
+    for (const auto& row : rows)
+        if (row.size() != width) throw invalid_argument("matrix: rows must have the same length");
+}
+
+template<class T>
+Matrix<T> make_kuma_matrix(ll height, ll width, const T& value = T{}) {
+    if (height < 0 || width < 0 || height > numeric_limits<int>::max() || width > numeric_limits<int>::max())
+        throw out_of_range("matrix: dimensions must be in [0, INT_MAX]");
+    Matrix<T> result;
+    result.rows = static_cast<int>(height);
+    result.cols = static_cast<int>(width);
+    if (height != 0) result.values.assign(static_cast<size_t>(height), vector<T>(static_cast<size_t>(width), value));
+    return result;
+}
+
+template<class T>
+Matrix<T> make_kuma_matrix(const vector<vector<T>>& values) {
+    require_kuma_matrix_shape(values);
+    return Matrix<T>(values);
+}
+
+template<class T>
+Matrix<T> kuma_matrix_identity(ll size) {
+    if (size < 0 || size > numeric_limits<int>::max())
+        throw out_of_range("matrix_identity: size must be in [0, INT_MAX]");
+    return Matrix<T>::identity(static_cast<int>(size));
+}
+
+template<class T>
+auto kuma_matrix(const vector<vector<T>>& rows) {
+    require_kuma_matrix_shape(rows);
+    if constexpr (std::integral<T>) {
+        const auto height = rows.size();
+        const auto width = rows.empty() ? 0 : rows.front().size();
+        Matrix<KumaCheckedInteger<T>> result(static_cast<int>(height), static_cast<int>(width));
+        for (size_t row = 0; row < height; ++row)
+            for (size_t column = 0; column < width; ++column)
+                result.values[row][column].value = rows[row][column];
+        return result;
+    } else {
+        return Matrix<T>(rows);
+    }
+}
+
+template<class T, class Cell>
+vector<vector<T>> kuma_matrix_values(Matrix<Cell> value) {
+    if constexpr (std::same_as<T, Cell>) {
+        return std::move(value.values);
+    } else {
+        vector<vector<T>> result(value.rows, vector<T>(value.cols));
+        for (int row = 0; row < value.rows; ++row)
+            for (int column = 0; column < value.cols; ++column)
+                result[row][column] = value[row][column].value;
+        return result;
+    }
+}
+
+template<class T>
+vector<vector<T>> kuma_matrix_product(const vector<vector<T>>& lhs, const vector<vector<T>>& rhs) {
+    auto left = kuma_matrix(lhs);
+    auto right = kuma_matrix(rhs);
+    return kuma_matrix_values<T>(::matrix_product(left, right));
+}
+
+template<class T>
+T kuma_matrix_trace(const vector<vector<T>>& rows) {
+    T total{};
+    for (size_t index = 0; index < rows.size(); ++index) {
+        if (rows[index].size() != rows.size())
+            throw invalid_argument("matrix_trace: matrix must be square");
+        if constexpr (std::integral<T>)
+            total = KumaCheckedInteger<T>::narrow(static_cast<i128>(total) + rows[index][index]);
+        else
+            total += rows[index][index];
+    }
+    return total;
+}
+
+template<bool Sum, class T>
+vector<vector<T>> kuma_matrix_power(const vector<vector<T>>& rows, ll exponent) {
+    if (exponent < 0) throw out_of_range("matrix: exponent must be non-negative");
+    auto base = kuma_matrix(rows);
+    const auto count = static_cast<ull>(exponent);
+    if constexpr (Sum) return kuma_matrix_values<T>(::matrix_power_sum(std::move(base), count));
+    else return kuma_matrix_values<T>(::matrix_power(std::move(base), count));
+}
+
+template<class T>
+Matrix<T> kuma_shaped_transpose(const Matrix<T>& source) {
+    auto result = make_kuma_matrix<T>(source.cols, source.rows);
+    if (source.empty()) return result;
+    for (int r = 0; r < source.rows; ++r)
+        for (int c = 0; c < source.cols; ++c)
+            result[c][r] = source[r][c];
+    return result;
+}
+
+template<class T>
+decltype(auto) kuma_shaped_base(const Matrix<T>& source) {
+    if constexpr (std::integral<T>) {
+        auto result = make_kuma_matrix<KumaCheckedInteger<T>>(source.rows, source.cols);
+        for (int r = 0; r < source.rows; ++r)
+            for (int c = 0; c < source.cols; ++c)
+                result[r][c].value = source[r][c];
+        return result;
+    } else {
+        return (source);
+    }
+}
+
+template<class T, class Cell>
+Matrix<T> kuma_shaped_result(Matrix<Cell> result) {
+    if constexpr (std::same_as<T, Cell>) {
+        return result;
+    } else {
+        Matrix<T> converted;
+        converted.rows = result.rows;
+        converted.cols = result.cols;
+        converted.values = kuma_matrix_values<T>(std::move(result));
+        return converted;
+    }
+}
+
+template<class T>
+Matrix<T> kuma_shaped_matrix_product(const Matrix<T>& left, const Matrix<T>& right) {
+    if (left.cols != right.rows)
+        throw invalid_argument("matrix_product: incompatible dimensions");
+    if (left.rows == 0 || right.cols == 0 || left.cols == 0)
+        return make_kuma_matrix<T>(left.rows, right.cols);
+    return kuma_shaped_result<T>(::matrix_product(kuma_shaped_base(left), kuma_shaped_base(right)));
+}
+
+template<bool Subtract, class T>
+Matrix<T> kuma_shaped_matrix_add(const Matrix<T>& left, const Matrix<T>& right) {
+    if (left.rows != right.rows || left.cols != right.cols)
+        throw invalid_argument("matrix: shapes must match");
+    auto result = make_kuma_matrix<T>(left.rows, left.cols);
+    for (int row = 0; row < left.rows; ++row) {
+        for (int col = 0; col < left.cols; ++col) {
+            const auto& a = left[row][col];
+            const auto& b = right[row][col];
+            if constexpr (std::integral<T>) {
+                const auto wide = static_cast<i128>(a);
+                result[row][col] = KumaCheckedInteger<T>::narrow(Subtract ? wide - b : wide + b);
+            } else if constexpr (Subtract) {
+                result[row][col] = a - b;
+            } else {
+                result[row][col] = a + b;
+            }
+        }
+    }
+    return result;
+}
+
+template<bool Divide, class T>
+Matrix<T> kuma_shaped_matrix_scale(const Matrix<T>& matrix, T scalar) {
+    constexpr bool has_inverse = requires(T x) { x.inv(); };
+    if constexpr (Divide) {
+        if constexpr (has_inverse) scalar = scalar.inv();
+        else if (scalar == T{}) throw domain_error("matrix: division by zero");
+    }
+    auto result = make_kuma_matrix<T>(matrix.rows, matrix.cols);
+    for (int row = 0; row < matrix.rows; ++row) {
+        for (int col = 0; col < matrix.cols; ++col) {
+            const auto& value = matrix[row][col];
+            if constexpr (std::integral<T>) {
+                const auto wide = static_cast<i128>(value);
+                result[row][col] = KumaCheckedInteger<T>::narrow(Divide ? wide / scalar : wide * scalar);
+            } else if constexpr (Divide && !has_inverse) {
+                result[row][col] = value / scalar;
+            } else {
+                result[row][col] = value * scalar;
+            }
+        }
+    }
+    return result;
+}
+
+template<class T>
+vector<T> kuma_shaped_matrix_vector_product(const Matrix<T>& matrix, const vector<T>& column) {
+    if (static_cast<size_t>(matrix.cols) != column.size())
+        throw invalid_argument("matrix: incompatible vector size");
+    if constexpr (std::integral<T>) {
+        vector<T> result(static_cast<size_t>(matrix.rows));
+        for (int row = 0; row < matrix.rows; ++row) {
+            KumaCheckedInteger<T> sum;
+            for (int col = 0; col < matrix.cols; ++col)
+                sum += KumaCheckedInteger<T>{matrix[row][col]} * KumaCheckedInteger<T>{column[col]};
+            result[row] = sum.value;
+        }
+        return result;
+    } else {
+        return matrix * column;
+    }
+}
+
+template<bool Sum, class T>
+Matrix<T> kuma_shaped_matrix_power(const Matrix<T>& source, ll exponent) {
+    if (exponent < 0) throw out_of_range("matrix: exponent must be non-negative");
+    const auto count = static_cast<ull>(exponent);
+    if constexpr (Sum) return kuma_shaped_result<T>(::matrix_power_sum(kuma_shaped_base(source), count));
+    else return kuma_shaped_result<T>(::matrix_power(kuma_shaped_base(source), count));
+}
+
+template<class T>
+T kuma_shaped_matrix_trace(const Matrix<T>& source) {
+    if (source.rows != source.cols) throw invalid_argument("matrix_trace: matrix must be square");
+    return kuma_matrix_trace(source.values);
+}
+
+template<class T, class Add, class Multiply>
+Matrix<T> kuma_shaped_matrix_product(const Matrix<T>& left, const Matrix<T>& right,
+                                     T zero, Add add, Multiply multiply) {
+    if (left.cols != right.rows)
+        throw invalid_argument("matrix_product: incompatible dimensions");
+    if (left.rows == 0 || right.cols == 0 || left.cols == 0)
+        return make_kuma_matrix<T>(left.rows, right.cols, zero);
+    return ::matrix_product(left, right, zero, add, multiply);
+}
+
+template<class T, class Multiply>
+Matrix<T> kuma_shaped_matrix_power(const Matrix<T>& base, ll exponent,
+                                   const Matrix<T>& identity, Multiply multiply) {
+    if (exponent < 0) throw out_of_range("matrix: exponent must be non-negative");
+    auto checked_multiply = [&](const Matrix<T>& lhs, const Matrix<T>& rhs) {
+        auto result = multiply(lhs, rhs);
+        if (result.rows != base.rows || result.cols != base.cols)
+            throw invalid_argument("matrix_power: multiply must preserve the matrix dimensions");
+        return result;
+    };
+    return ::matrix_power(base, static_cast<ull>(exponent), identity, checked_multiply);
+}
+
 template <class T>
 bool is_zero(const T& value, ld eps) {
     if constexpr (is_floating_point_v<remove_cv_t<T>>) {
@@ -2028,6 +2536,68 @@ int pivot_row(const Matrix<T>& matrix, int first_row, int column, ld eps) {
         }
     }
     return pivot;
+}
+
+template<bool Checked, class T>
+auto difference_of_products(T a, T b, T c, T d) {
+    if constexpr (Checked) {
+        const auto left = KumaCheckedInteger<T>::narrow(static_cast<i128>(a) * b);
+        const auto right = KumaCheckedInteger<T>::narrow(static_cast<i128>(c) * d);
+        return KumaCheckedInteger<T>::narrow(static_cast<i128>(left) - right);
+    } else {
+        return a * b - c * d;
+    }
+}
+
+template<bool Checked, class T>
+int integer_rank(Matrix<T>& matrix) {
+    int rank = 0;
+    for (int col = 0; col < matrix.cols && rank < matrix.rows; ++col) {
+        int pivot = rank;
+        while (pivot < matrix.rows && matrix[pivot][col] == T{}) ++pivot;
+        if (pivot == matrix.rows) continue;
+        swap(matrix[pivot], matrix[rank]);
+        for (int row = rank + 1; row < matrix.rows; ++row) {
+            if (matrix[row][col] == T{}) continue;
+            const T left = matrix[rank][col];
+            const T right = matrix[row][col];
+            for (int j = col + 1; j < matrix.cols; ++j)
+                matrix[row][j] = difference_of_products<Checked>(left, matrix[row][j], right, matrix[rank][j]);
+            matrix[row][col] = T{};
+        }
+        ++rank;
+    }
+    return rank;
+}
+
+template<bool Checked, class T>
+T integer_determinant(Matrix<T>& matrix) {
+    const int n = matrix.rows;
+    T previous = T{1};
+    int sign = 1;
+    for (int col = 0; col + 1 < n; ++col) {
+        int pivot = col;
+        while (pivot < n && matrix[pivot][col] == T{}) ++pivot;
+        if (pivot == n) return T{};
+        if (pivot != col) swap(matrix[pivot], matrix[col]), sign = -sign;
+        const T value = matrix[col][col];
+        for (int row = col + 1; row < n; ++row) {
+            for (int j = col + 1; j < n; ++j) {
+                const auto difference = difference_of_products<Checked>(matrix[row][j], value,
+                                                                       matrix[row][col], matrix[col][j]);
+                if constexpr (Checked)
+                    matrix[row][j] = KumaCheckedInteger<T>::narrow(static_cast<i128>(difference) / previous);
+                else
+                    matrix[row][j] = difference / previous;
+            }
+            matrix[row][col] = T{};
+        }
+        previous = value;
+    }
+    const T last = matrix[n - 1][n - 1];
+    if (sign == 1) return last;
+    if constexpr (Checked) return KumaCheckedInteger<T>::narrow(-static_cast<i128>(last));
+    else return -last;
 }
 }  // namespace ac_detail::matrix
 
@@ -2119,23 +2689,7 @@ int matrix_rank(Matrix<T> matrix, ld eps = EPS) {
     } else {
         static_assert(is_signed_v<remove_cv_t<T>>,
                       "matrix_rank does not support unsigned integer matrices");
-        int rank = 0;
-        for (int col = 0; col < matrix.cols && rank < matrix.rows; ++col) {
-            int pivot = rank;
-            while (pivot < matrix.rows && matrix[pivot][col] == T{}) ++pivot;
-            if (pivot == matrix.rows) continue;
-            swap(matrix[pivot], matrix[rank]);
-            for (int row = rank + 1; row < matrix.rows; ++row) {
-                if (matrix[row][col] == T{}) continue;
-                const T left = matrix[rank][col];
-                const T right = matrix[row][col];
-                for (int j = col + 1; j < matrix.cols; ++j)
-                    matrix[row][j] = left * matrix[row][j] - right * matrix[rank][j];
-                matrix[row][col] = T{};
-            }
-            ++rank;
-        }
-        return rank;
+        return ac_detail::matrix::integer_rank<false>(matrix);
     }
 }
 
@@ -2164,26 +2718,7 @@ T matrix_determinant(Matrix<T> matrix, ld eps = EPS) {
     if constexpr (is_integral_v<remove_cv_t<T>>) {
         static_assert(is_signed_v<remove_cv_t<T>>,
                       "matrix_determinant does not support unsigned integer matrices");
-        T previous = T{1};
-        int sign = 1;
-        for (int col = 0; col + 1 < n; ++col) {
-            int pivot = col;
-            while (pivot < n && matrix[pivot][col] == T{}) ++pivot;
-            if (pivot == n) return T{};
-            if (pivot != col) swap(matrix[pivot], matrix[col]), sign = -sign;
-            const T pivot_value = matrix[col][col];
-            for (int row = col + 1; row < n; ++row) {
-                for (int j = col + 1; j < n; ++j) {
-                    matrix[row][j] =
-                        (matrix[row][j] * pivot_value -
-                         matrix[row][col] * matrix[col][j]) /
-                        previous;
-                }
-                matrix[row][col] = T{};
-            }
-            previous = pivot_value;
-        }
-        return sign == 1 ? matrix[n - 1][n - 1] : -matrix[n - 1][n - 1];
+        return ac_detail::matrix::integer_determinant<false>(matrix);
     } else {
         T determinant{1};
         for (int col = 0; col < n; ++col) {
@@ -2315,6 +2850,96 @@ LinearSystemResult<T> solve_linear_system(const Matrix<T>& coefficients,
     }
     return {true, reduced.rank, move(particular), move(basis)};
 }
+
+namespace ac_detail::matrix {
+inline void require_kuma_epsilon(ld eps) {
+    if (!std::isfinite(eps) || eps < 0) throw invalid_argument("matrix: eps must be finite and non-negative");
+}
+
+template<class T>
+void require_kuma_finite_entries(const vector<vector<T>>& rows) {
+    if constexpr (std::floating_point<T>)
+        for (const auto& row : rows)
+            for (const auto& value : row)
+                if (!std::isfinite(value)) throw invalid_argument("matrix: entries must be finite");
+}
+
+template<class T>
+Matrix<T> kuma_elimination_matrix(const vector<vector<T>>& rows) {
+    require_kuma_matrix_shape(rows);
+    require_kuma_finite_entries(rows);
+    return Matrix<T>(rows);
+}
+
+template<class T>
+const Matrix<T>& kuma_elimination_matrix(const Matrix<T>& matrix) {
+    require_kuma_finite_entries(matrix.values);
+    return matrix;
+}
+
+template<class T>
+struct KumaGaussJordanResult {
+    vector<vector<T>> reduced;
+    int rank;
+    vi pivot_columns;
+};
+
+template<class T, class Rows>
+auto kuma_gauss_jordan(const Rows& rows, ll columns, ld eps) {
+    require_kuma_epsilon(eps);
+    auto matrix = kuma_elimination_matrix(rows);
+    if (columns < -1 || columns > matrix.cols)
+        throw out_of_range("gauss_jordan: coefficient_columns is out of range");
+    auto result = ::gauss_jordan(std::move(matrix), static_cast<int>(columns), eps);
+    if constexpr (std::same_as<Rows, Matrix<T>>) return result;
+    else return KumaGaussJordanResult<T>{std::move(result.reduced.values), result.rank, std::move(result.pivot_columns)};
+}
+
+template<class T, class Rows>
+int kuma_matrix_rank(const Rows& rows, ld eps) {
+    require_kuma_epsilon(eps);
+    auto matrix = kuma_elimination_matrix(rows);
+    if constexpr (std::integral<T>) return integer_rank<true>(matrix);
+    else return ::matrix_rank(std::move(matrix), eps);
+}
+
+template<class T, class Rows>
+T kuma_matrix_determinant(const Rows& rows, ld eps) {
+    require_kuma_epsilon(eps);
+    auto matrix = kuma_elimination_matrix(rows);
+    if constexpr (std::integral<T>) {
+        if (matrix.rows != matrix.cols)
+            throw invalid_argument("matrix_determinant: matrix must be square");
+        return matrix.rows == 0 ? T{1} : integer_determinant<true>(matrix);
+    } else {
+        return ::matrix_determinant(std::move(matrix), eps);
+    }
+}
+
+template<class T, class Rows>
+pair<bool, Rows> kuma_matrix_inverse(const Rows& rows, ld eps) {
+    require_kuma_epsilon(eps);
+    if (rows.size() > static_cast<size_t>(numeric_limits<int>::max() / 2))
+        throw length_error("matrix_inverse: augmented matrix is too wide");
+    auto result = ::matrix_inverse(kuma_elimination_matrix(rows), eps);
+    if (!result) return {false, {}};
+    if constexpr (std::same_as<Rows, Matrix<T>>) return {true, std::move(*result)};
+    else return {true, std::move(result->values)};
+}
+
+template<class T, class Rows>
+LinearSystemResult<T> kuma_solve_linear_system(const Rows& rows, const vector<T>& rhs, ld eps) {
+    require_kuma_epsilon(eps);
+    if (rows.size() != rhs.size()) throw invalid_argument("solve_linear_system: rhs size must equal row count");
+    const auto& matrix = kuma_elimination_matrix(rows);
+    if (matrix.cols == numeric_limits<int>::max())
+        throw length_error("solve_linear_system: augmented matrix is too wide");
+    if constexpr (std::floating_point<T>)
+        for (const auto& value : rhs)
+            if (!std::isfinite(value)) throw invalid_argument("solve_linear_system: rhs must be finite");
+    return ::solve_linear_system(matrix, rhs, eps);
+}
+}  // namespace ac_detail::matrix
 
 // @acf fn linear_recurrence_nth — (initial,coefficients,index) -> T — 定数係数線形漸化式の第 index 項
 
