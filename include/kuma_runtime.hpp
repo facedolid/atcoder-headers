@@ -5623,7 +5623,7 @@ decltype(auto) cpp_map_filter_tuple_arrow(R&& values, F&& callback) {
         return std::forward<R>(values).filter(std::forward<F>(callback));
     else if constexpr (Member && !Filter && requires { std::forward<R>(values).map(std::forward<F>(callback)); })
         return std::forward<R>(values).map(std::forward<F>(callback));
-    else if constexpr (is_plain_vector<std::remove_cvref_t<R>>) {
+    else if constexpr (is_plain_vector<std::remove_cvref_t<R>> || is_std_map<std::remove_cvref_t<R>>) {
         using Elem = typename std::remove_cvref_t<R>::value_type;
         if constexpr (arrow_tuple_arity<Arity, Elem>()) {
             auto apply = [&callback](const Elem& row) { return std::apply(callback, row); };
